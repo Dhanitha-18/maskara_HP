@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Application {
+  id                  String   @id @default(uuid())
+  bmsitId             String?
+  studentName         String
+  gender              String   // MALE, FEMALE
+  phoneNumber         String
+  email               String
+  dob                 DateTime
+  program             String?
+  semester            String?
+  branch              String?
+  bloodGroup          String?
+  aadhaarNumber       String?
+  nationality         String?
+  religion            String?
+  permanentAddress    String?
+  fatherName          String
+  fatherPhone         String
+  fatherEmail         String?
+  motherName          String?
+  motherPhone         String?
+  motherEmail         String?
+  communicationAddress String?
+  guardianName        String?
+  guardianRelationship String?
+  guardianPhone       String?
+  guardianAddress     String?
+  healthIssues        String?
+  allergies           String?
+  currentMedications  String?
+  emergencyContact    String
+
+  usn                 String   @unique
+  department          String
+  yearSem             String
+  address             String
+  category            String?
+  hostelPref          String
+  medicalInfo         String?
+  remarks             String?
+  status              String   // PENDING, HOLD, APPROVED, REJECTED
+  holdReason          String?
+  appliedAt           DateTime @default(now())
+  guardianEmail       String?
+  studentEmailSent   Boolean?  @default(false)
+  fatherEmailSent    Boolean?  @default(false)
+  motherEmailSent    Boolean?  @default(false)
+  studentEmailSentAt DateTime?
+  fatherEmailSentAt  DateTime?
+  motherEmailSentAt  DateTime?
+
+  allocations     Allocation[]
+  documents       Document[]
+}
+
+model Document {
+  id            String   @id @default(uuid())
+  applicationId String
+  name          String
+  url           String
+  application   Application @relation(fields: [applicationId], references: [id])
+}
+
+model Block {
+  id       String  @id @default(uuid())
+  name     String
+  gender   String  // MALE, FEMALE
+  imageUrl String?
+  rooms    Room[]
+}
+
+model Room {
+  id       String  @id @default(uuid())
+  blockId  String
+  roomNo   String
+  floor    Int
+  capacity Int
+  type     String  // e.g., "4 Sharing"
+  block    Block   @relation(fields: [blockId], references: [id])
+  beds     Bed[]
+}
+
+model Bed {
+  id          String   @id @default(uuid())
+  roomId      String
+  bedNo       Int
+  status      String   // AVAILABLE, OCCUPIED, RESERVED, MAINTENANCE
+  room        Room     @relation(fields: [roomId], references: [id])
+  allocation  Allocation?
+}
+
+model Allocation {
+  id            String   @id @default(uuid())
+  applicationId String
+  bedId         String   @unique
+  allocatedAt   DateTime @default(now())
+  status        String   // ACTIVE, CANCELLED, TRANSFERRED
+  
+  application   Application @relation(fields: [applicationId], references: [id])
+  bed           Bed         @relation(fields: [bedId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  adminName   String
+  action      String
+  details     String
+  createdAt   DateTime @default(now())
+}
+
+model AllocationHistory {
+  id              String   @id @default(uuid())
+  studentName     String
+  previousBlock   String?
+  previousRoom    String?
+  previousBed     String?
+  newBlock        String
+  newRoom         String
+  newBed          String
+  adminName       String
+  reason          String?
+  createdAt       DateTime @default(now())
+}
+
+model Payment {
+  id              String    @id @default(uuid())
+  studentName     String
+  studentUsn      String
+  hostelName      String
+  block           String
+  floor           String?
+  roomNumber      String
+  utrNumber       String    @unique
+  paymentDate     DateTime
+  screenshotUrl   String?
+  status          String    @default("PENDING_REVIEW")
+  emailStatus     String    @default("PENDING")
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  remarks         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+
+model EmailTemplate {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  subject   String
+  body      String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.LongText
+  updatedAt DateTime @updatedAt
+}
+
+model Facility {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+}
+
+model Feedback {
+  id          String   @id @default(uuid())
+  studentName String
+  usn         String
+  message     String
+  rating      Int
+  createdAt   DateTime @default(now())
+}
+
+model Complaint {
+  id              String   @id @default(uuid())
+  studentName     String
+  usn             String
+  roomNo          String
+  block           String   @default("Block A")
+  floor           String   @default("1")
+  category        String
+  priority        String   @default("Medium")
+  subject         String   @default("Hostel Issue")
+  description     String   @db.Text
+  status          String   @default("Pending")
+  assignedTo      String?
+  resolutionNotes String?  @db.Text
+  createdAt       DateTime @default(now())
+  resolvedAt      DateTime?
+}
+
+model SocialPost {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  imageUrl    String?
+  author      String
+  type        String   @default("General")
+  createdAt   DateTime @default(now())
+}
+
+model LeaveApplication {
+  id          String   @id @default(uuid())
+  studentName String
+  usn         String
+  reason      String
+  fromDate    DateTime
+  toDate      DateTime
+  status      String   @default("Pending")
+  appliedAt   DateTime @default(now())
+}
+
+model Notice {
+  id          String   @id @default(uuid())
+  title       String
+  desc        String
+  date        String
+  category    String
+  priority    String
+  author      String
+  fileSize    String?
+  createdAt   DateTime @default(now())
+}
+
+model EmailHistory {
+  id          String   @id @default(uuid())
+  studentId   String
+  studentName String
+  usn         String
+  email       String
+  workflow    String
+  subject     String
+  body        String   @db.Text
+  status      String
+  mode        String
+  createdAt   DateTime @default(now())
+}
+
+model ChatChannel {
+  id        String        @id @default(uuid())
+  name      String        @unique
+  desc      String
+  iconName  String        @default("MessageSquare")
+  badge     String?
+  createdAt DateTime      @default(now())
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id          String      @id @default(uuid())
+  channelId   String
+  senderName  String
+  usn         String
+  roomNo      String
+  message     String      @db.Text
+  time        String
+  likes       Int         @default(0)
+  price       String?
+  categoryTag String?
+  imgUrl      String?
+  createdAt   DateTime    @default(now())
+  
+  channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
