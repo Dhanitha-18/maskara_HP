@@ -80,6 +80,12 @@ export default function AllocationModal({ isOpen, onClose, applicationId, gender
     if (fNum === 2) return 'Second Floor';
     if (fNum === 3) return 'Third Floor';
     if (fNum === 4) return 'Fourth Floor';
+    if (fNum === 5) return 'Fifth Floor';
+    if (fNum === 6) return 'Sixth Floor';
+    if (fNum === 7) return 'Seventh Floor';
+    if (fNum === 8) return 'Eighth Floor';
+    if (fNum === 9) return 'Ninth Floor';
+    if (fNum === 10) return 'Tenth Floor';
     return `Floor ${flr}`;
   };
 

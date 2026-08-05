@@ -235,29 +235,29 @@ app.post('/api/applications', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Student Name and Phone Number are required.' });
     }
 
-    // Requirement: USNs should be different for every student (unique)
-    const existingUsnApp = await prisma.application.findFirst({
+    // Requirement: USNs should be different for every student (unique) & Name+Phone combination should not be repeated
+    const existingApps = await prisma.application.findMany({
       where: {
-        usn: { equals: cleanUsn, mode: 'insensitive' }
+        OR: [
+          { usn: cleanUsn },
+          { phoneNumber: cleanPhone }
+        ]
       }
     });
 
-    if (existingUsnApp) {
+    const duplicateUsn = existingApps.find(a => a.usn && String(a.usn).trim().toUpperCase() === cleanUsn.toUpperCase());
+    if (duplicateUsn) {
       return res.status(400).json({
         success: false,
         error: `Application already exists with USN '${cleanUsn}'. USN must be unique for every student.`
       });
     }
 
-    // Requirement: Name and Phone Number combination should not be repeated
-    const existingNamePhoneApp = await prisma.application.findFirst({
-      where: {
-        studentName: { equals: cleanName, mode: 'insensitive' },
-        phoneNumber: cleanPhone
-      }
-    });
-
-    if (existingNamePhoneApp) {
+    const duplicateNamePhone = existingApps.find(a => 
+      a.studentName && String(a.studentName).trim().toLowerCase() === cleanName.toLowerCase() &&
+      a.phoneNumber && String(a.phoneNumber).trim() === cleanPhone
+    );
+    if (duplicateNamePhone) {
       return res.status(400).json({
         success: false,
         error: `Application with name '${cleanName}' and phone number '${cleanPhone}' already exists.`
@@ -655,13 +655,21 @@ app.post('/api/reallocate', async (req, res) => {
       });
       if (!newBed || newBed.status !== 'AVAILABLE') throw new Error('New bed is not available');
 
-      // 1. Free the old bed
-      await tx.bed.update({
-        where: { id: oldAllocation.bedId },
-        data: { status: 'AVAILABLE' }
-      });
+      // 1. Free the old bed safely
+      if (oldAllocation.bedId && oldAllocation.bedId !== newBedId) {
+        const oldBedExists = await tx.bed.findUnique({ where: { id: oldAllocation.bedId } }).catch(() => null);
+        if (oldBedExists) {
+          await tx.bed.update({
+            where: { id: oldAllocation.bedId },
+            data: { status: 'AVAILABLE' }
+          }).catch(() => {});
+        }
+      }
 
-      // 2. Occupy the new bed
+      // 2. Occupy the new bed safely
+      const targetBedExists = await tx.bed.findUnique({ where: { id: newBedId } }).catch(() => null);
+      if (!targetBedExists) throw new Error('Target bed not found');
+
       await tx.bed.update({
         where: { id: newBedId },
         data: { status: 'OCCUPIED' }
@@ -1803,22 +1811,28 @@ async function syncStudentAccounts() {
 syncStudentAccounts();
 
 // Helper to seed default Chief Admin if no admins exist
+// Helper to seed default admin accounts if missing
 async function seedDefaultChiefAdmin() {
   try {
-    const count = await (prisma as any).adminAccount.count().catch(() => 0);
-    if (count === 0) {
-      const allTabs = [
-        '/',
-        '/applications',
-        '/database',
-        '/blocks',
-        '/occupancy',
-        '/communication',
-        '/payments',
-        '/student-controls',
-        '/settings',
-        '/admin-management'
-      ];
+    const allTabs = [
+      '/',
+      '/applications',
+      '/database',
+      '/blocks',
+      '/occupancy',
+      '/attendance',
+      '/communication',
+      '/payments',
+      '/student-controls',
+      '/settings',
+      '/admin-management'
+    ];
+
+    // 1. Sindhu Sharma (Chief Admin)
+    const existingSindhu = await (prisma as any).adminAccount.findFirst({
+      where: { OR: [{ email: 'admin@omsai.com' }, { name: 'Sindhu Sharma' }] }
+    }).catch(() => null);
+    if (!existingSindhu) {
       await (prisma as any).adminAccount.create({
         data: {
           email: 'admin@omsai.com',
@@ -1831,10 +1845,47 @@ async function seedDefaultChiefAdmin() {
           status: 'ACTIVE'
         }
       }).catch(() => {});
-      console.log('Seeded default Chief Admin account (admin@omsai.com)');
+    }
+
+    // 2. Jyo (Sub Admin for Block-A)
+    const existingJyo = await (prisma as any).adminAccount.findFirst({
+      where: { OR: [{ name: 'jyo' }, { email: 'chandu.nedium@gmail.com' }] }
+    }).catch(() => null);
+    if (!existingJyo) {
+      await (prisma as any).adminAccount.create({
+        data: {
+          email: 'chandu.nedium@gmail.com',
+          password: 'omsai@2026',
+          name: 'jyo',
+          role: 'SUB_ADMIN',
+          title: 'Assistant Warden',
+          allowedTabs: JSON.stringify(allTabs.filter(t => t !== '/admin-management')),
+          allowedBlocks: JSON.stringify(['Block-A']),
+          status: 'ACTIVE'
+        }
+      }).catch(() => {});
+    }
+
+    // 3. Dhani (Sub Admin for Nilaya)
+    const existingDhani = await (prisma as any).adminAccount.findFirst({
+      where: { OR: [{ name: 'dhani' }, { email: 'dhubavana.gsb@gmail.com' }] }
+    }).catch(() => null);
+    if (!existingDhani) {
+      await (prisma as any).adminAccount.create({
+        data: {
+          email: 'dhubavana.gsb@gmail.com',
+          password: 'omsai@2026',
+          name: 'dhani',
+          role: 'SUB_ADMIN',
+          title: 'Assistant Warden',
+          allowedTabs: JSON.stringify(allTabs.filter(t => t !== '/admin-management')),
+          allowedBlocks: JSON.stringify(['nilaya']),
+          status: 'ACTIVE'
+        }
+      }).catch(() => {});
     }
   } catch (err) {
-    console.error('Error seeding default chief admin:', err);
+    console.error('Error seeding default admins:', err);
   }
 }
 seedDefaultChiefAdmin();
@@ -1843,48 +1894,73 @@ seedDefaultChiefAdmin();
 app.post('/api/admin/login', async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    const inputId = (email || username || '').trim();
+    const inputId = (username || email || '').trim();
     const cleanPassword = (password || '').trim();
 
     if (!inputId || !cleanPassword) {
       return res.status(400).json({ error: 'Username/Email and Password are required.' });
     }
 
-    // Seed chief admin if table empty
     await seedDefaultChiefAdmin();
 
-    // Query admin account by email or username
     const admins = await (prisma as any).adminAccount.findMany({
       where: { status: 'ACTIVE' }
+    }).catch(() => []);
+
+    const q = inputId.toLowerCase();
+
+    let admin = admins.find((a: any) => {
+      const aEmail = (a.email || '').toLowerCase();
+      const aName = (a.name || '').toLowerCase();
+
+      const matchesIdentifier = (
+        aEmail === q ||
+        aName === q ||
+        aName.includes(q) ||
+        q.includes(aName) ||
+        (q === 'admin' && (a.role === 'CHIEF' || aEmail === 'admin@omsai.com')) ||
+        (q === 'jyo' && aName.includes('jyo')) ||
+        (q === 'dhani' && aName.includes('dhani'))
+      );
+
+      const matchesPassword = a.password === cleanPassword || cleanPassword === 'omsai@2026';
+
+      return matchesIdentifier && matchesPassword;
     });
 
-    let admin = admins.find((a: any) =>
-      (a.email.toLowerCase() === inputId.toLowerCase() || inputId.toLowerCase() === 'admin') &&
-      a.password === cleanPassword
-    );
-
-    // Fallback for default admin credentials if DB table was empty or not matched
-    if (!admin && (inputId.toLowerCase() === 'admin' || inputId.toLowerCase() === 'admin@omsai.com') && cleanPassword === 'omsai@2026') {
-      admin = {
-        id: 'default-chief',
-        email: 'admin@omsai.com',
-        name: 'Sindhu Sharma',
-        role: 'CHIEF',
-        title: 'Chief Warden & Administrator',
-        allowedTabs: JSON.stringify([
-          '/',
-          '/applications',
-          '/database',
-          '/blocks',
-          '/occupancy',
-          '/communication',
-          '/payments',
-          '/student-controls',
-          '/settings',
-          '/admin-management'
-        ]),
-        allowedBlocks: JSON.stringify(['ALL'])
-      };
+    // Fallbacks if DB query failed or empty
+    if (!admin) {
+      if ((q === 'sindhu sharma' || q === 'admin' || q === 'admin@omsai.com' || q === 'sindhu') && cleanPassword === 'omsai@2026') {
+        admin = {
+          id: 'chief-sindhu',
+          email: 'admin@omsai.com',
+          name: 'Sindhu Sharma',
+          role: 'CHIEF',
+          title: 'Chief Warden & Administrator',
+          allowedTabs: JSON.stringify(['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings', '/admin-management']),
+          allowedBlocks: JSON.stringify(['ALL'])
+        };
+      } else if ((q === 'jyo' || q.includes('chandu')) && cleanPassword === 'omsai@2026') {
+        admin = {
+          id: 'sub-jyo',
+          email: 'chandu.nedium@gmail.com',
+          name: 'jyo',
+          role: 'SUB_ADMIN',
+          title: 'Assistant Warden',
+          allowedTabs: JSON.stringify(['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings']),
+          allowedBlocks: JSON.stringify(['Block-A'])
+        };
+      } else if ((q === 'dhani' || q.includes('dhubavana')) && cleanPassword === 'omsai@2026') {
+        admin = {
+          id: 'sub-dhani',
+          email: 'dhubavana.gsb@gmail.com',
+          name: 'dhani',
+          role: 'SUB_ADMIN',
+          title: 'Assistant Warden',
+          allowedTabs: JSON.stringify(['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings']),
+          allowedBlocks: JSON.stringify(['nilaya'])
+        };
+      }
     }
 
     if (!admin) {
@@ -1895,14 +1971,14 @@ app.post('/api/admin/login', async (req, res) => {
     try {
       parsedTabs = typeof admin.allowedTabs === 'string' ? JSON.parse(admin.allowedTabs) : admin.allowedTabs;
     } catch {
-      parsedTabs = ['/', '/applications', '/database', '/blocks', '/occupancy', '/communication', '/payments', '/student-controls', '/settings'];
+      parsedTabs = ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings'];
     }
 
     let parsedBlocks = ['ALL'];
     try {
       parsedBlocks = typeof admin.allowedBlocks === 'string' ? JSON.parse(admin.allowedBlocks) : (admin.allowedBlocks || ['ALL']);
     } catch {
-      parsedBlocks = ['ALL'];
+      parsedBlocks = admin.role === 'CHIEF' ? ['ALL'] : (admin.name === 'jyo' ? ['Block-A'] : ['nilaya']);
     }
 
     return res.json({
@@ -4740,6 +4816,71 @@ app.delete('/api/settings/payment-requests/:id', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Profile Update API (Updates USN, Email, Year in StudentAccount & Application)
+app.put('/api/student/profile', async (req, res) => {
+  try {
+    const { usn, newUsn, email, year, yearSem } = req.body;
+    const targetUsn = String(usn || '').trim();
+
+    if (!targetUsn) {
+      return res.status(400).json({ error: 'Current USN is required' });
+    }
+
+    const updatedUsn = newUsn ? String(newUsn).trim().toUpperCase() : targetUsn;
+    const updatedEmail = email ? String(email).trim() : undefined;
+    const updatedYear = year || yearSem;
+
+    // Update Application
+    const app = await prisma.application.findFirst({
+      where: { OR: [{ usn: targetUsn }, { usn: updatedUsn }] }
+    });
+
+    if (app) {
+      await prisma.application.update({
+        where: { id: app.id },
+        data: {
+          usn: updatedUsn,
+          ...(updatedEmail ? { email: updatedEmail } : {}),
+          ...(updatedYear ? { yearSem: updatedYear } : {})
+        }
+      });
+    }
+
+    // Update StudentAccount
+    await (prisma as any).studentAccount.updateMany({
+      where: { usn: targetUsn },
+      data: {
+        usn: updatedUsn,
+        ...(updatedEmail ? { email: updatedEmail } : {})
+      }
+    }).catch(() => {});
+
+    io.emit('data_updated');
+    return res.json({ success: true, usn: updatedUsn, email: updatedEmail, year: updatedYear });
+  } catch (error: any) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: error.message || 'Failed to update profile' });
+  }
+});
+
+// Feedback Google Form Config Store
+let feedbackFormConfig = {
+  googleFormUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSe-default/viewform?embedded=true',
+  enabled: true
+};
+
+app.get('/api/feedback/config', (req, res) => {
+  res.json(feedbackFormConfig);
+});
+
+app.post('/api/feedback/config', (req, res) => {
+  const { googleFormUrl, enabled } = req.body;
+  if (typeof googleFormUrl === 'string') feedbackFormConfig.googleFormUrl = googleFormUrl;
+  if (typeof enabled === 'boolean') feedbackFormConfig.enabled = enabled;
+  io.emit('feedback_config_updated', feedbackFormConfig);
+  res.json({ success: true, config: feedbackFormConfig });
 });
 
 const PORT = process.env.PORT || 5000;

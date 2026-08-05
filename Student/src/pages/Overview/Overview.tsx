@@ -84,7 +84,7 @@ const PG_FEATURE_SECTIONS: Array<{
 
 export const Overview: React.FC = () => {
   const { applicationState, student, hostel, paymentStatus, refreshStatus } = usePayment();
-  const { studentUsn } = useAuth();
+  const { isLoggedIn, studentUsn } = useAuth();
   const navigate = useNavigate();
   const [currentSlide, setCurrentSlide] = useState(0);
 
@@ -286,102 +286,9 @@ export const Overview: React.FC = () => {
         </p>
       </section>
 
-      {/* 3. APPLICATION OVERVIEW & STATUS SECTION */}
-      {applicationState !== 'not_applied' ? (
-        <section className="bg-white border border-indigo-100 p-6 sm:p-8 rounded-2xl shadow-soft relative overflow-hidden group space-y-5">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-            <div className="space-y-4 w-full md:w-auto flex-1">
-              <h3 className="text-base font-black text-indigo-900 uppercase tracking-wider flex items-center gap-2 border-b border-indigo-50 pb-3">
-                <Receipt className="w-5 h-5 text-indigo-500" />
-                Your Application Overview & Status
-              </h3>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 text-sm">
-                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Student Name</p>
-                   <p className="font-bold text-slate-800 truncate">{student.name || '-'}</p>
-                 </div>
-                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">USN</p>
-                   <p className="font-bold text-slate-800 uppercase truncate">{student.usn || '-'}</p>
-                 </div>
-                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Department</p>
-                   <p className="font-bold text-slate-800 truncate">{student.department || '-'}</p>
-                 </div>
-                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Contact</p>
-                   <p className="font-bold text-slate-800 truncate">{student.phone || '-'}</p>
-                 </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
-              {applicationState === 'applied' && (
-                <div className="space-y-1 text-right">
-                  <span className="bg-amber-50 text-amber-700 border border-amber-200 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm inline-flex">
-                    <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping" />
-                    Application Under Review
-                  </span>
-                </div>
-              )}
-              {applicationState === 'room_allotted' && (
-                <span className="bg-blue-50 text-blue-700 border border-blue-200 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm">
-                  <CheckCircle2 className="w-5 h-5 text-blue-600" />
-                  Hostel Room Allotted
-                </span>
-              )}
-              {applicationState === 'paid' && (
-                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                  Fully Confirmed Resident
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Under Review Explanation Message */}
-          {applicationState === 'applied' && (
-            <div className="bg-amber-50/70 border border-amber-200/80 p-4 rounded-xl text-xs text-amber-900 font-semibold space-y-1">
-              <p className="font-bold flex items-center gap-2 text-amber-800">
-                <span>📋 Application Submitted — Pending Hostel Allocation</span>
-              </p>
-              <p className="text-slate-600 leading-relaxed">
-                Your application has been received and is currently under verification by the hostel warden. Once your room and bed allocation is completed by administration, all portal features (Payments, Complaints, Social Connect, Circulars, Attendance) will unlock automatically.
-              </p>
-            </div>
-          )}
-
-          {/* Room Allocation Info Grid if Allotted or Paid */}
-          {(applicationState === 'room_allotted' || applicationState === 'paid') && hostel?.room && (
-            <div className="bg-blue-50/60 border border-blue-100 p-4 rounded-xl space-y-2 text-xs">
-              <span className="text-[10px] font-black uppercase tracking-wider text-blue-800 block">🏠 Allocated Room Details</span>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 font-bold text-slate-800">
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-normal">Hostel</span>
-                  {hostel.hostel}
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-normal">Block</span>
-                  {hostel.block}
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-normal">Floor</span>
-                  Floor {hostel.floor}
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-normal">Room No</span>
-                  Room {hostel.room}
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-normal">Bed No</span>
-                  Bed {hostel.bed}
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-      ) : (
+      {/* 3. APPLICATION OVERVIEW / ALLOCATION / APPLY NOW CONDITIONAL SECTION */}
+      {!isLoggedIn ? (
+        /* State 1: NOT LOGGED IN -> Show APPLY NOW CTA */
         <section className="bg-white border border-border p-6 sm:p-8 rounded-2xl shadow-soft flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-card transition-all">
           <div className="space-y-4 w-full md:w-auto">
             <h3 className="text-base font-black text-slate-900 uppercase tracking-wider">
@@ -406,12 +313,123 @@ export const Overview: React.FC = () => {
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => navigate('/apply')}
-              className="bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-xl text-xs flex items-center gap-2 transition-all shadow-md group whitespace-nowrap"
+              className="bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-xl text-xs flex items-center gap-2 transition-all shadow-md group whitespace-nowrap cursor-pointer"
               type="button"
             >
-              <span>Apply to Join</span>
+              <span>Apply Now</span>
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </button>
+          </div>
+        </section>
+      ) : (applicationState === 'room_allotted' || applicationState === 'paid') && hostel?.room && hostel.room !== '-' && hostel.room !== 'Unassigned' ? (
+        /* State 2: LOGGED IN & BED ALLOTTED -> Show Exact Card from Image */
+        <section className="bg-white border border-indigo-100 p-6 sm:p-8 rounded-3xl shadow-soft space-y-6 animate-fadeIn">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="space-y-4 flex-1 w-full">
+              <h3 className="text-xs font-black text-indigo-900 uppercase tracking-wider flex items-center gap-2 border-b border-indigo-50 pb-3">
+                <Receipt className="w-4.5 h-4.5 text-indigo-600" />
+                YOUR APPLICATION OVERVIEW & STATUS
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">STUDENT NAME</p>
+                  <p className="font-extrabold text-slate-800 text-sm truncate">{student.name || 'Student'}</p>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">USN</p>
+                  <p className="font-extrabold text-slate-800 text-sm uppercase truncate">{student.usn || studentUsn || '-'}</p>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">DEPARTMENT</p>
+                  <p className="font-extrabold text-slate-800 text-sm truncate">{student.department || 'General'}</p>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">CONTACT</p>
+                  <p className="font-extrabold text-slate-800 text-sm truncate">{student.phone || '-'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="shrink-0 self-start md:self-center">
+              <span className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2.5 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-xs">
+                <CheckCircle2 className="w-4.5 h-4.5 text-blue-600" />
+                HOSTEL ROOM ALLOTTED
+              </span>
+            </div>
+          </div>
+
+          {/* Inner Room Allocation Box */}
+          <div className="bg-[#f0f7ff] border border-blue-100 p-5 rounded-2xl space-y-2 text-xs shadow-xs">
+            <span className="text-[11px] font-black uppercase tracking-wider text-blue-800 flex items-center gap-1.5 mb-2">
+              <span>🏢 ALLOCATED ROOM DETAILS</span>
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 font-extrabold text-slate-800">
+              <div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase mb-0.5">Hostel</span>
+                <span className="text-xs sm:text-sm font-extrabold text-slate-900">{hostel?.hostel || 'OM SAI PG'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase mb-0.5">Block</span>
+                <span className="text-xs sm:text-sm font-extrabold text-slate-900">{hostel?.block || 'Block A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase mb-0.5">Floor</span>
+                <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                  {hostel?.floor ? (String(hostel.floor).toLowerCase().includes('floor') ? hostel.floor : `Floor ${hostel.floor}`) : 'Floor 1'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase mb-0.5">Room No</span>
+                <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                  {hostel?.room ? (String(hostel.room).toLowerCase().includes('room') ? hostel.room : `Room ${hostel.room}`) : 'Room 101'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase mb-0.5">Bed No</span>
+                <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                  {hostel?.bed ? (String(hostel.bed).toLowerCase().includes('bed') ? hostel.bed : `Bed ${hostel.bed}`) : 'Bed 1'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : (
+        /* State 3: LOGGED IN & APPLICATION UNDER VERIFICATION */
+        <section className="bg-white border border-indigo-100 p-6 sm:p-8 rounded-2xl shadow-soft relative overflow-hidden group space-y-5 animate-fadeIn">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-4 w-full md:w-auto flex-1">
+              <h3 className="text-base font-black text-indigo-900 uppercase tracking-wider flex items-center gap-2 border-b border-indigo-50 pb-3">
+                <Receipt className="w-5 h-5 text-indigo-500" />
+                Your Application Overview & Status
+              </h3>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 text-sm">
+                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Student Name</p>
+                   <p className="font-bold text-slate-800 truncate">{student.name || '-'}</p>
+                 </div>
+                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">USN</p>
+                   <p className="font-bold text-slate-800 uppercase truncate">{student.usn || studentUsn || '-'}</p>
+                 </div>
+                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Department</p>
+                   <p className="font-bold text-slate-800 truncate">{student.department || '-'}</p>
+                 </div>
+                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Contact</p>
+                   <p className="font-bold text-slate-800 truncate">{student.phone || '-'}</p>
+                 </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
+              <span className="bg-amber-50 text-amber-700 border border-amber-200 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm inline-flex">
+                <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping" />
+                Application Under Verification
+              </span>
+            </div>
           </div>
         </section>
       )}

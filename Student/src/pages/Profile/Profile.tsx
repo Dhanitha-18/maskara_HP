@@ -10,13 +10,61 @@ import { HeroBanner } from '../../components/layout/HeroBanner';
 import { useNavigate } from 'react-router-dom';
 
 export const Profile: React.FC = () => {
-  const { student, hostel, paymentStatus, applicationState, backendPayments } = usePayment();
-  const { isLoggedIn } = useAuth();
+  const { student, hostel, paymentStatus, applicationState, backendPayments, updateStudent } = usePayment();
+  const { isLoggedIn, studentUsn: authUsn } = useAuth();
   const navigate = useNavigate();
   const [showAppFormModal, setShowAppFormModal] = useState(false);
 
   const isRoomAllotted = applicationState === 'room_allotted' || applicationState === 'paid';
   const appData = student.applicationData || {};
+
+  // Profile Edit state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedUsn, setEditedUsn] = useState('');
+  const [editedEmail, setEditedEmail] = useState('');
+  const [selectedYear, setSelectedYear] = useState('1st Year');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEditedUsn(student.usn || appData.usn || authUsn || '');
+    setEditedEmail(student.email || appData.email || '');
+    setSelectedYear(appData.yearSem || (student as any).yearSem || (student.semester ? `${student.semester}st Year` : '1st Year'));
+  }, [student, appData, authUsn]);
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    setSaveSuccessMsg(null);
+    try {
+      const currentUsnToUse = student.usn || authUsn;
+      const res = await fetch('http://localhost:5000/api/student/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usn: currentUsnToUse,
+          newUsn: editedUsn,
+          email: editedEmail,
+          year: selectedYear
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to update profile');
+
+      updateStudent({
+        usn: editedUsn,
+        email: editedEmail,
+        semester: selectedYear as any
+      });
+
+      setSaveSuccessMsg('Profile updated successfully! Synced with Admin Portal Student Database.');
+      setIsEditing(false);
+      setTimeout(() => setSaveSuccessMsg(null), 4000);
+    } catch {
+      alert('Failed to save profile changes. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const getPhotoUrl = (url?: string | null) => {
     if (!url) return null;
@@ -193,22 +241,58 @@ export const Profile: React.FC = () => {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white border border-border rounded-2xl p-6 sm:p-8 shadow-card space-y-8">
               
-              {/* Header Title */}
+              {/* Header Title & Edit Controls */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
                 <div>
                   <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
                     Student Profile Details
                   </h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowAppFormModal(true)}
-                  className="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0"
-                >
-                  <Eye className="w-4 h-4" />
-                  <span>View Raw Form</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {!isEditing ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0 cursor-pointer"
+                    >
+                      <span>Edit Profile (USN / Email / Year)</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveProfile}
+                        disabled={isSaving}
+                        className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer"
+                      >
+                        <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditing(false)}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 px-3 rounded-xl text-xs transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowAppFormModal(true)}
+                    className="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>View Raw Form</span>
+                  </button>
+                </div>
               </div>
+
+              {saveSuccessMsg && (
+                <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{saveSuccessMsg}</span>
+                </div>
+              )}
 
               {/* 1. Student Personal & Identification Details */}
               <div className="space-y-3">
@@ -220,7 +304,16 @@ export const Profile: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-100 p-4 rounded-xl">
                   <div>
                     <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">1. USN</span>
-                    <span className="text-slate-900 font-bold block mt-0.5 font-mono">{displayVal(appData.bmsitId || appData.usn || student.usn)}</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editedUsn}
+                        onChange={e => setEditedUsn(e.target.value)}
+                        className="w-full mt-1 bg-white border border-indigo-300 rounded-lg p-1.5 text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    ) : (
+                      <span className="text-slate-900 font-bold block mt-0.5 font-mono">{displayVal(editedUsn || appData.bmsitId || appData.usn || student.usn)}</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">2. Full Name</span>
@@ -236,11 +329,33 @@ export const Profile: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">5. Email</span>
-                    <span className="text-slate-900 font-bold block mt-0.5 font-mono">{displayVal(appData.email || student.email)}</span>
+                    {isEditing ? (
+                      <input
+                        type="email"
+                        value={editedEmail}
+                        onChange={e => setEditedEmail(e.target.value)}
+                        className="w-full mt-1 bg-white border border-indigo-300 rounded-lg p-1.5 text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    ) : (
+                      <span className="text-slate-900 font-bold block mt-0.5 font-mono">{displayVal(editedEmail || appData.email || student.email)}</span>
+                    )}
                   </div>
                   <div>
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">6. Date of Birth</span>
-                    <span className="text-slate-900 font-bold block mt-0.5">{appData.dob ? new Date(appData.dob).toLocaleDateString('en-IN') : 'Not Available'}</span>
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">6. Academic Year</span>
+                    {isEditing ? (
+                      <select
+                        value={selectedYear}
+                        onChange={e => setSelectedYear(e.target.value)}
+                        className="w-full mt-1 bg-white border border-indigo-300 rounded-lg p-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                      >
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year">4th Year</option>
+                      </select>
+                    ) : (
+                      <span className="text-slate-900 font-bold block mt-0.5">{displayVal(selectedYear)}</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">7. Program</span>

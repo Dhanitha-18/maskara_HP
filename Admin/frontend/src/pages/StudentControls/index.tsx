@@ -14,7 +14,9 @@ import { useAuthStore } from '../../store/useAuthStore';
 
 export default function StudentControlsIndex() {
   const { role, allowedTabs } = useAuthStore();
-  const [activeTab, setActiveTab] = useState('attendance');
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('admin_student_controls_tab') || 'attendance';
+  });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +42,12 @@ export default function StudentControlsIndex() {
       return allowedTabs.includes(t.permKey);
     });
   }, [role, allowedTabs]);
+
+  useEffect(() => {
+    if (activeTab) {
+      localStorage.setItem('admin_student_controls_tab', activeTab);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (tabs.length > 0 && !tabs.some(t => t.id === activeTab)) {

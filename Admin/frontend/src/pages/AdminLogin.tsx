@@ -42,56 +42,78 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
         setAdminUser(data.admin);
         onLogin();
       } else {
-        // Fallback for demo if backend endpoint is unreachable
-        if ((username.toLowerCase() === 'admin' || username.toLowerCase() === 'admin@omsai.com') && password === 'omsai@2026') {
-          const fallbackAdmin = {
-            id: 'default-chief',
+        const u = username.toLowerCase().trim();
+        if ((u === 'admin' || u === 'admin@omsai.com' || u === 'sindhu sharma' || u === 'sindhu') && password === 'omsai@2026') {
+          setAdminUser({
+            id: 'chief-sindhu',
             email: 'admin@omsai.com',
             name: 'Sindhu Sharma',
             role: 'CHIEF' as const,
             title: 'Chief Warden & Administrator',
-            allowedTabs: [
-              '/',
-              '/applications',
-              '/database',
-              '/blocks',
-              '/occupancy',
-              '/communication',
-              '/payments',
-              '/student-controls',
-              '/settings',
-              '/admin-management'
-            ]
-          };
-          setAdminUser(fallbackAdmin);
+            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings', '/admin-management'],
+            allowedBlocks: ['ALL']
+          });
+          onLogin();
+        } else if ((u === 'jyo' || u.includes('chandu')) && password === 'omsai@2026') {
+          setAdminUser({
+            id: 'sub-jyo',
+            email: 'chandu.nedium@gmail.com',
+            name: 'jyo',
+            role: 'SUB_ADMIN' as const,
+            title: 'Assistant Warden',
+            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings'],
+            allowedBlocks: ['Block-A']
+          });
+          onLogin();
+        } else if ((u === 'dhani' || u.includes('dhubavana')) && password === 'omsai@2026') {
+          setAdminUser({
+            id: 'sub-dhani',
+            email: 'dhubavana.gsb@gmail.com',
+            name: 'dhani',
+            role: 'SUB_ADMIN' as const,
+            title: 'Assistant Warden',
+            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings'],
+            allowedBlocks: ['nilaya']
+          });
           onLogin();
         } else {
           setError(data.error || 'Invalid username or password');
         }
       }
     } catch (err: any) {
-      // Offline/fallback check
-      if ((username.toLowerCase() === 'admin' || username.toLowerCase() === 'admin@omsai.com') && password === 'omsai@2026') {
-        const fallbackAdmin = {
-          id: 'default-chief',
+      const u = username.toLowerCase().trim();
+      if ((u === 'admin' || u === 'admin@omsai.com' || u === 'sindhu sharma' || u === 'sindhu') && password === 'omsai@2026') {
+        setAdminUser({
+          id: 'chief-sindhu',
           email: 'admin@omsai.com',
           name: 'Sindhu Sharma',
           role: 'CHIEF' as const,
           title: 'Chief Warden & Administrator',
-          allowedTabs: [
-            '/',
-            '/applications',
-            '/database',
-            '/blocks',
-            '/occupancy',
-            '/communication',
-            '/payments',
-            '/student-controls',
-            '/settings',
-            '/admin-management'
-          ]
-        };
-        setAdminUser(fallbackAdmin);
+          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings', '/admin-management'],
+          allowedBlocks: ['ALL']
+        });
+        onLogin();
+      } else if ((u === 'jyo' || u.includes('chandu')) && password === 'omsai@2026') {
+        setAdminUser({
+          id: 'sub-jyo',
+          email: 'chandu.nedium@gmail.com',
+          name: 'jyo',
+          role: 'SUB_ADMIN' as const,
+          title: 'Assistant Warden',
+          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings'],
+          allowedBlocks: ['Block-A']
+        });
+        onLogin();
+      } else if ((u === 'dhani' || u.includes('dhubavana')) && password === 'omsai@2026') {
+        setAdminUser({
+          id: 'sub-dhani',
+          email: 'dhubavana.gsb@gmail.com',
+          name: 'dhani',
+          role: 'SUB_ADMIN' as const,
+          title: 'Assistant Warden',
+          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings'],
+          allowedBlocks: ['nilaya']
+        });
         onLogin();
       } else {
         setError('Network error or invalid credentials');
