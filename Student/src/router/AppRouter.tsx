@@ -15,7 +15,6 @@ import { SocialConnect } from '../pages/SocialConnect/SocialConnect';
 import { Attendance } from '../pages/Attendance/Attendance';
 import { LeaveApplication } from '../pages/LeaveApplication/LeaveApplication';
 import { Profile } from '../pages/Profile/Profile';
-import { Notifications } from '../pages/Notifications/Notifications';
 import { Feedback } from '../pages/Feedback/Feedback';
 import { Lock, ArrowRight, ShieldAlert } from 'lucide-react';
 
@@ -114,7 +113,6 @@ export const AppRouter: React.FC = () => {
         <Route path="attendance" element={<RequireApplicationGuard><Attendance /></RequireApplicationGuard>} />
         <Route path="leave-application" element={<RequireApplicationGuard><LeaveApplication /></RequireApplicationGuard>} />
         <Route path="profile" element={<RequireApplicationGuard><Profile /></RequireApplicationGuard>} />
-        <Route path="notifications" element={<RequireApplicationGuard><Notifications /></RequireApplicationGuard>} />
         <Route path="feedback" element={<RequireApplicationGuard><Feedback /></RequireApplicationGuard>} />
 
         {/* Redirect unknown routes to Overview */}

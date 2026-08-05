@@ -111,18 +111,8 @@ export const Attendance: React.FC = () => {
       />
 
       {/* Summary Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         
-        <div className="bg-white border border-border p-5 rounded-2xl shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black text-xl shrink-0">
-            {percentage}%
-          </div>
-          <div>
-            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">Attendance Rate</span>
-            <span className="text-lg font-black text-text">{percentage >= 75 ? 'Satisfactory' : 'Needs Attention'}</span>
-          </div>
-        </div>
-
         <div className="bg-white border border-border p-5 rounded-2xl shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-6 h-6" />

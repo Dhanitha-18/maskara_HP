@@ -223,21 +223,50 @@ app.post('/api/applications', async (req, res) => {
       guardianEmail: data.guardianEmail || data.guardianAddress || null
     };
 
-    const existingApp = await prisma.application.findUnique({
-      where: { usn: data.usn }
+    const cleanUsn = String(data.usn || data.bmsitId || '').trim().toUpperCase();
+    const cleanName = String(data.studentName || '').trim();
+    const cleanPhone = String(data.phoneNumber || '').trim();
+
+    if (!cleanUsn) {
+      return res.status(400).json({ success: false, error: 'USN is required.' });
+    }
+
+    if (!cleanName || !cleanPhone) {
+      return res.status(400).json({ success: false, error: 'Student Name and Phone Number are required.' });
+    }
+
+    // Requirement: USNs should be different for every student (unique)
+    const existingUsnApp = await prisma.application.findFirst({
+      where: {
+        usn: { equals: cleanUsn, mode: 'insensitive' }
+      }
     });
 
-    let application;
-    if (existingApp) {
-      application = await prisma.application.update({
-        where: { id: existingApp.id },
-        data: appData
-      });
-    } else {
-      application = await prisma.application.create({
-        data: appData
+    if (existingUsnApp) {
+      return res.status(400).json({
+        success: false,
+        error: `Application already exists with USN '${cleanUsn}'. USN must be unique for every student.`
       });
     }
+
+    // Requirement: Name and Phone Number combination should not be repeated
+    const existingNamePhoneApp = await prisma.application.findFirst({
+      where: {
+        studentName: { equals: cleanName, mode: 'insensitive' },
+        phoneNumber: cleanPhone
+      }
+    });
+
+    if (existingNamePhoneApp) {
+      return res.status(400).json({
+        success: false,
+        error: `Application with name '${cleanName}' and phone number '${cleanPhone}' already exists.`
+      });
+    }
+
+    const application = await prisma.application.create({
+      data: appData
+    });
 
     let passportPhoto = null;
     if (data.passportPhoto || data.photoUrl) {
@@ -1284,48 +1313,53 @@ app.put('/api/applications/batch-status', async (req, res) => {
   }
 });
 
-// Dashboard Stats
+// Dashboard Stats (Ultra-Fast Parallel Queries)
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
-    const [pending, approved, hold, rejected, allocated, paymentPending] = await Promise.all([
-      prisma.application.count({ where: { status: 'PENDING' } }),
-      prisma.application.count({ where: { status: 'APPROVED' } }),
-      prisma.application.count({ where: { status: 'HOLD' } }),
-      prisma.application.count({ where: { status: 'REJECTED' } }),
-      prisma.application.count({ where: { status: 'ALLOCATED' } }),
-      prisma.payment.count({ where: { status: 'PENDING_REVIEW' } })
+    const [
+      pending, approved, hold, rejected, allocated, paymentPending,
+      allBeds, occupiedBeds, availableBeds, totalBlocks, blocks
+    ] = await Promise.all([
+      prisma.application.count({ where: { status: 'PENDING' } }).catch(() => 0),
+      prisma.application.count({ where: { status: 'APPROVED' } }).catch(() => 0),
+      prisma.application.count({ where: { status: 'HOLD' } }).catch(() => 0),
+      prisma.application.count({ where: { status: 'REJECTED' } }).catch(() => 0),
+      prisma.application.count({ where: { status: 'ALLOCATED' } }).catch(() => 0),
+      prisma.payment.count({ where: { status: 'PENDING_REVIEW' } }).catch(() => 0),
+      prisma.bed.count().catch(() => 0),
+      prisma.bed.count({ where: { status: 'OCCUPIED' } }).catch(() => 0),
+      prisma.bed.count({ where: { status: 'AVAILABLE' } }).catch(() => 0),
+      prisma.block.count().catch(() => 0),
+      prisma.block.findMany({
+        select: {
+          gender: true,
+          rooms: { select: { beds: { select: { status: true } } } }
+        }
+      }).catch(() => [])
     ]);
-
-    const allBeds = await prisma.bed.count();
-    const occupiedBeds = await prisma.bed.count({ where: { status: 'OCCUPIED' } });
-    const availableBeds = await prisma.bed.count({ where: { status: 'AVAILABLE' } });
 
     const occupancyPercentage = allBeds === 0 ? 0 : Math.round((occupiedBeds / allBeds) * 100);
 
-    // Simple male/female occupancy (assuming boys block = male, girls block = female)
-    const blocks = await prisma.block.findMany({ include: { rooms: { include: { beds: true } } } });
     let maleOccupancy = 0;
     let femaleOccupancy = 0;
 
-    blocks.forEach(block => {
+    blocks.forEach((block: any) => {
       let blockOccupancy = 0;
-      block.rooms.forEach(room => {
-        blockOccupancy += room.beds.filter(b => b.status === 'OCCUPIED').length;
+      (block.rooms || []).forEach((room: any) => {
+        blockOccupancy += (room.beds || []).filter((b: any) => b.status === 'OCCUPIED').length;
       });
       if (block.gender === 'MALE') maleOccupancy += blockOccupancy;
       if (block.gender === 'FEMALE') femaleOccupancy += blockOccupancy;
     });
 
-   const totalBlocks = await prisma.block.count();
-
-res.json({
-  applications: { pending, approved, hold, rejected, allocated, paymentPending },
-  beds: { all: allBeds, occupied: occupiedBeds, available: availableBeds },
-  occupancyPercentage,
-  maleOccupancy,
-  femaleOccupancy,
-  totalBlocks
-});
+    res.json({
+      applications: { pending, approved, hold, rejected, allocated, paymentPending },
+      beds: { all: allBeds, occupied: occupiedBeds, available: availableBeds },
+      occupancyPercentage,
+      maleOccupancy,
+      femaleOccupancy,
+      totalBlocks
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
@@ -3579,6 +3613,29 @@ app.put('/api/leaves/:id/status', async (req, res) => {
       where: { id },
       data: { status }
     });
+
+    const isApproved = String(status).trim().toLowerCase() === 'approved';
+    const leaveTypeStr = String(leave.leaveType || '').toLowerCase();
+    const reasonStr = String(leave.reason || '').toLowerCase();
+    const isVacating = leaveTypeStr.includes('vacat') || leaveTypeStr.includes('exit') || reasonStr.includes('vacat') || reasonStr.includes('exit');
+
+    // Requirement: When admin approves permanent hostel vacating request -> remove student details from database table
+    if (isApproved && isVacating) {
+      const usnToDel = String(leave.usn || '').trim().toUpperCase();
+      const nameToDel = String(leave.studentName || '').trim();
+
+      await (prisma as any).studentAccount.deleteMany({
+        where: {
+          OR: [
+            { usn: usnToDel },
+            { studentName: { equals: nameToDel, mode: 'insensitive' } }
+          ]
+        }
+      }).catch((e: any) => console.error('Error deleting student account on vacating approval:', e));
+
+      io.emit('student_account_deleted', { usns: [usnToDel] });
+    }
+
     io.emit('LEAVE_UPDATED', leave);
     io.emit('data_updated');
     res.json(leave);

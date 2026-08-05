@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePayment } from '../../context/PaymentContext';
 import { useAuth } from '../../context/AuthContext';
@@ -11,6 +11,8 @@ export const ApplicationForm: React.FC = () => {
   const { login, studentUsn } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   // Form fields states
   const [quota, setQuota] = useState('CET');
@@ -176,6 +178,8 @@ export const ApplicationForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isSubmitting || submittingRef.current) return;
+
     if (!emergencyContact.trim()) {
       setFormErrors("Emergency Contact Number is required.");
       return;
@@ -198,6 +202,9 @@ export const ApplicationForm: React.FC = () => {
       setFormErrors("Signature Date is required.");
       return;
     }
+
+    submittingRef.current = true;
+    setIsSubmitting(true);
 
     const finalCourse = program && branch ? `${program} - ${branch}` : course || branch;
     const finalUsn = usn || bmsitId || studentUsn || `APP-${Date.now()}`;
@@ -281,9 +288,12 @@ export const ApplicationForm: React.FC = () => {
 
       alert("Application submitted successfully! You are now logged in.");
       navigate("/");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setFormErrors("Failed to submit application.");
+      submittingRef.current = false;
+      setIsSubmitting(false);
+      const errMsg = err?.message || "Application already exists.";
+      setFormErrors(errMsg);
     }
   };
 

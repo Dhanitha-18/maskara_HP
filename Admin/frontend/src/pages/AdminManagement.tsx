@@ -31,6 +31,18 @@ const AVAILABLE_TABS = [
   { id: '/settings', label: 'System Settings', category: 'System' },
 ];
 
+const STUDENT_CONTROL_SUBTABS = [
+  { id: 'sc_attendance', label: 'Attendance Control' },
+  { id: 'sc_facilities', label: 'Facilities Control' },
+  { id: 'sc_feedback', label: 'Feedback Control' },
+  { id: 'sc_complaints', label: 'Complaints Control' },
+  { id: 'sc_mess_menu', label: 'Mess Menu Control' },
+  { id: 'sc_circulars', label: 'Circulars Control' },
+  { id: 'sc_social', label: 'Social Connect Control' },
+  { id: 'sc_leaves', label: 'Leave Application Control' },
+  { id: 'sc_payments', label: 'Payment Gateway Control' },
+];
+
 export default function AdminManagement() {
   const { role, logout } = useAuthStore();
   const [admins, setAdmins] = useState<AdminAccountItem[]>([]);
@@ -134,11 +146,24 @@ export default function AdminManagement() {
   };
 
   const handleSelectAllTabs = () => {
-    setSelectedTabs(AVAILABLE_TABS.map(t => t.id));
+    const allTabIds = AVAILABLE_TABS.map(t => t.id);
+    const allSubIds = STUDENT_CONTROL_SUBTABS.map(s => s.id);
+    setSelectedTabs([...allTabIds, ...allSubIds]);
   };
 
   const handleDeselectAllTabs = () => {
     setSelectedTabs([]);
+  };
+
+  const handleSelectAllSubControls = () => {
+    const subIds = STUDENT_CONTROL_SUBTABS.map(s => s.id);
+    const combined = Array.from(new Set([...selectedTabs, '/student-controls', ...subIds]));
+    setSelectedTabs(combined);
+  };
+
+  const handleDeselectAllSubControls = () => {
+    const subIds = STUDENT_CONTROL_SUBTABS.map(s => s.id);
+    setSelectedTabs(selectedTabs.filter(id => !subIds.includes(id)));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -543,27 +568,73 @@ export default function AdminManagement() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
                   {AVAILABLE_TABS.map((tab) => {
                     const isChecked = selectedTabs.includes(tab.id);
+                    const isStudentControls = tab.id === '/student-controls';
                     return (
-                      <div
-                        key={tab.id}
-                        onClick={() => toggleTab(tab.id)}
-                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                          isChecked 
-                            ? 'bg-indigo-50/70 border-indigo-300 text-indigo-900 font-black shadow-sm' 
-                            : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100 font-semibold'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          {isChecked ? (
-                            <CheckSquare className="w-4 h-4 text-indigo-600 shrink-0" />
-                          ) : (
-                            <Square className="w-4 h-4 text-slate-400 shrink-0" />
-                          )}
-                          <span className="text-xs">{tab.label}</span>
+                      <div key={tab.id} className={isStudentControls ? "sm:col-span-2 space-y-2" : ""}>
+                        <div
+                          onClick={() => toggleTab(tab.id)}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                            isChecked 
+                              ? 'bg-indigo-50/70 border-indigo-300 text-indigo-900 font-black shadow-sm' 
+                              : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100 font-semibold'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            {isChecked ? (
+                              <CheckSquare className="w-4 h-4 text-indigo-600 shrink-0" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-400 shrink-0" />
+                            )}
+                            <span className="text-xs">{tab.label}</span>
+                          </div>
+                          <span className="text-[9.5px] uppercase font-bold text-slate-400 px-2 py-0.5 bg-white rounded-md border border-slate-200">
+                            {tab.category}
+                          </span>
                         </div>
-                        <span className="text-[9.5px] uppercase font-bold text-slate-400 px-2 py-0.5 bg-white rounded-md border border-slate-200">
-                          {tab.category}
-                        </span>
+
+                        {/* SUB-CONTROLS DROPDOWN MENU FOR STUDENT CONTROLS */}
+                        {isStudentControls && isChecked && (
+                          <div className="p-4 bg-indigo-50/50 border border-indigo-200 rounded-2xl space-y-3 animate-fadeIn">
+                            <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700">
+                                Student Controls Sub-Tabs Dropdown Menu Permissions
+                              </span>
+                              <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-600">
+                                <button type="button" onClick={handleSelectAllSubControls} className="hover:underline">
+                                  Select All Sub-Tabs
+                                </button>
+                                <span>•</span>
+                                <button type="button" onClick={handleDeselectAllSubControls} className="hover:underline">
+                                  Deselect All
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                              {STUDENT_CONTROL_SUBTABS.map((sub) => {
+                                const isSubChecked = selectedTabs.includes(sub.id);
+                                return (
+                                  <div
+                                    key={sub.id}
+                                    onClick={(e) => { e.stopPropagation(); toggleTab(sub.id); }}
+                                    className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                                      isSubChecked
+                                        ? 'bg-white border-indigo-400 text-indigo-900 shadow-xs'
+                                        : 'bg-white/60 border-slate-200 text-slate-500 hover:bg-white'
+                                    }`}
+                                  >
+                                    {isSubChecked ? (
+                                      <CheckSquare className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    ) : (
+                                      <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                    )}
+                                    <span className="truncate">{sub.label}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

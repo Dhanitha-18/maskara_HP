@@ -18,16 +18,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [studentName, setStudentName] = useState<string | null>(null);
   const [studentPhone, setStudentPhone] = useState<string | null>(null);
 
-  // Restore session from localStorage on mount so page refresh preserves login session
+  // Use sessionStorage so fresh app startup always opens on Student Login
   useEffect(() => {
-    const savedUsn = localStorage.getItem('student_usn');
-    const savedName = localStorage.getItem('student_name');
-    const savedPhone = localStorage.getItem('student_phone');
+    const savedUsn = sessionStorage.getItem('student_usn');
+    const savedName = sessionStorage.getItem('student_name');
+    const savedPhone = sessionStorage.getItem('student_phone');
     if (savedUsn || savedName) {
       setStudentUsn(savedUsn);
       setStudentName(savedName);
       setStudentPhone(savedPhone);
       setIsLoggedIn(true);
+    } else {
+      setIsLoggedIn(false);
     }
   }, []);
 
@@ -35,14 +37,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const normalizedUsn = usn ? usn.trim().toUpperCase() : `STD-${Date.now()}`;
     setStudentUsn(normalizedUsn);
     setIsLoggedIn(true);
+    sessionStorage.setItem('student_usn', normalizedUsn);
     localStorage.setItem('student_usn', normalizedUsn);
 
     if (name) {
       setStudentName(name);
+      sessionStorage.setItem('student_name', name);
       localStorage.setItem('student_name', name);
     }
     if (phone) {
       setStudentPhone(phone);
+      sessionStorage.setItem('student_phone', phone);
       localStorage.setItem('student_phone', phone);
     }
   };
@@ -52,6 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setStudentUsn(null);
     setStudentName(null);
     setStudentPhone(null);
+    sessionStorage.removeItem('student_usn');
+    sessionStorage.removeItem('student_name');
+    sessionStorage.removeItem('student_phone');
     localStorage.removeItem('student_usn');
     localStorage.removeItem('student_name');
     localStorage.removeItem('student_phone');

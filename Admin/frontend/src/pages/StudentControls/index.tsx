@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import FacilitiesControl from './FacilitiesControl';
 import FeedbackControl from './FeedbackControl';
@@ -8,26 +8,47 @@ import LeaveControl from './LeaveControl';
 import MessMenuControl from './MessMenuControl';
 import CircularsControl from './CircularsControl';
 import PaymentsControl from './PaymentsControl';
-import { Building2, MessageSquare, AlertTriangle, Users, Calendar, Utensils, FileText, CreditCard, Menu, ChevronDown } from 'lucide-react';
+import AttendanceManagement from '../AttendanceManagement';
+import { Building2, MessageSquare, AlertTriangle, Users, Calendar, Utensils, FileText, CreditCard, UserCheck, Menu, ChevronDown } from 'lucide-react';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export default function StudentControlsIndex() {
-  const [activeTab, setActiveTab] = useState('facilities');
+  const { role, allowedTabs } = useAuthStore();
+  const [activeTab, setActiveTab] = useState('attendance');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const tabs = [
-    { id: 'facilities', label: 'Facilities', icon: Building2 },
-    { id: 'feedback', label: 'Feedback', icon: MessageSquare },
-    { id: 'complaints', label: 'Complaints', icon: AlertTriangle },
-    { id: 'mess_menu', label: 'Mess Menu', icon: Utensils },
-    { id: 'circulars', label: 'Circulars', icon: FileText },
-    { id: 'social', label: 'Social Connect', icon: Users },
-    { id: 'leaves', label: 'Leave Applications', icon: Calendar },
-    { id: 'payments', label: 'Payment Gateway', icon: CreditCard },
+  const allTabs = [
+    { id: 'attendance', permKey: 'sc_attendance', label: 'Daily Attendance', icon: UserCheck },
+    { id: 'facilities', permKey: 'sc_facilities', label: 'Facilities', icon: Building2 },
+    { id: 'feedback', permKey: 'sc_feedback', label: 'Feedback', icon: MessageSquare },
+    { id: 'complaints', permKey: 'sc_complaints', label: 'Complaints', icon: AlertTriangle },
+    { id: 'mess_menu', permKey: 'sc_mess_menu', label: 'Mess Menu', icon: Utensils },
+    { id: 'circulars', permKey: 'sc_circulars', label: 'Circulars', icon: FileText },
+    { id: 'social', permKey: 'sc_social', label: 'Social Connect', icon: Users },
+    { id: 'leaves', permKey: 'sc_leaves', label: 'Leave Applications', icon: Calendar },
+    { id: 'payments', permKey: 'sc_payments', label: 'Payment Gateway', icon: CreditCard },
   ];
 
-  const activeTabData = tabs.find(t => t.id === activeTab)!;
-  const ActiveIcon = activeTabData.icon;
+  // Dynamic real-time tab filtering based on Chief Admin permissions
+  const tabs = useMemo(() => {
+    return allTabs.filter(t => {
+      if (role === 'CHIEF') return true;
+      if (!allowedTabs) return true;
+      const hasAnyScKey = allowedTabs.some(k => k.startsWith('sc_'));
+      if (!hasAnyScKey) return true;
+      return allowedTabs.includes(t.permKey);
+    });
+  }, [role, allowedTabs]);
+
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.some(t => t.id === activeTab)) {
+      setActiveTab(tabs[0].id);
+    }
+  }, [tabs, activeTab]);
+
+  const activeTabData = tabs.find(t => t.id === activeTab) || tabs[0] || allTabs[0];
+  const ActiveIcon = activeTabData ? activeTabData.icon : UserCheck;
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -52,7 +73,7 @@ export default function StudentControlsIndex() {
             <Menu className="w-5 h-5 text-slate-500 group-hover:text-indigo-600 transition-colors" />
             <div className="flex items-center gap-2">
               <ActiveIcon className="w-4 h-4 text-indigo-600" />
-              <span className="text-sm font-bold text-slate-700">{activeTabData.label}</span>
+              <span className="text-sm font-bold text-slate-700">{activeTabData ? activeTabData.label : 'Controls'}</span>
             </div>
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -64,7 +85,7 @@ export default function StudentControlsIndex() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full left-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 py-2 overflow-hidden"
+                className="absolute top-full left-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 py-2 overflow-hidden max-h-96 overflow-y-auto"
               >
                 {tabs.map(tab => {
                   const isActive = activeTab === tab.id;
@@ -94,7 +115,7 @@ export default function StudentControlsIndex() {
 
         <div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Student Dashboard Control</h1>
-          <p className="text-slate-500 mt-0.5 text-sm">Manage data that reflects on the student portal.</p>
+          <p className="text-slate-500 mt-0.5 text-sm">Manage data and attendance that reflect on the student portal.</p>
         </div>
       </div>
 
@@ -107,14 +128,15 @@ export default function StudentControlsIndex() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
           >
+            {activeTab === 'attendance' && <AttendanceManagement />}
             {activeTab === 'facilities' && <FacilitiesControl />}
             {activeTab === 'feedback' && <FeedbackControl />}
-            { activeTab === 'complaints' && <ComplaintsControl /> }
-            { activeTab === 'mess_menu' && <MessMenuControl /> }
-            { activeTab === 'circulars' && <CircularsControl /> }
-            { activeTab === 'social' && <SocialControl /> }
-            { activeTab === 'leaves' && <LeaveControl /> }
-            { activeTab === 'payments' && <PaymentsControl /> }
+            {activeTab === 'complaints' && <ComplaintsControl />}
+            {activeTab === 'mess_menu' && <MessMenuControl />}
+            {activeTab === 'circulars' && <CircularsControl />}
+            {activeTab === 'social' && <SocialControl />}
+            {activeTab === 'leaves' && <LeaveControl />}
+            {activeTab === 'payments' && <PaymentsControl />}
           </motion.div>
         </AnimatePresence>
       </div>
