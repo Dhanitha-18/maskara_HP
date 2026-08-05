@@ -310,7 +310,7 @@ app.get('/api/applications', async (req, res) => {
         }
       }),
       prisma.emailHistory.findMany({
-        where: { status: 'Sent' }
+        orderBy: { createdAt: 'desc' }
       }),
       prisma.payment.findMany({
         where: { status: 'APPROVED' }
@@ -323,7 +323,7 @@ app.get('/api/applications', async (req, res) => {
       const photoDoc = app.documents.find(d => d.name === "Passport Photo");
       
       const studentSent = sentHistories.filter(h => h.studentId === app.id);
-      const sentEmails: Record<string, { date: string; student: boolean; father: boolean; mother: boolean }> = {};
+      const sentEmails: Record<string, { date: string | null; status: string; student: boolean; father: boolean; mother: boolean }> = {};
       
       const workflows = [
         { name: 'Allocation', key: 'ALLOCATION' },
@@ -335,13 +335,22 @@ app.get('/api/applications', async (req, res) => {
       for (const wf of workflows) {
         const latest = studentSent
           .filter(h => h.workflow === wf.name)
-          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
         if (latest) {
           sentEmails[wf.key] = {
-            date: latest.createdAt.toISOString(),
-            student: app.studentEmailSent ?? (latest.status === 'Sent'),
-            father: app.fatherEmailSent ?? (latest.status === 'Sent'),
-            mother: app.motherEmailSent ?? (latest.status === 'Sent')
+            date: latest.createdAt ? new Date(latest.createdAt).toISOString() : null,
+            status: latest.status || 'Sent',
+            student: latest.studentSent ?? (latest.status === 'Sent'),
+            father: latest.fatherSent ?? (latest.status === 'Sent'),
+            mother: latest.motherSent ?? (latest.status === 'Sent')
+          };
+        } else {
+          sentEmails[wf.key] = {
+            date: null,
+            status: 'Pending',
+            student: false,
+            father: false,
+            mother: false
           };
         }
       }
@@ -371,6 +380,19 @@ app.post('/api/applications/batch-status', async (req, res) => {
       where: { id: { in: ids } },
       data: { status, holdReason: reason || null }
     });
+
+    if (String(status).toUpperCase() === 'REJECTED') {
+      const apps = await prisma.application.findMany({ where: { id: { in: ids } } });
+      const usns = apps.map(a => a.usn);
+      await (prisma as any).studentAccount.deleteMany({
+        where: {
+          OR: [
+            { applicationId: { in: ids } },
+            { usn: { in: usns } }
+          ]
+        }
+      }).catch(() => {});
+    }
 
     io.emit('data_updated');
 
@@ -492,12 +514,23 @@ app.post('/api/reallocate', async (req, res) => {
     const { allocationId, newBedId, adminName, reason } = req.body;
 
     const result = await prisma.$transaction(async (tx) => {
-      // Fetch old allocation
-      const oldAllocation = await tx.allocation.findUnique({
-        where: { id: allocationId },
-        include: { application: true, bed: { include: { room: { include: { block: true } } } } }
-      });
-      if (!oldAllocation) throw new Error('Allocation not found');
+      // Fetch old allocation with flexible fallback lookup
+      let oldAllocation: any = null;
+      if (allocationId) {
+        oldAllocation = await tx.allocation.findUnique({
+          where: { id: allocationId },
+          include: { application: true, bed: { include: { room: { include: { block: true } } } } }
+        }).catch(() => null);
+      }
+
+      if (!oldAllocation && allocationId) {
+        oldAllocation = await tx.allocation.findFirst({
+          where: { OR: [{ id: allocationId }, { applicationId: allocationId }, { bedId: allocationId }] },
+          include: { application: true, bed: { include: { room: { include: { block: true } } } } }
+        });
+      }
+
+      if (!oldAllocation) throw new Error('Allocation record not found');
 
       // Fetch new bed
       const newBed = await tx.bed.findUnique({
@@ -520,7 +553,7 @@ app.post('/api/reallocate', async (req, res) => {
 
       // 3. Update Allocation record
       const updatedAllocation = await tx.allocation.update({
-        where: { id: allocationId },
+        where: { id: oldAllocation.id },
         data: { bedId: newBedId }
       });
 
@@ -559,15 +592,14 @@ app.post('/api/reallocate', async (req, res) => {
 // Create Block
 app.post('/api/blocks', async (req, res) => {
   const { name, gender, floorConfigs, imageUrl } = req.body;
-  // floorConfigs should be an array of { floor: number, rooms: number, capacity: number }
   try {
     const block = await prisma.$transaction(async (tx) => {
       const newBlock = await tx.block.create({ data: { name, gender, imageUrl } });
 
-      for (const config of floorConfigs) {
+      for (const config of (floorConfigs || [])) {
         const floor = config.floor;
         const capacity = config.capacity;
-        const roomNumbers = config.roomNumbers || []; // Array of string room numbers
+        const roomNumbers = config.roomNumbers || [];
 
         for (const roomNo of roomNumbers) {
           const type = `${capacity} Sharing`;
@@ -577,6 +609,7 @@ app.post('/api/blocks', async (req, res) => {
           });
 
           const bedsData = Array.from({ length: capacity }).map((_, i) => ({
+            id: crypto.randomUUID(),
             roomId: newRoom.id,
             bedNo: i + 1,
             status: 'AVAILABLE'
@@ -586,10 +619,17 @@ app.post('/api/blocks', async (req, res) => {
         }
       }
       return newBlock;
-    });
+    }, { maxWait: 10000, timeout: 30000 });
+
+    io.emit('data_updated');
+    io.emit('block_created', block);
     res.json(block);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to create block' });
+  } catch (error: any) {
+    console.error('Error creating block:', error);
+    if (error?.code === 'P2002') {
+      return res.status(400).json({ error: `Block with name "${name}" already exists. Please enter a unique block name.` });
+    }
+    res.status(500).json({ error: error?.message || 'Failed to create block' });
   }
 });
 
@@ -638,12 +678,15 @@ app.put('/api/rooms/:id/capacity', async (req, res) => {
       if (newCapacity > currentCapacity) {
         // Add new beds
         const bedsToAdd = newCapacity - currentCapacity;
-        const bedsData = Array.from({ length: bedsToAdd }).map((_, i) => ({
-          roomId,
-          bedNo: currentCapacity + i + 1,
-          status: 'AVAILABLE'
-        }));
-        await tx.bed.createMany({ data: bedsData });
+        for (let i = 0; i < bedsToAdd; i++) {
+          await tx.bed.create({
+            data: {
+              roomId,
+              bedNo: currentCapacity + i + 1,
+              status: 'AVAILABLE'
+            }
+          });
+        }
       } else if (newCapacity < currentCapacity) {
         // Remove beds
         const bedsToRemoveCount = currentCapacity - newCapacity;
@@ -728,24 +771,29 @@ app.post('/api/blocks/:id/floors', async (req, res) => {
           data: {
             blockId,
             roomNo,
-            floor,
-            capacity: capacityPerRoom,
+            floor: Number(floor),
+            capacity: Number(capacityPerRoom),
             type: type || `${capacityPerRoom} Sharing`
           }
         });
         
-        for (let j = 1; j <= capacityPerRoom; j++) {
-          await tx.bed.create({
-            data: { roomId: room.id, bedNo: j, status: 'AVAILABLE' }
-          });
-        }
-      }
-    });
+        const bedsData = Array.from({ length: Number(capacityPerRoom) }).map((_, idx) => ({
+          id: crypto.randomUUID(),
+          roomId: room.id,
+          bedNo: idx + 1,
+          status: 'AVAILABLE'
+        }));
 
+        await tx.bed.createMany({ data: bedsData });
+      }
+    }, { maxWait: 10000, timeout: 30000 });
+
+    io.emit('data_updated');
+    io.emit('floor_added', { blockId, floor });
     res.json({ success: true });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to add floor' });
+  } catch (error: any) {
+    console.error('Error adding floor:', error);
+    res.status(500).json({ error: error.message || 'Failed to add floor' });
   }
 });
 
@@ -762,7 +810,7 @@ app.post('/api/blocks/:id/rooms', async (req, res) => {
     await prisma.$transaction(async (tx) => {
       for (const roomNo of roomNos) {
         const existingRoom = await tx.room.findFirst({
-          where: { blockId, roomNo: roomNo.trim() }
+          where: { blockId, roomNo: String(roomNo).trim() }
         });
         if (existingRoom) {
           throw new Error(`Room number ${roomNo} already exists in this block`);
@@ -771,24 +819,29 @@ app.post('/api/blocks/:id/rooms', async (req, res) => {
         const room = await tx.room.create({
           data: {
             blockId,
-            roomNo: roomNo.trim(),
-            floor,
-            capacity,
+            roomNo: String(roomNo).trim(),
+            floor: Number(floor),
+            capacity: Number(capacity),
             type: type || `${capacity} Sharing`
           }
         });
         
-        for (let j = 1; j <= capacity; j++) {
-          await tx.bed.create({
-            data: { roomId: room.id, bedNo: j, status: 'AVAILABLE' }
-          });
-        }
-      }
-    });
+        const bedsData = Array.from({ length: Number(capacity) }).map((_, idx) => ({
+          id: crypto.randomUUID(),
+          roomId: room.id,
+          bedNo: idx + 1,
+          status: 'AVAILABLE'
+        }));
 
+        await tx.bed.createMany({ data: bedsData });
+      }
+    }, { maxWait: 10000, timeout: 30000 });
+
+    io.emit('data_updated');
+    io.emit('room_added', { blockId });
     res.json({ success: true });
   } catch (error: any) {
-    console.error(error);
+    console.error('Error adding rooms:', error);
     res.status(500).json({ error: error.message || 'Failed to add rooms' });
   }
 });
@@ -809,13 +862,15 @@ app.delete('/api/rooms/:id', async (req, res) => {
 
     await prisma.$transaction(async (tx) => {
       await tx.bed.deleteMany({ where: { roomId } });
-      await tx.room.delete({ where: { id: roomId } });
-    });
+      await tx.room.deleteMany({ where: { id: roomId } });
+    }, { maxWait: 10000, timeout: 30000 });
 
+    io.emit('data_updated');
+    io.emit('room_deleted', { roomId });
     res.json({ success: true });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to delete room' });
+  } catch (error: any) {
+    console.error('Error deleting room:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete room' });
   }
 });
 
@@ -1586,6 +1641,46 @@ app.post("/api/emails/send", async (req, res) => {
 
 // ==================== STUDENT PORTAL ENDPOINTS ====================
 
+// Helper to auto-sync active StudentAccounts from applications
+async function syncStudentAccounts() {
+  try {
+    const apps = await prisma.application.findMany();
+    for (const app of apps) {
+      const isRejected = app.status && String(app.status).toUpperCase() === 'REJECTED';
+      if (isRejected) {
+        await (prisma as any).studentAccount.deleteMany({
+          where: {
+            OR: [
+              { applicationId: app.id },
+              { usn: app.usn }
+            ]
+          }
+        }).catch(() => {});
+      } else {
+        await (prisma as any).studentAccount.upsert({
+          where: { usn: app.usn },
+          update: {
+            studentName: app.studentName,
+            phoneNumber: app.phoneNumber,
+            applicationId: app.id,
+            status: 'ACTIVE'
+          },
+          create: {
+            studentName: app.studentName,
+            phoneNumber: app.phoneNumber,
+            usn: app.usn,
+            applicationId: app.id,
+            status: 'ACTIVE'
+          }
+        }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.error("Error syncing StudentAccount table:", err);
+  }
+}
+syncStudentAccounts();
+
 // Student Login API using Exact Name & Phone Number
 app.post('/api/student/login', async (req, res) => {
   try {
@@ -1598,47 +1693,52 @@ app.post('/api/student/login', async (req, res) => {
     const cleanName = String(studentName).trim();
     const cleanPhone = String(phoneNumber).trim();
 
-    // 1. Try finding application matching phone number first
-    const apps = await prisma.application.findMany({
-      where: { phoneNumber: cleanPhone },
-      include: {
-        allocations: {
-          where: { status: 'ACTIVE' }
-        }
+    // Sync student accounts first to catch recent status changes
+    await syncStudentAccounts();
+
+    // 1. Query active accounts from StudentAccount DB table
+    const accounts = await (prisma as any).studentAccount.findMany({
+      where: {
+        status: 'ACTIVE'
       }
     });
 
-    // Match exact or case-insensitive student name
-    let application = apps.find(
-      a => a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
+    const account = accounts.find((a: any) => 
+      a.phoneNumber.trim() === cleanPhone &&
+      a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
     );
 
-    // If not found by phone, search by student name
-    if (!application) {
-      const nameApps = await prisma.application.findMany({
-        where: {
-          studentName: {
-            contains: cleanName
-          }
-        }
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'No account exists'
       });
-
-      application = nameApps.find(
-        a => a.phoneNumber.trim() === cleanPhone || a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
-      );
     }
 
-    if (!application) {
+    // 2. Double check matching Application status in DB
+    const application = await prisma.application.findUnique({
+      where: { usn: account.usn }
+    });
+
+    const isRejected = !application || (application.status && String(application.status).toUpperCase() === 'REJECTED');
+
+    if (isRejected) {
+      // Delete credentials from StudentAccount DB table
+      await (prisma as any).studentAccount.deleteMany({
+        where: { usn: account.usn }
+      }).catch(() => {});
+
       return res.status(404).json({
-        error: 'No student application found matching this Name and Phone Number. Please check your credentials or apply to join.'
+        success: false,
+        error: 'No account exists'
       });
     }
 
     return res.json({
       success: true,
-      usn: application.usn,
-      studentName: application.studentName,
-      phoneNumber: application.phoneNumber,
+      usn: account.usn,
+      studentName: account.studentName,
+      phoneNumber: account.phoneNumber,
       application
     });
 
@@ -1652,6 +1752,11 @@ app.post('/api/student/login', async (req, res) => {
 app.get('/api/student/status/:usn', async (req, res) => {
   try {
     const { usn } = req.params;
+
+    const account = await (prisma as any).studentAccount.findUnique({
+      where: { usn }
+    });
+
     // Find application by USN
     const application = await prisma.application.findUnique({
       where: { usn },
@@ -1672,8 +1777,13 @@ app.get('/api/student/status/:usn', async (req, res) => {
       }
     });
 
-    if (!application) {
-      return res.json({ found: false, applicationState: 'not_applied' });
+    const isAppRejected = !application || (application.status && String(application.status).toUpperCase() === 'REJECTED');
+
+    if (!account || isAppRejected) {
+      if (account) {
+        await (prisma as any).studentAccount.deleteMany({ where: { usn } }).catch(() => {});
+      }
+      return res.status(404).json({ found: false, error: 'No account exists', applicationState: 'rejected' });
     }
 
     // Determine application state from real DB status
@@ -1737,14 +1847,10 @@ app.get('/api/student/status/:usn', async (req, res) => {
 // Student submits payment info (after filling Google Form + bank transfer)
 app.post('/api/student/payment', async (req, res) => {
   try {
-    const { studentName, studentUsn, utrNumber, paymentDate, hostelName, block, floor, roomNumber, screenshotUrl } = req.body;
+    const { studentUsn, studentName, hostelName, block, floor, roomNumber, utrNumber, paymentDate, screenshotUrl, paymentTitle, amount } = req.body;
 
     if (!studentUsn || !utrNumber) {
       return res.status(400).json({ error: 'USN and UTR Number are required' });
-    }
-
-    if (!screenshotUrl) {
-      return res.status(400).json({ error: 'Payment Screenshot is mandatory' });
     }
 
     // Look up real application + allocation data from DB to get accurate info
@@ -1797,6 +1903,8 @@ app.post('/api/student/payment', async (req, res) => {
           roomNumber: realRoom,
           paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
           screenshotUrl: screenshotUrl || existing.screenshotUrl || null,
+          paymentTitle: paymentTitle || existing.paymentTitle || 'Hostel Fee Payment',
+          amount: amount ? Number(amount) : (existing.amount || 143000),
           status: 'PENDING_REVIEW'
         }
       });
@@ -1812,6 +1920,8 @@ app.post('/api/student/payment', async (req, res) => {
           utrNumber,
           paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
           screenshotUrl: screenshotUrl || null,
+          paymentTitle: paymentTitle || 'Hostel Fee Payment',
+          amount: amount ? Number(amount) : 143000,
           status: 'PENDING_REVIEW',
           emailStatus: 'PENDING'
         }
@@ -2545,6 +2655,20 @@ app.put('/api/complaints/:id', async (req, res) => {
   }
 });
 
+app.post('/api/complaints/:id/like', async (req, res) => {
+  try {
+    const complaint = await prisma.complaint.update({
+      where: { id: req.params.id },
+      data: { upvotes: { increment: 1 } }
+    });
+    io.emit('complaint_updated', complaint);
+    io.emit('data_updated');
+    res.json(complaint);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update likes' });
+  }
+});
+
 app.delete('/api/complaints/:id', async (req, res) => {
   try {
     const deleted = await prisma.complaint.delete({
@@ -2742,10 +2866,23 @@ app.get('/api/notices', async (req, res) => {
 
 app.post('/api/notices', async (req, res) => {
   try {
-    const { title, desc, date, category, priority, author, fileSize } = req.body;
+    const { title, desc, date, category, priority, author, fileSize, documentUrl, documentName, documentType } = req.body;
     const notice = await prisma.notice.create({
-      data: { title, desc, date, category, priority, author, fileSize: fileSize || 'Unknown' }
+      data: {
+        title,
+        desc,
+        date: date || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+        category: category || 'Events',
+        priority: priority || 'Normal',
+        author: author || 'Admin',
+        fileSize: fileSize || 'Document',
+        documentUrl: documentUrl || null,
+        documentName: documentName || null,
+        documentType: documentType || null
+      }
     });
+    io.emit('notice_created', notice);
+    io.emit('data_updated');
     res.json({ success: true, notice });
   } catch (error) {
     console.error(error);
@@ -2757,6 +2894,8 @@ app.delete('/api/notices/:id', async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.notice.delete({ where: { id } });
+    io.emit('notice_deleted', id);
+    io.emit('data_updated');
     res.json({ success: true, message: 'Notice deleted' });
   } catch (error) {
     console.error(error);
@@ -3279,15 +3418,25 @@ async function sendWorkflowEmail(studentId: string, action: string, mode: 'Manua
       targets.push({ role: 'guardian', email: guardianEmail });
     }
 
+    const sendPromises = targets.map(async (t) => {
+      const sent = await sendRealEmail(t.email, subject, body.replace(/\n/g, "<br>"));
+      return { role: t.role, email: t.email, sent };
+    });
+
+    const sendResultsArr = await Promise.all(sendPromises);
     const results: Record<string, { email: string; sent: boolean }> = {};
     let anySentSuccess = false;
-    for (const t of targets) {
-      const sent = await sendRealEmail(t.email, subject, body.replace(/\n/g, "<br>"));
-      results[t.role] = { email: t.email, sent };
-      if (sent) anySentSuccess = true;
+
+    for (const r of sendResultsArr) {
+      results[r.role] = { email: r.email, sent: r.sent };
+      if (r.sent) anySentSuccess = true;
     }
 
     const finalStatus = anySentSuccess ? 'Sent' : 'Failed';
+
+    const isStudentSent = results.student ? results.student.sent : false;
+    const isFatherSent = results.father ? results.father.sent : false;
+    const isMotherSent = results.mother ? results.mother.sent : (results.guardian ? results.guardian.sent : false);
 
     await prisma.emailHistory.create({
       data: {
@@ -3299,19 +3448,10 @@ async function sendWorkflowEmail(studentId: string, action: string, mode: 'Manua
         subject,
         body,
         status: finalStatus,
-        mode
-      }
-    });
-
-    await prisma.application.update({
-      where: { id: student.id },
-      data: {
-        studentEmailSent: results.student ? results.student.sent : student.studentEmailSent,
-        fatherEmailSent: results.father ? results.father.sent : student.fatherEmailSent,
-        motherEmailSent: results.mother ? results.mother.sent : (results.guardian ? results.guardian.sent : student.motherEmailSent),
-        studentEmailSentAt: results.student?.sent ? new Date() : student.studentEmailSentAt,
-        fatherEmailSentAt: results.father?.sent ? new Date() : student.fatherEmailSentAt,
-        motherEmailSentAt: (results.mother?.sent || results.guardian?.sent) ? new Date() : student.motherEmailSentAt,
+        mode,
+        studentSent: isStudentSent,
+        fatherSent: isFatherSent,
+        motherSent: isMotherSent
       }
     });
 
@@ -3596,18 +3736,27 @@ app.post('/api/emails/send', async (req, res) => {
       targets.push({ role: 'guardian', email: guardianEmail });
     }
 
+    const sendPromises = targets.map(async (t) => {
+      const sent = await sendRealEmail(t.email, subject || 'Hostel Notification', (body || '').replace(/\n/g, "<br>"));
+      return { role: t.role, email: t.email, sent };
+    });
+
+    const sendResultsArr = await Promise.all(sendPromises);
     const results: Record<string, { email: string; sent: boolean }> = {};
     let anySentSuccess = false;
 
-    for (const t of targets) {
-      const sent = await sendRealEmail(t.email, subject || 'Hostel Notification', (body || '').replace(/\n/g, "<br>"));
-      results[t.role] = { email: t.email, sent };
-      if (sent) anySentSuccess = true;
+    for (const r of sendResultsArr) {
+      results[r.role] = { email: r.email, sent: r.sent };
+      if (r.sent) anySentSuccess = true;
     }
 
     const finalStatus = anySentSuccess ? 'Sent' : 'Failed';
 
-    await prisma.emailHistory.create({
+    const isStudentSent = results.student ? results.student.sent : false;
+    const isFatherSent = results.father ? results.father.sent : false;
+    const isMotherSent = results.mother ? results.mother.sent : (results.guardian ? results.guardian.sent : false);
+
+    const historyRecord = await prisma.emailHistory.create({
       data: {
         studentId: student.id,
         studentName: student.studentName,
@@ -3617,19 +3766,10 @@ app.post('/api/emails/send', async (req, res) => {
         subject: subject || 'Hostel Notification',
         body: body || '',
         status: finalStatus,
-        mode: 'Manual'
-      }
-    });
-
-    const updatedApp = await prisma.application.update({
-      where: { id: student.id },
-      data: {
-        studentEmailSent: results.student ? results.student.sent : Boolean(student.studentEmailSent),
-        fatherEmailSent: results.father ? results.father.sent : Boolean(student.fatherEmailSent),
-        motherEmailSent: (results.mother?.sent || results.guardian?.sent) ? true : Boolean(student.motherEmailSent),
-        studentEmailSentAt: results.student?.sent ? new Date() : student.studentEmailSentAt,
-        fatherEmailSentAt: results.father?.sent ? new Date() : student.fatherEmailSentAt,
-        motherEmailSentAt: (results.mother?.sent || results.guardian?.sent) ? new Date() : student.motherEmailSentAt,
+        mode: 'Manual',
+        studentSent: isStudentSent,
+        fatherSent: isFatherSent,
+        motherSent: isMotherSent
       }
     });
 
@@ -3641,7 +3781,7 @@ app.post('/api/emails/send', async (req, res) => {
       message: 'Email dispatched successfully',
       status: finalStatus,
       results,
-      application: updatedApp
+      historyRecord
     });
   } catch (error: any) {
     console.error('Error in /api/emails/send:', error);

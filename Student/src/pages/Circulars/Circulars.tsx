@@ -209,6 +209,47 @@ export const Circulars: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  // Fetch real-time notices from backend and setup sockets
+  useEffect(() => {
+    const fetchNotices = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/notices');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.notices) && data.notices.length > 0) {
+            const mapped = data.notices.map((n: any) => ({
+              id: n.id,
+              title: n.title,
+              date: n.date,
+              category: n.category || 'Events',
+              priority: n.priority || 'Normal',
+              desc: n.desc,
+              author: n.author || 'Admin',
+              fileSize: n.fileSize || '150 KB',
+              attachments: n.documentUrl ? [{ name: n.documentName || 'Document Attachment', type: n.documentType?.toLowerCase() || 'pdf', url: n.documentUrl, size: n.fileSize || '150 KB' }] : [],
+              reactions: { going: 0, useful: 12, thanks: 8, clarification: 0 },
+              comments: []
+            }));
+            setNotices(mapped);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching notices:', err);
+      }
+    };
+
+    fetchNotices();
+
+    const socket = io('http://localhost:5000');
+    socket.on('notice_created', () => fetchNotices());
+    socket.on('notice_deleted', () => fetchNotices());
+    socket.on('data_updated', () => fetchNotices());
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
   const categories = ['All', 'Unread', 'Mess Rules', 'Security', 'Maintenance', 'Regulations', 'Events', 'Archived'];
 
   // Single select filter chip

@@ -90,17 +90,77 @@ export const ApplicationForm: React.FC = () => {
 
   const handleNextStep = () => {
     if (step === 1) {
-      if (!fullName || !dob || !aadhaar || !program || !branch || !contact || !email) {
-        setFormErrors(
-          nationality === 'Other'
-            ? "Please fill in all required student details including Passport Number."
-            : "Please fill in all required student details including Aadhaar Number."
-        );
+      if (quota !== 'MANAGEMENT' && !rank.trim()) {
+        setFormErrors("Entrance Exam Rank is required for the selected quota.");
+        return;
+      }
+      if (!fullName.trim()) {
+        setFormErrors("Full Name is required.");
+        return;
+      }
+      if (!dob) {
+        setFormErrors("Date of Birth is required.");
+        return;
+      }
+      if (!aadhaar.trim()) {
+        setFormErrors(nationality === 'Other' ? "Passport Number is required." : "12-digit Aadhaar Number is required.");
+        return;
+      }
+      if (nationality === 'Indian' && aadhaar.trim().length !== 12) {
+        setFormErrors("Aadhaar Number must be exactly 12 digits.");
+        return;
+      }
+      if (!program) {
+        setFormErrors("Program is required.");
+        return;
+      }
+      if (!branch) {
+        setFormErrors("Branch is required.");
+        return;
+      }
+      if (!sem) {
+        setFormErrors("Year / Semester is required.");
+        return;
+      }
+      if (!contact.trim()) {
+        setFormErrors("Contact Number is required.");
+        return;
+      }
+      if (contact.trim().length !== 10) {
+        setFormErrors("Contact Number must be a valid 10-digit phone number.");
+        return;
+      }
+      if (!email.trim() || !email.includes('@')) {
+        setFormErrors("A valid Email Address is required.");
+        return;
+      }
+      if (!permanentAddress.trim()) {
+        setFormErrors("Permanent Address is required.");
         return;
       }
     } else if (step === 2) {
-      if (!fatherName || !fatherPhone || !motherName || !motherPhone) {
-        setFormErrors("Please fill in parent contact names and phone numbers.");
+      if (!fatherName.trim()) {
+        setFormErrors("Father Full Name is required.");
+        return;
+      }
+      if (!fatherPhone.trim()) {
+        setFormErrors("Father Phone Number is required.");
+        return;
+      }
+      if (fatherPhone.trim().length !== 10) {
+        setFormErrors("Father Phone Number must be a valid 10-digit number.");
+        return;
+      }
+      if (!motherName.trim()) {
+        setFormErrors("Mother Full Name is required.");
+        return;
+      }
+      if (!motherPhone.trim()) {
+        setFormErrors("Mother Phone Number is required.");
+        return;
+      }
+      if (motherPhone.trim().length !== 10) {
+        setFormErrors("Mother Phone Number must be a valid 10-digit number.");
         return;
       }
     }
@@ -116,10 +176,26 @@ export const ApplicationForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!undertakingCheck || !signature || !sigDate) {
+    if (!emergencyContact.trim()) {
+      setFormErrors("Emergency Contact Number is required.");
+      return;
+    }
+    if (emergencyContact.trim().length !== 10) {
+      setFormErrors("Emergency Contact Number must be a valid 10-digit number.");
+      return;
+    }
+    if (!undertakingCheck) {
       setFormErrors(
-        "You must accept the student undertaking declaration and sign the form."
+        "You must accept the student undertaking declaration checkbox."
       );
+      return;
+    }
+    if (!signature.trim()) {
+      setFormErrors("Digital Signature is required.");
+      return;
+    }
+    if (!sigDate) {
+      setFormErrors("Signature Date is required.");
       return;
     }
 
@@ -405,10 +481,10 @@ export const ApplicationForm: React.FC = () => {
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">BMSIT ID (Optional)</label>
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">USN (Optional)</label>
                   <input 
                     type="text" 
-                    placeholder="Enter BMSIT ID"
+                    placeholder="Enter USN"
                     value={bmsitId}
                     onChange={e => setBmsitId(e.target.value.toUpperCase())}
                     className="w-full border border-border rounded-lg p-2 text-xs font-bold font-mono outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"

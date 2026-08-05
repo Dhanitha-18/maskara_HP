@@ -36,13 +36,6 @@ export const MainLayout: React.FC = () => {
         </footer>
       </div>
 
-      {/* Live sync indicator */}
-      {isLoadingStatus && (
-        <div className="fixed bottom-6 right-6 bg-white border border-border rounded-full px-3 py-2 shadow-card z-40 flex items-center gap-2 no-print">
-          <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
-          <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Syncing...</span>
-        </div>
-      )}
     </div>
   );
 };

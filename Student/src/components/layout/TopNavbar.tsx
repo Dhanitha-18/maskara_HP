@@ -10,10 +10,13 @@ interface TopNavbarProps {
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({ onMenuToggle }) => {
   const { student, notifications, markNotificationRead, markAllNotificationsRead } = usePayment();
-  const { logout, isLoggedIn } = useAuth();
+  const { logout, isLoggedIn, studentName: authStudentName, studentUsn: authStudentUsn } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const navigate = useNavigate();
+
+  const displayName = student.name || authStudentName || '';
+  const displayUsn = student.usn || authStudentUsn || '';
 
   const ADMIN_PORTAL_URL = 'http://localhost:5173';
 
@@ -94,13 +97,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onMenuToggle }) => {
             >
               {/* Profile Avatar */}
               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold border border-primary/20 flex items-center justify-center text-sm shadow-inner uppercase shrink-0">
-                {student.name ? student.name.charAt(0) : 'S'}
+                {displayName ? displayName.charAt(0).toUpperCase() : 'S'}
               </div>
               
               <div className="hidden sm:block">
-                <p className="text-xs font-bold text-text truncate max-w-[120px]">{student.name}</p>
-                {student.usn && !student.usn.startsWith('APP-') && (
-                  <p className="text-[9px] font-medium text-text-muted">{student.usn}</p>
+                <p className="text-xs font-bold text-text truncate max-w-[120px]">{displayName}</p>
+                {displayUsn && !displayUsn.startsWith('APP-') && (
+                  <p className="text-[9px] font-medium text-text-muted">{displayUsn}</p>
                 )}
               </div>
               
@@ -110,9 +113,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onMenuToggle }) => {
             {showProfileMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-white border border-border rounded-xl shadow-card py-2 z-50 animate-fadeIn">
                 <div className="px-4 py-2 border-b border-border">
-                  <p className="text-xs font-bold text-text">{student.name}</p>
-                  {student.usn && !student.usn.startsWith('APP-') && (
-                    <p className="text-[10px] text-text-muted font-mono">{student.usn}</p>
+                  <p className="text-xs font-bold text-text">{displayName}</p>
+                  {displayUsn && !displayUsn.startsWith('APP-') && (
+                    <p className="text-[10px] text-text-muted font-mono">{displayUsn}</p>
                   )}
                 </div>
                 

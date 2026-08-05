@@ -60,6 +60,19 @@ export default function BatchAllocationModal({ isOpen, onClose, selectedIds, gen
     allocateMutation.mutate();
   };
 
+  const selectedBlockObj = blocks.find((b: any) => b.id === blockId);
+  const detectedFloors = Array.from(
+    new Set(
+      selectedBlockObj?.rooms
+        ? selectedBlockObj.rooms.map((r: any) => Number(r.floor)).filter((f: number) => f > 0)
+        : []
+    )
+  ).sort((a: any, b: any) => a - b);
+
+  const floorsToRender = detectedFloors.length > 0
+    ? Array.from({ length: Math.max(...detectedFloors, 3) }, (_, i) => i + 1)
+    : [1, 2, 3, 4, 5];
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
@@ -94,9 +107,10 @@ export default function BatchAllocationModal({ isOpen, onClose, selectedIds, gen
                   <SelectValue placeholder="Select floor" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">1st Floor</SelectItem>
-                  <SelectItem value="2">2nd Floor</SelectItem>
-                  <SelectItem value="3">3rd Floor</SelectItem>
+                  {floorsToRender.map((flNum) => {
+                    const label = flNum === 1 ? '1st Floor' : flNum === 2 ? '2nd Floor' : flNum === 3 ? '3rd Floor' : `${flNum}th Floor`;
+                    return <SelectItem key={flNum} value={String(flNum)}>{label}</SelectItem>;
+                  })}
                 </SelectContent>
               </Select>
             </div>

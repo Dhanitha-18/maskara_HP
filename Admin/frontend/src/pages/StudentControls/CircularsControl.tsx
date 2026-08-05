@@ -16,6 +16,44 @@ export default function CircularsControl() {
     fileSize: '150 KB'
   });
 
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setDocFile(file);
+    setUploadingDoc(true);
+    try {
+      const fd = new FormData();
+      fd.append('photo', file);
+      const res = await fetch('http://localhost:5000/api/upload', {
+        method: 'POST',
+        body: fd
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+        const sizeKb = (file.size / 1024).toFixed(0);
+        const formattedSize = file.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
+        setFormData(prev => ({
+          ...prev,
+          documentUrl: data.imageUrl,
+          documentName: file.name,
+          documentType: file.name.split('.').pop()?.toUpperCase() || 'DOC',
+          fileSize: formattedSize
+        }));
+        toast.success(`Attached document: ${file.name}`);
+      } else {
+        toast.error('Failed to upload document file');
+      }
+    } catch (err) {
+      toast.error('Error uploading document file');
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
   const { data: notices, isLoading } = useQuery({
     queryKey: ['notices'],
     queryFn: async () => {
@@ -40,6 +78,7 @@ export default function CircularsControl() {
       queryClient.invalidateQueries({ queryKey: ['notices'] });
       toast.success('Notice published successfully');
       setIsAdding(false);
+      setDocFile(null);
       setFormData({
         title: '', desc: '', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
         category: 'Events', priority: 'Normal', author: 'Admin', fileSize: '150 KB'
@@ -83,35 +122,53 @@ export default function CircularsControl() {
       </div>
 
       {isAdding && (
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8 space-y-4">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">New Notice</h2>
+        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8 space-y-4 text-xs font-semibold">
+          <h2 className="text-base font-bold text-slate-900 mb-4">New Notice / Circular</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
+              <label className="block font-bold text-slate-700 mb-1">Title *</label>
               <input
                 type="text"
                 required
                 value={formData.title}
                 onChange={e => setFormData({ ...formData, title: e.target.value })}
-                className="w-full p-2 border border-slate-300 rounded-lg"
+                className="w-full p-2.5 border border-slate-300 rounded-xl"
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+              <label className="block font-bold text-slate-700 mb-1">Description *</label>
               <textarea
                 required
                 rows={3}
                 value={formData.desc}
                 onChange={e => setFormData({ ...formData, desc: e.target.value })}
-                className="w-full p-2 border border-slate-300 rounded-lg"
+                className="w-full p-2.5 border border-slate-300 rounded-xl"
               />
             </div>
+
+            {/* Document Upload Input */}
+            <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-300 space-y-2">
+              <label className="block font-bold text-slate-800 uppercase tracking-wider text-[10px]">Attach Document (PDF, Word, Image, Excel, ZIP, TXT)</label>
+              <input
+                type="file"
+                onChange={handleFileUpload}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip,.txt"
+                className="w-full text-xs text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+              />
+              {uploadingDoc && <p className="text-indigo-600 font-bold text-xs animate-pulse">Uploading document...</p>}
+              {(formData as any).documentName && (
+                <p className="text-emerald-700 font-bold text-xs flex items-center gap-1.5">
+                  ✓ Attached: {(formData as any).documentName} ({(formData as any).fileSize})
+                </p>
+              )}
+            </div>
+
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+              <label className="block font-bold text-slate-700 mb-1">Category</label>
               <select
                 value={formData.category}
                 onChange={e => setFormData({ ...formData, category: e.target.value })}
-                className="w-full p-2 border border-slate-300 rounded-lg"
+                className="w-full p-2.5 border border-slate-300 rounded-xl cursor-pointer"
               >
                 <option value="Mess Rules">Mess Rules</option>
                 <option value="Security">Security</option>
@@ -121,11 +178,11 @@ export default function CircularsControl() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
+              <label className="block font-bold text-slate-700 mb-1">Priority</label>
               <select
                 value={formData.priority}
                 onChange={e => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full p-2 border border-slate-300 rounded-lg"
+                className="w-full p-2.5 border border-slate-300 rounded-xl cursor-pointer"
               >
                 <option value="Normal">Normal</option>
                 <option value="High">High</option>
@@ -133,23 +190,23 @@ export default function CircularsControl() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Author / Department</label>
+              <label className="block font-bold text-slate-700 mb-1">Author / Department</label>
               <input
                 type="text"
                 required
                 value={formData.author}
                 onChange={e => setFormData({ ...formData, author: e.target.value })}
-                className="w-full p-2 border border-slate-300 rounded-lg"
+                className="w-full p-2.5 border border-slate-300 rounded-xl"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+              <label className="block font-bold text-slate-700 mb-1">Date</label>
               <input
                 type="text"
                 required
                 value={formData.date}
                 onChange={e => setFormData({ ...formData, date: e.target.value })}
-                className="w-full p-2 border border-slate-300 rounded-lg"
+                className="w-full p-2.5 border border-slate-300 rounded-xl"
                 placeholder="e.g., 20 July 2026"
               />
             </div>
@@ -157,10 +214,10 @@ export default function CircularsControl() {
           <div className="flex justify-end pt-4">
             <button
               type="submit"
-              disabled={createMutation.isPending}
-              className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50"
+              disabled={createMutation.isPending || uploadingDoc}
+              className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-md cursor-pointer"
             >
-              {createMutation.isPending ? 'Publishing...' : 'Publish'}
+              {createMutation.isPending ? 'Publishing...' : 'Publish Circular'}
             </button>
           </div>
         </form>

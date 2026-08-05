@@ -19,6 +19,7 @@ interface ComplaintItem {
   subject: string;
   description: string;
   status: string;
+  upvotes?: number;
   assignedTo: string | null;
   resolutionNotes: string | null;
   createdAt: string;
@@ -316,6 +317,7 @@ export default function ComplaintsControl() {
                 <th className="p-3.5">Subject & Description</th>
                 <th className="p-3.5">Submitted</th>
                 <th className="p-3.5">Status</th>
+                <th className="p-3.5 text-center">Likes / Me Too</th>
                 <th className="p-3.5">Technician / Resolution</th>
                 <th className="p-3.5">Actions</th>
               </tr>
@@ -353,6 +355,11 @@ export default function ComplaintsControl() {
                   <td className="p-3.5 whitespace-nowrap">
                     <span className={`px-2.5 py-0.5 rounded-full border text-[9px] font-bold uppercase tracking-wider ${getStatusStyle(item.status)}`}>
                       {item.status}
+                    </span>
+                  </td>
+                  <td className="p-3.5 text-center whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 font-black px-2.5 py-1 rounded-lg border border-indigo-200 text-xs">
+                      👍 {item.upvotes || 1}
                     </span>
                   </td>
                   <td className="p-3.5 max-w-[180px]">

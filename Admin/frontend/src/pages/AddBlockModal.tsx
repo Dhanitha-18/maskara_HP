@@ -141,8 +141,9 @@ export default function AddBlockModal({ isOpen, onClose }: AddBlockModalProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, gender, floorConfigs: sanitizedConfigs, imageUrl })
       });
-      if (!res.ok) throw new Error('Failed to create block');
-      return res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create block');
+      return data;
     },
     onSuccess: () => {
       toast.success('Block created successfully!');
@@ -150,8 +151,8 @@ export default function AddBlockModal({ isOpen, onClose }: AddBlockModalProps) {
       queryClient.invalidateQueries({ queryKey: ['blocks'] });
       onClose();
     },
-    onError: () => {
-      toast.error('Failed to create block');
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to create block');
     }
   });
 

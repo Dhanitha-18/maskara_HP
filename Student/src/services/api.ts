@@ -12,9 +12,12 @@ export async function apiRequest(
     ...options,
   });
 
+  const data = await response.json().catch(() => ({}));
+
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
+    const errorMsg = data.error || `API Error: ${response.status}`;
+    throw new Error(errorMsg);
   }
 
-  return response.json();
+  return data;
 }

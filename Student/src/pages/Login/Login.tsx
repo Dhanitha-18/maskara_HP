@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { apiRequest } from '../../services/api';
-import { Building2, ArrowRight, User, Phone } from 'lucide-react';
+import { Building2, ArrowRight, ArrowLeft, User, Phone } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [studentName, setStudentNameInput] = useState('');
@@ -38,11 +38,11 @@ export const Login: React.FC = () => {
         login(data.usn, data.studentName, data.phoneNumber);
         navigate('/');
       } else {
-        setError(data.error || 'Login failed. Please verify your credentials.');
+        setError(data.error || 'No account exists');
       }
     } catch (err: any) {
       console.error(err);
-      setError('No student application found matching this Name and Phone Number. Please check your details or click "Apply to Join".');
+      setError(err.message || 'No account exists');
     } finally {
       setIsLoading(false);
     }
@@ -65,9 +65,18 @@ export const Login: React.FC = () => {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 relative max-w-lg mx-auto w-full">
+        {/* Back to Overview Button */}
+        <button
+          onClick={() => navigate('/')}
+          className="self-start mb-4 inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs sm:text-sm rounded-xl border border-slate-200 shadow-sm transition-all group cursor-pointer"
+          type="button"
+        >
+          <ArrowLeft className="w-4 h-4 text-primary transition-transform group-hover:-translate-x-1" />
+          <span>Back to Overview</span>
+        </button>
 
+        <div className="w-full">
           {/* Login Card */}
           <div className="bg-white border border-border rounded-2xl shadow-card p-8 space-y-6">
             

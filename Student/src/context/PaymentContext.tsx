@@ -64,7 +64,7 @@ interface PaymentContextType {
 const PaymentContext = createContext<PaymentContextType | undefined>(undefined);
 
 export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { studentUsn, isLoggedIn, setStudentName } = useAuth();
+  const { studentUsn, studentName, isLoggedIn, setStudentName, logout } = useAuth();
 
   const [student, setStudent] = useState<Student>(mockStudent);
   const [hostel, setHostel] = useState<HostelInfo>(mockHostel);
@@ -82,6 +82,17 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [backendPayments, setBackendPayments] = useState<any[]>([]);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
 
+  // Sync auth credentials to student state instantly on login/mount
+  useEffect(() => {
+    if (studentName || studentUsn) {
+      setStudent(prev => ({
+        ...prev,
+        name: studentName || prev.name,
+        usn: studentUsn || prev.usn
+      }));
+    }
+  }, [studentName, studentUsn]);
+
   // ──────────────────────────────────────────────
   // FETCH REAL STATUS FROM BACKEND
   // ──────────────────────────────────────────────
@@ -92,8 +103,10 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const data = await apiRequest(`/api/student/status/${studentUsn}`);
 
-      if (!data.found) {
-        // No application yet — student hasn't applied
+      if (!data.found || data.error === 'No account exists' || data.applicationState === 'rejected') {
+        if (data.error === 'No account exists' || data.applicationState === 'rejected') {
+          logout();
+        }
         setApplicationState('not_applied');
         setIsLoadingStatus(false);
         return;

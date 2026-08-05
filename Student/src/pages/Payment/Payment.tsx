@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePayment } from '../../context/PaymentContext';
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { PAYMENT_HERO_IMAGE } from '../../assets/heroBanners';
+import { io } from 'socket.io-client';
 import { 
   Building,
   Copy,
@@ -17,7 +18,7 @@ import {
 const DEFAULT_GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeGj_HFh1FvceJCVuQhY7L4dY74CjjjjHccehN69MDOg6-Egw/viewform';
 
 export const Payment: React.FC = () => {
-  const { fees, student, hostel, paymentStatus, backendPayments } = usePayment();
+  const { student, hostel, paymentStatus, backendPayments } = usePayment();
 
   // Copy success indicator
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -33,6 +34,8 @@ export const Payment: React.FC = () => {
 
   // Admin Published Payment Requests State
   const [adminPaymentRequests, setAdminPaymentRequests] = useState<any[]>([]);
+  // All Backend Payments Submitted by Students
+  const [allPayments, setAllPayments] = useState<any[]>([]);
 
   useEffect(() => {
     fetch('http://localhost:5000/api/settings/bank-details')
@@ -45,22 +48,43 @@ export const Payment: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Poll Admin Published Payment Requests in Real-Time (every 3s)
+  // Fetch Payment Requests & User Submitted Payments with Real-Time WebSockets
   useEffect(() => {
-    const fetchRequests = () => {
+    const socket = io('http://localhost:5000');
+
+    const loadData = () => {
       fetch('http://localhost:5000/api/settings/payment-requests')
         .then(res => res.json())
         .then(data => {
-          if (Array.isArray(data)) {
-            setAdminPaymentRequests(data);
-          }
+          if (Array.isArray(data)) setAdminPaymentRequests(data);
+        })
+        .catch(() => {});
+
+      fetch('http://localhost:5000/api/payments')
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setAllPayments(data);
         })
         .catch(() => {});
     };
 
-    fetchRequests();
-    const interval = setInterval(fetchRequests, 3000);
-    return () => clearInterval(interval);
+    loadData();
+
+    socket.on('data_updated', loadData);
+    socket.on('payment_submitted', loadData);
+    socket.on('payment_status_changed', loadData);
+    socket.on('payment_request_updated', loadData);
+
+    const interval = setInterval(loadData, 3000);
+
+    return () => {
+      socket.off('data_updated', loadData);
+      socket.off('payment_submitted', loadData);
+      socket.off('payment_status_changed', loadData);
+      socket.off('payment_request_updated', loadData);
+      socket.disconnect();
+      clearInterval(interval);
+    };
   }, []);
 
   const handleCopy = (text: string, label: string) => {
@@ -69,9 +93,72 @@ export const Payment: React.FC = () => {
     setTimeout(() => setCopiedField(null), 1800);
   };
 
-  const handleIndividualFormClick = (formUrl?: string) => {
-    const destination = formUrl || DEFAULT_GOOGLE_FORM_URL;
+  // Payment Form Submission Modal State
+  const [selectedFormItem, setSelectedFormItem] = useState<any | null>(null);
+  const [utrInput, setUtrInput] = useState('');
+  const [paymentDateInput, setPaymentDateInput] = useState(new Date().toISOString().split('T')[0]);
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+
+  const handleOpenFormAndModal = (item: any) => {
+    const destination = item.googleFormUrl || DEFAULT_GOOGLE_FORM_URL;
     window.open(destination, '_blank', 'noopener,noreferrer');
+    setSelectedFormItem(item);
+  };
+
+  const handleStudentFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!utrInput.trim()) {
+      alert('Please enter Bank UTR / Transaction Reference Number');
+      return;
+    }
+    setIsSubmittingForm(true);
+    try {
+      let uploadedUrl = null;
+      if (screenshotFile) {
+        const formData = new FormData();
+        formData.append('photo', screenshotFile);
+        const uploadRes = await fetch('http://localhost:5000/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          uploadedUrl = uploadData.imageUrl;
+        }
+      }
+
+      const inputEl = document.getElementById('paidAmountInput') as HTMLInputElement | null;
+      const userAmount = inputEl?.value ? Number(inputEl.value) : (selectedFormItem?.amount || 143000);
+
+      const res = await fetch('http://localhost:5000/api/student/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentUsn: student.usn,
+          studentName: student.name,
+          paymentTitle: selectedFormItem?.title || 'Hostel Fee Payment',
+          amount: userAmount,
+          utrNumber: utrInput.trim(),
+          paymentDate: paymentDateInput,
+          screenshotUrl: uploadedUrl
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to submit payment details');
+      }
+
+      alert('Payment details submitted successfully! Real-time status updated in Admin Portal.');
+      setSelectedFormItem(null);
+      setUtrInput('');
+      setScreenshotFile(null);
+    } catch (err: any) {
+      alert(err.message || 'Error submitting payment details');
+    } finally {
+      setIsSubmittingForm(false);
+    }
   };
 
   // Helper for real-time status reflection badges
@@ -92,9 +179,56 @@ export const Payment: React.FC = () => {
     return { label: 'Not Paid', bg: 'bg-rose-50 text-rose-700 border-rose-200', icon: ShieldAlert };
   };
 
+  // Dynamic calculation for enabled payments & real-time dues
+  const enabledRequests = adminPaymentRequests.filter((r: any) => r.enabled !== false);
+  const myPaymentsList = (allPayments.length > 0 ? allPayments : (backendPayments || [])).filter(
+    (p: any) => p.studentUsn?.trim().toUpperCase() === student.usn?.trim().toUpperCase()
+  );
+
+  const feeCalculations = enabledRequests.map((req: any) => {
+    const totalAmount = Number(req.amount || 0);
+
+    // Matching payments for this title
+    const matchingPayments = myPaymentsList.filter(
+      (p: any) =>
+        p.paymentTitle?.trim().toLowerCase() === req.title?.trim().toLowerCase() ||
+        (enabledRequests.length === 1 && (!p.paymentTitle || p.paymentTitle === 'Hostel Fee Payment'))
+    );
+
+    // Paid amount taken from form submissions filled by user
+    const alreadySettled = matchingPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    const remainingFee = Math.max(0, totalAmount - alreadySettled);
+
+    let statusLabel = 'DUE';
+    let badgeStyle = 'bg-rose-50 text-rose-700 border-rose-200';
+
+    if (alreadySettled > 0 && remainingFee > 0) {
+      statusLabel = 'PARTIALLY PAID';
+      badgeStyle = 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse';
+    } else if (remainingFee === 0 && totalAmount > 0) {
+      statusLabel = 'SETTLED';
+      badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+
+    return {
+      id: req.id,
+      title: req.title,
+      subtitle: req.subtitle,
+      totalAmount,
+      alreadySettled,
+      remainingFee,
+      dueDate: req.dueDate || '30 July 2026',
+      statusLabel,
+      badgeStyle,
+      isDue: remainingFee > 0
+    };
+  });
+
+  const activeDues = feeCalculations.filter(f => f.isDue);
+
   // Combine payment items to display under PAYMENT UPDATED
-  const combinedPayments = adminPaymentRequests.length > 0 
-    ? adminPaymentRequests 
+  const combinedPayments = enabledRequests.length > 0 
+    ? enabledRequests 
     : (backendPayments || []).map((p: any) => ({
         id: p.id,
         title: 'Hostel Admission Fee',
@@ -111,7 +245,7 @@ export const Payment: React.FC = () => {
         title="PG Accounts Payment Hub"
       />
 
-      {/* TOP SECTION: ALLOTTED DETAILS & ADMISSION FEE SUMMARY */}
+      {/* TOP SECTION: ALLOTTED DETAILS & ACTIVE FEE DUES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Hostel Allotted Details Card */}
@@ -155,46 +289,53 @@ export const Payment: React.FC = () => {
           </div>
         </div>
 
-        {/* Fee Summary Card */}
-        <div className="lg:col-span-2 bg-white border border-border p-6 rounded-2xl shadow-soft space-y-6">
+        {/* Dynamic Fee Dues Card (Replaces old static breakdown cards) */}
+        <div className="lg:col-span-2 bg-white border border-border p-6 rounded-2xl shadow-soft space-y-5">
           <div>
-            <h3 className="text-xs font-black text-text uppercase tracking-wider">Admission Fee Summary</h3>
-            <p className="text-[10px] text-text-muted mt-0.5 font-semibold">Consolidated fee structure details</p>
+            <h3 className="text-xs font-black text-text uppercase tracking-wider">Active Fee Dues & Summary</h3>
+            <p className="text-[10px] text-text-muted mt-0.5 font-semibold">Real-time breakdown of enabled payments and outstanding balances</p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
-              <span className="text-[8.5px] font-bold text-text-muted uppercase tracking-wider block">Hostel Rent</span>
-              <span className="text-sm font-black text-slate-800 mt-1 block">₹95,000</span>
-            </div>
-            <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
-              <span className="text-[8.5px] font-bold text-text-muted uppercase tracking-wider block">Security Deposit</span>
-              <span className="text-sm font-black text-slate-800 mt-1 block">₹15,000</span>
-            </div>
-            <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
-              <span className="text-[8.5px] font-bold text-text-muted uppercase tracking-wider block">Annual Mess Fee</span>
-              <span className="text-sm font-black text-slate-800 mt-1 block">₹33,000</span>
-            </div>
-            <div className="bg-primary/5 border border-primary/10 p-3 rounded-xl">
-              <span className="text-[8.5px] font-black text-primary uppercase tracking-wider block font-sans">Total Fee</span>
-              <span className="text-sm font-black text-primary mt-1 block">₹1,43,000</span>
-            </div>
-          </div>
+          {activeDues.length > 0 ? (
+            <div className="space-y-4">
+              {activeDues.map((item: any) => (
+                <div key={item.id} className="bg-slate-50/90 border border-slate-200/80 rounded-xl p-4.5 space-y-3.5 hover:border-slate-300 transition-all">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-850">{item.title}</h4>
+                      {item.subtitle && <p className="text-[10px] text-text-muted font-medium mt-0.5">{item.subtitle}</p>}
+                    </div>
+                    <span className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-full border ${item.badgeStyle}`}>
+                      {item.statusLabel}
+                    </span>
+                  </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-slate-100 pt-5 text-xs font-semibold">
-            <div className="flex flex-col">
-              <span className="text-text-muted text-[10px]">Already Settled:</span>
-              <span className="text-emerald-600 font-black text-sm mt-0.5">₹{fees.paid.toLocaleString()}</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs font-semibold">
+                    <div className="flex flex-col bg-white p-3 rounded-xl border border-slate-100 shadow-2xs">
+                      <span className="text-text-muted text-[9.5px] uppercase font-bold tracking-wider">Already Settled</span>
+                      <span className="text-emerald-600 font-black text-sm mt-0.5">₹{item.alreadySettled.toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-col bg-white p-3 rounded-xl border border-slate-100 shadow-2xs">
+                      <span className="text-text-muted text-[9.5px] uppercase font-bold tracking-wider">Remaining Fee</span>
+                      <span className="text-rose-600 font-black text-sm mt-0.5">₹{item.remainingFee.toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-col bg-white p-3 rounded-xl border border-slate-100 shadow-2xs">
+                      <span className="text-text-muted text-[9.5px] uppercase font-bold tracking-wider">Due Date</span>
+                      <span className="text-slate-800 font-extrabold text-xs mt-1">{item.dueDate}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="flex flex-col">
-              <span className="text-text-muted text-[10px]">Remaining Balance:</span>
-              <span className="text-rose-600 font-black text-sm mt-0.5">₹{fees.remaining.toLocaleString()}</span>
+          ) : (
+            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-10 text-center space-y-2.5">
+              <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+              <h4 className="text-base font-black text-emerald-900 tracking-tight">No Due Payments</h4>
+              <p className="text-xs text-emerald-700 font-semibold max-w-sm mx-auto">
+                You have settled all active fee payments. No dues outstanding at this time.
+              </p>
             </div>
-            <div className="flex flex-col">
-              <span className="text-text-muted text-[10px]">Final Due Date:</span>
-              <span className="text-slate-800 font-bold text-sm mt-0.5">30 July 2026</span>
-            </div>
-          </div>
+          )}
         </div>
 
       </div>
@@ -280,7 +421,7 @@ export const Payment: React.FC = () => {
         </div>
       </div>
       
-      {/* MIDDLE SECTION: PAYMENT UPDATED (BEFORE BANK DETAILS) */}
+      {/* MIDDLE SECTION: PAYMENT UPDATED */}
       <div className="bg-white border border-border p-6 rounded-2xl shadow-soft space-y-4">
         <div className="pb-2 border-b border-slate-100">
           <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
@@ -298,12 +439,13 @@ export const Payment: React.FC = () => {
                   <th className="p-3">Payment Details</th>
                   <th className="p-3 text-right">Amount</th>
                   <th className="p-3 text-center">Status</th>
-                  <th className="p-3 text-center">Form Link</th>
+                  <th className="p-3 text-center">Form Link & UTR Submission</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {combinedPayments.map((item: any) => {
-                  const currentStatus = item.backendStatus || (backendPayments && backendPayments.length > 0 ? backendPayments[0].status : paymentStatus);
+                  const matchingPayment = myPaymentsList.find((p: any) => p.paymentTitle?.toLowerCase() === item.title?.toLowerCase());
+                  const currentStatus = matchingPayment?.status || item.backendStatus || paymentStatus;
                   const badge = getStatusBadge(currentStatus);
                   const Icon = badge.icon;
                   return (
@@ -325,10 +467,13 @@ export const Payment: React.FC = () => {
                       <td className="p-3 text-center">
                         {item.enabled !== false ? (
                           <button
-                            onClick={() => handleIndividualFormClick(item.googleFormUrl)}
+                            onClick={() => {
+                              const destination = item.googleFormUrl || DEFAULT_GOOGLE_FORM_URL;
+                              window.open(destination, '_blank', 'noopener,noreferrer');
+                            }}
                             className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-1.5 px-3 rounded-lg text-[10px] shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer"
                             type="button"
-                            title="Open payment form"
+                            title="Open Google Form"
                           >
                             <span>Fill Payment Form</span>
                             <ExternalLink className="w-3 h-3" />
@@ -350,7 +495,6 @@ export const Payment: React.FC = () => {
           </div>
         )}
       </div>
-
     </div>
   );
 };

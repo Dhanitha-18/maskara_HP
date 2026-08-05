@@ -185,6 +185,26 @@ export default function CommunicationCenter() {
     }
   });
 
+  // Applications query (to get student applications)
+  const { data: applications = [], isLoading: loadingApps } = useQuery({
+    queryKey: ['applications-list-comm'],
+    queryFn: async () => {
+      const res = await fetch('http://localhost:5000/api/applications');
+      if (!res.ok) throw new Error('Failed to fetch applications');
+      return res.json();
+    }
+  });
+
+  // Allocations query (to get student room/bed allocations)
+  const { data: allocations = [] } = useQuery({
+    queryKey: ['allocations-list-comm'],
+    queryFn: async () => {
+      const res = await fetch('http://localhost:5000/api/allocations');
+      if (!res.ok) throw new Error('Failed to fetch allocations');
+      return res.json();
+    }
+  });
+
   // Automation Switch State (fetched from backend and persisted in DB)
   const { data: emailModeData, refetch: refetchEmailMode } = useQuery({
     queryKey: ['email-mode'],
@@ -216,6 +236,7 @@ export default function CommunicationCenter() {
       // Invalidate queries so tables are updated once bulk processing completes
       queryClient.invalidateQueries({ queryKey: ['email-history-list'] });
       queryClient.invalidateQueries({ queryKey: ['applications-list-comm'] });
+      queryClient.invalidateQueries({ queryKey: ['allocations-list-comm'] });
     };
 
     socket.on('bulk_email_progress', handleProgress);
@@ -239,6 +260,7 @@ export default function CommunicationCenter() {
         refetchEmailMode();
         queryClient.invalidateQueries({ queryKey: ['email-history-list'] });
         queryClient.invalidateQueries({ queryKey: ['applications-list-comm'] });
+        queryClient.invalidateQueries({ queryKey: ['allocations-list-comm'] });
         toast.success(`Switched to ${targetMode} Mode`, {
           description: targetMode === 'Automatic'
             ? 'Automatic email processing has been enabled.'
@@ -314,30 +336,42 @@ export default function CommunicationCenter() {
     }
   });
 
-  const { data: applications = [], isLoading: loadingApps } = useQuery({
-    queryKey: ['applications-list-comm'],
-    queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/applications');
-      if (!res.ok) throw new Error('Failed to fetch applications');
-      return res.json();
-    }
-  });
-
-  const { data: allocations = [] } = useQuery({
-    queryKey: ['allocations-list-comm'],
-    queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/allocations');
-      if (!res.ok) throw new Error('Failed to fetch allocations');
-      return res.json();
-    }
-  });
-
   // Reusable Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [hostelType, setHostelType] = useState('ALL');
   const [blockFilter, setBlockFilter] = useState('ALL');
   const [floorFilter, setFloorFilter] = useState('ALL');
   const [yearFilter, setYearFilter] = useState('ALL');
+
+  // Dynamic Floor Options Calculation from Database Blocks & Rooms
+  const availableFloors = useMemo(() => {
+    const floorSet = new Set<number>();
+
+    blocks.forEach((b: any) => {
+      if (blockFilter === 'ALL' || b.id === blockFilter || b.name === blockFilter) {
+        if (b.rooms && Array.isArray(b.rooms)) {
+          b.rooms.forEach((r: any) => {
+            if (r.floor !== undefined && r.floor !== null) {
+              floorSet.add(Number(r.floor));
+            }
+          });
+        }
+      }
+    });
+
+    const floorsArr = Array.from(floorSet).filter(f => f > 0).sort((a, b) => a - b);
+    
+    if (floorsArr.length === 0) {
+      return [1, 2, 3, 4, 5];
+    }
+    
+    const max = Math.max(...floorsArr, 3);
+    const result: number[] = [];
+    for (let i = 1; i <= max; i++) {
+      result.push(i);
+    }
+    return result;
+  }, [blocks, blockFilter]);
 
   // Modals States
   const [editingTemplateKey, setEditingTemplateKey] = useState<WorkflowType | null>(null);
@@ -360,7 +394,8 @@ export default function CommunicationCenter() {
       }
 
       const sentInfo = app.sentEmails?.[activeTab];
-      const isSent = !!sentInfo;
+      const hasHistory = !!sentInfo?.date;
+      const statusFromBackend = sentInfo?.status || (hasHistory ? 'Sent' : 'Pending');
       const sentDate = sentInfo?.date ? new Date(sentInfo.date).toLocaleString('en-IN') : undefined;
 
       return {
@@ -371,9 +406,9 @@ export default function CommunicationCenter() {
         fatherEmail: app.fatherEmail || undefined,
         motherEmail: app.motherEmail || undefined,
         guardianEmail: app.guardianEmail || undefined,
-        studentEmailSent: sentInfo ? sentInfo.student : Boolean(app.studentEmailSent),
-        fatherEmailSent: sentInfo ? sentInfo.father : Boolean(app.fatherEmailSent),
-        motherEmailSent: sentInfo ? sentInfo.mother : Boolean(app.motherEmailSent),
+        studentEmailSent: sentInfo ? Boolean(sentInfo.student) : false,
+        fatherEmailSent: sentInfo ? Boolean(sentInfo.father) : false,
+        motherEmailSent: sentInfo ? Boolean(sentInfo.mother) : false,
         gender: app.gender, // MALE, FEMALE
         yearSem: app.yearSem, // e.g. "1 Year", "2 Year"
         status: app.status, // PENDING, APPROVED, REJECTED, ALLOCATED
@@ -381,7 +416,7 @@ export default function CommunicationCenter() {
         blockName: allocation?.bed?.room?.block?.name || 'Unassigned',
         roomNo: allocation?.bed?.room?.roomNo || 'N/A',
         floor: allocation?.bed?.room?.floor?.toString() || '',
-        lastEmailStatus: (isSent ? 'Sent' : 'Not Sent') as 'Sent' | 'Pending' | 'Not Sent' | 'Failed',
+        lastEmailStatus: (hasHistory ? statusFromBackend : 'Pending') as 'Sent' | 'Pending' | 'Not Sent' | 'Failed',
         lastSentDate: sentDate,
         hasApprovedPayment: app.hasApprovedPayment,
         allocationStatus: allocation?.status || 'NONE',
@@ -748,6 +783,7 @@ useEffect(() => {
 
       queryClient.invalidateQueries({ queryKey: ['email-history-list'] });
       queryClient.invalidateQueries({ queryKey: ['applications-list-comm'] });
+      queryClient.invalidateQueries({ queryKey: ['allocations-list-comm'] });
 
       toast.success(`Email successfully dispatched for ${student.studentName}!`, {
         description: `Sent to Student, Father & Mother/Guardian emails.`,
@@ -1144,14 +1180,15 @@ useEffect(() => {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Floor</label>
                   <select
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
                     value={floorFilter}
                     onChange={e => setFloorFilter(e.target.value)}
                   >
                     <option value="ALL">All Floors</option>
-                    <option value="1">1st Floor</option>
-                    <option value="2">2nd Floor</option>
-                    <option value="3">3rd Floor</option>
+                    {availableFloors.map((flNum) => {
+                      const label = flNum === 1 ? '1st Floor' : flNum === 2 ? '2nd Floor' : flNum === 3 ? '3rd Floor' : `${flNum}th Floor`;
+                      return <option key={flNum} value={String(flNum)}>{label}</option>;
+                    })}
                   </select>
                 </div>
 

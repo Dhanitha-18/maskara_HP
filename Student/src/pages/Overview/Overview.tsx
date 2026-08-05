@@ -1,18 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { usePayment } from '../../context/PaymentContext';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  ArrowRight, 
-  ShieldCheck, 
-  Building2, 
-  CheckCircle2, 
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { usePayment } from "../../context/PaymentContext";
+
+import {
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
+  ShieldCheck,
+  Building2,
+  CheckCircle2,
   Sparkles,
-  Receipt
-} from 'lucide-react';
-import { apiRequest } from '../../services/api';
-import { useAuth } from '../../context/AuthContext';
+  Receipt,
+  UtensilsCrossed,
+} from "lucide-react";
+
+import { apiRequest } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 
 const API_BASE_URL = 'http://localhost:5000';
 
@@ -182,25 +185,26 @@ export const Overview: React.FC = () => {
           
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3.5 pt-1">
-              <button
-                onClick={() => navigate('/apply')}
-                className="bg-primary hover:bg-primary-dark text-white font-bold py-3.5 px-7 rounded-xl text-xs uppercase tracking-wider transition-all shadow-md hover:shadow-lg flex items-center gap-2 group"
-                type="button"
-              >
-                <span>Apply Now</span>
-                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-              </button>
+            {/* Action Buttons */}
+<div className="flex flex-wrap items-center gap-3.5 pt-1">
+  <button
+    onClick={() => navigate('/facilities')}
+    className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider border border-slate-200 transition-all flex items-center gap-2"
+    type="button"
+  >
+    <Building2 className="w-4 h-4 text-primary" />
+    <span>Facilities</span>
+  </button>
 
-              <button
-                onClick={() => navigate('/facilities')}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider border border-slate-200 transition-all flex items-center gap-2"
-                type="button"
-              >
-                <Building2 className="w-4 h-4 text-primary" />
-                <span>Facilities</span>
-              </button>
-            </div>
+  <button
+    onClick={() => navigate('/mess')}
+    className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider border border-slate-200 transition-all flex items-center gap-2"
+    type="button"
+  >
+    <UtensilsCrossed className="w-4 h-4 text-primary" />
+    <span>Mess Menu</span>
+  </button>
+</div>
           </div>
 
           {/* Right Building Showcase — Almost full screen height */}

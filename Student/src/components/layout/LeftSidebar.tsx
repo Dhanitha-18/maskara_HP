@@ -28,9 +28,11 @@ interface LeftSidebarProps {
 const PUBLIC_PATHS = ['/', '/facilities', '/mess'];
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({ isOpen, onClose }) => {
-  const { resetPayment } = usePayment();
+  const { resetPayment, applicationState } = usePayment();
   const { logout, isLoggedIn } = useAuth();
   const navigate = useNavigate();
+
+  const isAllocationCompleted = applicationState === 'room_allotted' || applicationState === 'paid';
 
   const navItems = [
     { name: 'Overview', path: '/', icon: Home },

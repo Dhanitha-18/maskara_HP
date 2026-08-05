@@ -24,9 +24,11 @@ model Application {
   religion            String?
   permanentAddress    String?
   fatherName          String
+  fatherOccupation    String?
   fatherPhone         String
   fatherEmail         String?
   motherName          String?
+  motherOccupation    String?
   motherPhone         String?
   motherEmail         String?
   communicationAddress String?
@@ -140,6 +142,8 @@ model Payment {
   floor           String?
   roomNumber      String
   utrNumber       String    @unique
+  paymentTitle    String?
+  amount          Float?
   paymentDate     DateTime
   screenshotUrl   String?
   status          String    @default("PENDING_REVIEW")
@@ -196,6 +200,7 @@ model Complaint {
   subject         String   @default("Hostel Issue")
   description     String   @db.Text
   status          String   @default("Pending")
+  upvotes         Int      @default(1)
   assignedTo      String?
   resolutionNotes String?  @db.Text
   createdAt       DateTime @default(now())
@@ -224,15 +229,18 @@ model LeaveApplication {
 }
 
 model Notice {
-  id          String   @id @default(uuid())
-  title       String
-  desc        String
-  date        String
-  category    String
-  priority    String
-  author      String
-  fileSize    String?
-  createdAt   DateTime @default(now())
+  id           String   @id @default(uuid())
+  title        String
+  desc         String
+  date         String
+  category     String
+  priority     String
+  author       String
+  fileSize     String?
+  documentUrl  String?
+  documentName String?
+  documentType String?
+  createdAt    DateTime @default(now())
 }
 
 model EmailHistory {
@@ -246,6 +254,9 @@ model EmailHistory {
   body        String   @db.Text
   status      String
   mode        String
+  studentSent Boolean? @default(false)
+  fatherSent  Boolean? @default(false)
+  motherSent  Boolean? @default(false)
   createdAt   DateTime @default(now())
 }
 
@@ -274,4 +285,18 @@ model ChatMessage {
   createdAt   DateTime    @default(now())
   
   channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model StudentAccount {
+  id            String   @id @default(uuid())
+  studentName   String
+  phoneNumber   String
+  usn           String   @unique
+  applicationId String   @unique
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([phoneNumber])
+  @@index([studentName])
 }

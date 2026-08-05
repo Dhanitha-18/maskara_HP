@@ -152,6 +152,13 @@ export const Profile: React.FC = () => {
               {/* Summary Key Details */}
               <div className="w-full border-t border-slate-100 mt-5 pt-4 space-y-3 text-xs text-left font-semibold">
                 <div className="space-y-0.5">
+                  <span className="text-[10px] text-primary uppercase tracking-wider block font-bold">Unique Application ID</span>
+                  <span className="text-primary-dark font-black font-mono block text-xs bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block mt-0.5">
+                    {appData.id ? (appData.id.startsWith('APP-') ? appData.id : `APP-2026-${appData.id.slice(0, 6).toUpperCase()}`) : '-'}
+                  </span>
+                </div>
+
+                <div className="space-y-0.5 border-t border-slate-100/60 pt-2.5">
                   <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">Hostel Block & Room</span>
                   <span className="text-slate-900 font-bold block text-xs">
                     {`Block ${hostel.block} • Room ${hostel.room} (Bed ${hostel.bed})`}
@@ -190,9 +197,8 @@ export const Profile: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
                 <div>
                   <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
-                    Official Student Application Profile
+                    Student Profile Details
                   </h3>
-                  <p className="text-xs text-text-muted font-medium mt-0.5">Complete application form details registered in the hostel database.</p>
                 </div>
                 <button
                   type="button"
@@ -213,7 +219,7 @@ export const Profile: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-100 p-4 rounded-xl">
                   <div>
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">1. BMSIT ID</span>
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">1. USN</span>
                     <span className="text-slate-900 font-bold block mt-0.5 font-mono">{displayVal(appData.bmsitId || appData.usn || student.usn)}</span>
                   </div>
                   <div>
@@ -460,7 +466,7 @@ export const Profile: React.FC = () => {
                   Database Record Fields (1 - 29)
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700">
-                  <div><span className="text-text-muted text-[10px] uppercase block">1. BMSIT ID</span><span className="font-bold text-slate-900">{displayVal(appData.bmsitId || appData.usn)}</span></div>
+                  <div><span className="text-text-muted text-[10px] uppercase block">1. USN</span><span className="font-bold text-slate-900">{displayVal(appData.bmsitId || appData.usn)}</span></div>
                   <div><span className="text-text-muted text-[10px] uppercase block">2. Name</span><span className="font-bold text-slate-900">{displayVal(appData.studentName)}</span></div>
                   <div><span className="text-text-muted text-[10px] uppercase block">3. Gender</span><span className="font-bold text-slate-900">{displayVal(appData.gender)}</span></div>
                   <div><span className="text-text-muted text-[10px] uppercase block">4. Contact Number</span><span className="font-bold text-slate-900">{displayVal(appData.phoneNumber)}</span></div>

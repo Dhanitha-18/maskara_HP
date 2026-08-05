@@ -81,6 +81,25 @@ export default function BlockOverview() {
     onError: (err: any) => toast.error(err.message)
   });
 
+  const deleteFloorMutation = useMutation({
+    mutationFn: async (floorNum: number) => {
+      if (!selectedBlock) return;
+      const res = await fetch(`http://localhost:5000/api/blocks/${selectedBlock.id}/floors/${floorNum}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete floor');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Floor deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['blocks-overview'] });
+    },
+    onError: (err: any) => toast.error(err.message)
+  });
+
   const updateBlockPhotoMutation = useMutation({
     mutationFn: async ({ blockId, file }: { blockId: string, file: File }) => {
       const formData = new FormData();
@@ -317,13 +336,27 @@ export default function BlockOverview() {
                 <div className="flex space-x-2 ml-auto">
                   <button 
                     onClick={() => setIsAddFloorOpen(true)}
-                    className="flex items-center px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100"
+                    className="flex items-center px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100 font-semibold"
                   >
                     <Plus className="w-4 h-4 mr-1" /> Add Floor
                   </button>
+                  {selectedFloor !== null && (
+                    <button 
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to delete Floor ${selectedFloor} from ${activeBlock.name}? All unallocated rooms on this floor will be deleted.`)) {
+                          deleteFloorMutation.mutate(selectedFloor);
+                        }
+                      }}
+                      disabled={deleteFloorMutation.isPending}
+                      className="flex items-center px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors border border-rose-100 font-semibold disabled:opacity-50"
+                      title={`Delete Floor ${selectedFloor}`}
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" /> Delete Floor
+                    </button>
+                  )}
                   <button 
                     onClick={() => setIsAddRoomOpen(true)}
-                    className="flex items-center px-3 py-1.5 bg-teal-50 text-teal-600 hover:bg-teal-100 rounded-lg transition-colors border border-teal-100"
+                    className="flex items-center px-3 py-1.5 bg-teal-50 text-teal-600 hover:bg-teal-100 rounded-lg transition-colors border border-teal-100 font-semibold"
                   >
                     <Plus className="w-4 h-4 mr-1" /> Add Room
                   </button>
@@ -339,7 +372,10 @@ export default function BlockOverview() {
               </h3>
               
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                {activeBlock.rooms.filter((r: any) => r.floor === selectedFloor).map((room: any) => {
+                {activeBlock.rooms
+                  .filter((r: any) => r.floor === selectedFloor)
+                  .sort((a: any, b: any) => a.roomNo.localeCompare(b.roomNo, undefined, { numeric: true, sensitivity: 'base' }))
+                  .map((room: any) => {
                   const isGirls = activeBlock.gender === 'FEMALE';
                   const themeFocus = isGirls ? 'focus:ring-pink-400' : 'focus:ring-blue-500';
                   

@@ -260,6 +260,8 @@ export default function PaymentDashboard() {
   };
 
 
+  const [selectedPaymentTitle, setSelectedPaymentTitle] = useState<string>('ALL');
+
   // Queries
   const { data: payments, isLoading, isError: isPaymentsError } = useQuery<Payment[]>({
     queryKey: ['payments'],
@@ -268,7 +270,7 @@ export default function PaymentDashboard() {
       if (!r.ok) throw new Error('Failed to fetch payments'); 
       return r.json(); 
     },
-    refetchInterval: 5000,
+    refetchInterval: 2000,
     retry: 1,
   });
 
@@ -279,8 +281,18 @@ export default function PaymentDashboard() {
       if (!r.ok) throw new Error('Failed to fetch stats'); 
       return r.json(); 
     },
-    refetchInterval: 5000,
+    refetchInterval: 2000,
     retry: 1,
+  });
+
+  const { data: paymentRequests } = useQuery<any[]>({
+    queryKey: ['payment-requests'],
+    queryFn: async () => {
+      const r = await fetch(`${API}/settings/payment-requests`);
+      if (!r.ok) return [];
+      return r.json();
+    },
+    refetchInterval: 3000,
   });
 
   // Real-time socket listener — auto-refresh when students submit Google Form payments
@@ -412,6 +424,23 @@ export default function PaymentDashboard() {
     return data;
   }, [payments, activeTab, searchQuery, filters]);
 
+  const spreadsheetPayments = useMemo(() => {
+    let data = payments || [];
+    if (selectedPaymentTitle !== 'ALL') {
+      data = data.filter(p => (p.paymentTitle || 'Hostel Fee Payment') === selectedPaymentTitle);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      data = data.filter(p =>
+        p.studentName.toLowerCase().includes(q) ||
+        p.studentUsn.toLowerCase().includes(q) ||
+        p.utrNumber.toLowerCase().includes(q) ||
+        p.roomNumber.toLowerCase().includes(q)
+      );
+    }
+    return data;
+  }, [payments, selectedPaymentTitle, searchQuery]);
+
   const hasActiveFilters = useMemo(() =>
     !!(filters.hostel || filters.block || filters.floor || filters.room || filters.status || filters.month || filters.year),
     [filters]);
@@ -471,8 +500,9 @@ export default function PaymentDashboard() {
   };
 
   const exportCSV = () => {
-    const headers = ['Student Name', 'USN', 'Hostel', 'Block', 'Floor', 'Room Number', 'UTR Number', 'Payment Date', 'Payment Status', 'Email Status', 'Screenshot Proof'];
-    const rows = filteredPayments.map(p => [p.studentName, p.studentUsn, p.hostelName, p.block, p.floor || '-', p.roomNumber, p.utrNumber, formatDate(p.paymentDate), p.status, p.emailStatus, p.screenshotUrl ? 'Yes' : 'Google Form']);
+    const targetData = activeTab === 'spreadsheet' ? spreadsheetPayments : filteredPayments;
+    const headers = ['Student Name', 'USN', 'Hostel', 'Block', 'Floor', 'Room Number', 'Bank UTR / Ref No', 'Payment Title', 'Amount', 'Payment Date', 'Payment Status', 'Email Status', 'Screenshot Proof'];
+    const rows = targetData.map(p => [p.studentName, p.studentUsn, p.hostelName, p.block, p.floor || '-', p.roomNumber, p.utrNumber, p.paymentTitle || 'Hostel Fee Payment', p.amount ? `₹${p.amount}` : '₹143000', formatDate(p.paymentDate), p.status, p.emailStatus, p.screenshotUrl ? 'Yes' : 'Google Form']);
     const csv = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -480,7 +510,7 @@ export default function PaymentDashboard() {
     a.href = url; a.download = `hostel_payments_spreadsheet_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success(`Exported ${filteredPayments.length} records to CSV spreadsheet`);
+    toast.success(`Exported ${targetData.length} records to CSV spreadsheet`);
   };
 
   // ─── Loading State ──────────────────────────────────────────
@@ -519,30 +549,6 @@ export default function PaymentDashboard() {
           <h2 className="text-3xl font-extrabold tracking-tight text-slate-800">Payment Management</h2>
           <p className="text-slate-500 font-medium mt-1">Review and manage student payment submissions</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => { queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['payment-stats'] }); toast.info('Refreshed'); }}
-            className="p-3 bg-white/70 backdrop-blur-sm border border-slate-200/60 rounded-2xl text-slate-500 hover:text-indigo-600 hover:bg-white transition-all hover:-translate-y-0.5 hover:shadow-md"
-            title="Refresh"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setShowFormModal(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl text-sm font-bold shadow-sm hover:bg-emerald-100 hover:-translate-y-0.5 transition-all"
-            title="Set Google Form Link for Student Portal"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Configure Google Form</span>
-          </button>
-          <button
-            onClick={exportCSV}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-indigo-500/25 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 transition-all"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
-        </div>
       </div>
 
       {/* ═══ Summary Cards ═══ */}
@@ -572,47 +578,6 @@ export default function PaymentDashboard() {
           );
         })}
       </div>
-
-      {/* ═══ Block-wise Stats ═══ */}
-      {Object.keys(blockStats).length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.35 }}>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-            <Building className="w-3.5 h-3.5" /> Block-wise Payment Status
-          </p>
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {Object.entries(blockStats).sort(([a], [b]) => a.localeCompare(b)).map(([block, data]) => {
-              const pct = data.total > 0 ? Math.round((data.paid / data.total) * 100) : 0;
-              return (
-                <button
-                  key={block}
-                  onClick={() => setFilters(f => ({ ...f, block: f.block === block ? '' : block }))}
-                  className={`flex-shrink-0 rounded-2xl border px-5 py-3 min-w-[155px] transition-all duration-200 text-left cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${filters.block === block
-                    ? 'bg-indigo-50 border-indigo-200/60 shadow-sm'
-                    : 'bg-white/60 backdrop-blur-sm border-slate-200/50 hover:bg-white'
-                    }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Building className={`w-3.5 h-3.5 ${filters.block === block ? 'text-indigo-600' : 'text-slate-400'}`} />
-                    <span className={`text-sm font-bold ${filters.block === block ? 'text-indigo-700' : 'text-slate-700'}`}>Block {block}</span>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className={`text-2xl font-black ${filters.block === block ? 'text-indigo-600' : 'text-slate-800'}`}>{data.paid}</span>
-                    <span className="text-sm text-slate-400">/ {data.total} paid</span>
-                  </div>
-                  <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' }}
-                      className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full"
-                    />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
-      )}
 
       {/* ═══ Search + Filter Bar ═══ */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -770,29 +735,44 @@ export default function PaymentDashboard() {
       {/* ═══ Data Table / Spreadsheet View ═══ */}
       {activeTab === 'spreadsheet' ? (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <div className="bg-white rounded-2xl border border-emerald-300 shadow-lg overflow-hidden font-sans">
+          <div className="bg-white rounded-2xl border border-emerald-300 shadow-lg overflow-hidden font-sans space-y-0">
 
             {/* Spreadsheet Toolbar Header */}
-            <div className="bg-emerald-700 text-white p-4 flex items-center justify-between flex-wrap gap-3">
+            <div className="bg-emerald-700 text-white p-4 flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center font-black text-sm">
                   📊
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold tracking-tight">Google Forms & Bank Payment Submissions Sheet</h3>
-                  <p className="text-[11px] text-emerald-100 font-medium">Real-time consolidated spreadsheet of all student UTR and proof submissions</p>
+                  <p className="text-[11px] text-emerald-100 font-medium">Real-time consolidated spreadsheet of all student form submissions & UTR records</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Payment Title Selector Dropdown */}
+                <div className="flex items-center gap-2 bg-emerald-800/80 px-3 py-1.5 rounded-xl border border-emerald-600">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-100 whitespace-nowrap">Payment Title:</label>
+                  <select
+                    value={selectedPaymentTitle}
+                    onChange={(e) => setSelectedPaymentTitle(e.target.value)}
+                    className="px-3 py-1 bg-white text-emerald-950 rounded-lg text-xs font-black shadow-sm outline-none cursor-pointer border-none"
+                  >
+                    <option value="ALL">All Payment Forms / Titles</option>
+                    {paymentRequests?.map((req: any) => (
+                      <option key={req.id} value={req.title}>{req.title}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <span className="text-xs font-bold bg-white/10 px-3 py-1.5 rounded-lg border border-white/20 flex items-center gap-1.5">
                   <FileSpreadsheet className="w-3.5 h-3.5" />
-                  Total Entries: {filteredPayments.length}
+                  Total: {spreadsheetPayments.length}
                 </span>
                 <button
                   onClick={handleSyncGoogleSheet}
                   disabled={isSyncingSheet}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold shadow-md transition-all disabled:opacity-60"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold shadow-md transition-all disabled:opacity-60"
                   title="Pull new responses from Google Sheet"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheet ? 'animate-spin' : ''}`} />
@@ -800,7 +780,7 @@ export default function PaymentDashboard() {
                 </button>
                 <button
                   onClick={exportCSV}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold shadow-md transition-all"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold shadow-md transition-all"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Download Sheet (.CSV)</span>
@@ -809,19 +789,54 @@ export default function PaymentDashboard() {
 
             </div>
 
+            {/* Selected Payment Title Banner & Form Link */}
+            {selectedPaymentTitle !== 'ALL' && (
+              <div className="bg-emerald-50 border-b border-emerald-200 p-4 flex items-center justify-between flex-wrap gap-3">
+                {(() => {
+                  const req = paymentRequests?.find((r: any) => r.title === selectedPaymentTitle);
+                  return (
+                    <>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white px-2 py-0.5 rounded">Active Form View</span>
+                          <h4 className="text-sm font-black text-emerald-950">{selectedPaymentTitle}</h4>
+                        </div>
+                        <p className="text-xs text-emerald-700 font-semibold mt-0.5">
+                          {req?.subtitle || 'Official Student Fee Form'} • Amount: <span className="font-bold font-mono">₹{req?.amount ? Number(req.amount).toLocaleString() : '1,43,000'}</span> • Due: <span className="font-bold">{req?.dueDate || '30 August 2026'}</span>
+                        </p>
+                      </div>
+                      {req?.googleFormUrl && (
+                        <a
+                          href={req.googleFormUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5"
+                        >
+                          <span>Open Google Form</span>
+                          <CreditCard className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
             {/* Spreadsheet Table Grid */}
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-emerald-50 border-b border-emerald-200 text-[10px] font-black text-emerald-900 uppercase tracking-wider">
+                  <tr className="bg-emerald-50/80 border-b border-emerald-200 text-[10px] font-black text-emerald-900 uppercase tracking-wider">
                     <th className="p-3 border-r border-emerald-200 text-center w-12">#</th>
                     <th className="p-3 border-r border-emerald-200">Timestamp / Date</th>
+                    <th className="p-3 border-r border-emerald-200">Payment Title / Form</th>
                     <th className="p-3 border-r border-emerald-200">Student Name</th>
                     <th className="p-3 border-r border-emerald-200">USN</th>
                     <th className="p-3 border-r border-emerald-200">Hostel & Block</th>
                     <th className="p-3 border-r border-emerald-200">Floor</th>
                     <th className="p-3 border-r border-emerald-200">Room No</th>
                     <th className="p-3 border-r border-emerald-200">Bank UTR / Ref No</th>
+                    <th className="p-3 border-r border-emerald-200 text-right">Amount</th>
                     <th className="p-3 border-r border-emerald-200 text-center">Payment Proof</th>
                     <th className="p-3 border-r border-emerald-200 text-center">Email Status</th>
                     <th className="p-3 border-r border-emerald-200 text-center">Verification Status</th>
@@ -829,73 +844,85 @@ export default function PaymentDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-xs font-medium text-slate-700 bg-white">
-                  {filteredPayments.map((payment, idx) => (
-                    <tr key={payment.id} className="hover:bg-emerald-50/40 transition-colors">
-                      <td className="p-3 border-r border-slate-200 text-center font-bold text-slate-400 bg-slate-50">{idx + 1}</td>
-                      <td className="p-3 border-r border-slate-200 font-mono text-[11px] text-slate-600">{formatDate(payment.paymentDate)}</td>
-                      <td className="p-3 border-r border-slate-200 font-bold text-slate-800">{payment.studentName}</td>
-                      <td className="p-3 border-r border-slate-200 font-mono font-bold text-slate-700">{payment.studentUsn}</td>
-                      <td className="p-3 border-r border-slate-200">{payment.hostelName} (Block {payment.block})</td>
-                      <td className="p-3 border-r border-slate-200 text-center font-mono">{payment.floor || '-'}</td>
-                      <td className="p-3 border-r border-slate-200 font-bold">{payment.roomNumber}</td>
-                      <td className="p-3 border-r border-slate-200 font-mono font-bold text-indigo-700">{payment.utrNumber}</td>
-                      <td className="p-3 border-r border-slate-200 text-center">
-                        {payment.screenshotUrl ? (
-                          <button
-                            onClick={() => setScreenshotUrl(payment.screenshotUrl!)}
-                            className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 transition-all inline-flex items-center gap-1"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>View Screenshot</span>
-                          </button>
-                        ) : (
-                          <span className="text-xs text-slate-400 font-semibold italic">No File</span>
-                        )}
-                      </td>
-                      <td className="p-3 border-r border-slate-200 text-center">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${payment.emailStatus === 'SENT' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-500 border-slate-200'
-                          }`}>
-                          <Mail className="w-3 h-3" />
-                          {payment.emailStatus === 'SENT' ? 'Sent' : 'Pending'}
-                        </span>
-                      </td>
-                      <td className="p-3 border-r border-slate-200 text-center">
-                        <StatusBadge status={payment.status} />
-                      </td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {payment.status === 'PENDING_REVIEW' && (
-                            <>
-                              <button
-                                onClick={() => approveMutation.mutate(payment.id)}
-                                disabled={approveMutation.isPending}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow-sm transition-all disabled:opacity-50"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => rejectMutation.mutate(payment.id)}
-                                disabled={rejectMutation.isPending}
-                                className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold shadow-sm transition-all disabled:opacity-50"
-                              >
-                                Reject
-                              </button>
-                            </>
-                          )}
-                          {payment.status === 'APPROVED' && (
-                            <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                              <CheckCircle className="w-3.5 h-3.5" /> Verified
-                            </span>
-                          )}
-                          {payment.status === 'REJECTED' && (
-                            <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
-                              <XCircle className="w-3.5 h-3.5" /> Rejected
-                            </span>
-                          )}
-                        </div>
+                  {spreadsheetPayments.length === 0 ? (
+                    <tr>
+                      <td colSpan={14} className="p-8 text-center text-slate-400 font-semibold">
+                        No submissions found for the selected payment form title.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    spreadsheetPayments.map((payment, idx) => (
+                      <tr key={payment.id} className="hover:bg-emerald-50/40 transition-colors">
+                        <td className="p-3 border-r border-slate-200 text-center font-bold text-slate-400 bg-slate-50">{idx + 1}</td>
+                        <td className="p-3 border-r border-slate-200 font-mono text-[11px] text-slate-600">{formatDate(payment.paymentDate)}</td>
+                        <td className="p-3 border-r border-slate-200 font-extrabold text-emerald-800 bg-emerald-50/30">{payment.paymentTitle || 'Hostel Fee Payment'}</td>
+                        <td className="p-3 border-r border-slate-200 font-bold text-slate-800">{payment.studentName}</td>
+                        <td className="p-3 border-r border-slate-200 font-mono font-bold text-slate-700">{payment.studentUsn}</td>
+                        <td className="p-3 border-r border-slate-200">{payment.hostelName} (Block {payment.block})</td>
+                        <td className="p-3 border-r border-slate-200 text-center font-mono">{payment.floor || '-'}</td>
+                        <td className="p-3 border-r border-slate-200 font-bold">{payment.roomNumber}</td>
+                        <td className="p-3 border-r border-slate-200 font-mono font-bold text-indigo-700">{payment.utrNumber}</td>
+                        <td className="p-3 border-r border-slate-200 text-right font-mono font-bold text-slate-900">
+                          ₹{payment.amount ? Number(payment.amount).toLocaleString() : '1,43,000'}
+                        </td>
+                        <td className="p-3 border-r border-slate-200 text-center">
+                          {payment.screenshotUrl ? (
+                            <button
+                              onClick={() => setScreenshotUrl(payment.screenshotUrl!)}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 transition-all inline-flex items-center gap-1"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View Proof</span>
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400 font-semibold italic">Google Form Record</span>
+                          )}
+                        </td>
+                        <td className="p-3 border-r border-slate-200 text-center">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${payment.emailStatus === 'SENT' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-500 border-slate-200'
+                            }`}>
+                            <Mail className="w-3 h-3" />
+                            {payment.emailStatus === 'SENT' ? 'Sent' : 'Pending'}
+                          </span>
+                        </td>
+                        <td className="p-3 border-r border-slate-200 text-center">
+                          <StatusBadge status={payment.status} />
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {payment.status === 'PENDING_REVIEW' && (
+                              <>
+                                <button
+                                  onClick={() => approveMutation.mutate(payment.id)}
+                                  disabled={approveMutation.isPending}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow-sm transition-all disabled:opacity-50"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => rejectMutation.mutate(payment.id)}
+                                  disabled={rejectMutation.isPending}
+                                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold shadow-sm transition-all disabled:opacity-50"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                            {payment.status === 'APPROVED' && (
+                              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                                <CheckCircle className="w-3.5 h-3.5" /> Verified
+                              </span>
+                            )}
+                            {payment.status === 'REJECTED' && (
+                              <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
+                                <XCircle className="w-3.5 h-3.5" /> Rejected
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1055,25 +1082,15 @@ export default function PaymentDashboard() {
             <h3 className="text-xl font-bold text-slate-700 mb-2">
               {hasActiveFilters || searchQuery ? 'No matching payments' : 'No payments yet'}
             </h3>
-            <p className="text-sm text-slate-400 max-w-md mb-6">
+            <p className="text-sm text-slate-400 max-w-md">
               {hasActiveFilters || searchQuery
                 ? 'Try adjusting your search or filter criteria to find payments.'
                 : 'Payment data will appear here once students submit their payment details through the Google Form.'}
             </p>
-            {!hasActiveFilters && !searchQuery && (
-              <button
-                onClick={() => seedMutation.mutate()}
-                disabled={seedMutation.isPending}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-indigo-500/25 hover:-translate-y-0.5 hover:shadow-xl transition-all disabled:opacity-60"
-              >
-                {seedMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-                Load Demo Data
-              </button>
-            )}
             {(hasActiveFilters || searchQuery) && (
               <button
                 onClick={() => { setFilters(emptyFilters); setSearchQuery(''); }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all"
+                className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all mt-6"
               >
                 <X className="w-4 h-4" /> Clear Search & Filters
               </button>

@@ -56,6 +56,7 @@ export default function RoomOccupancy() {
             studentsAllocated++;
             studentsInRoom.push({
               bedNo: bed.bedNo,
+              allocationId: bed.allocation.id,
               ...bed.allocation.application
             });
           } else {
@@ -107,7 +108,7 @@ export default function RoomOccupancy() {
     }
   }, [allFloors, floorFilter]);
 
-  // Apply Filters
+  // Apply Filters and Sort Rooms Numerically
   const filteredRooms = useMemo(() => {
     return flatRooms.filter(room => {
       if (hostelType !== 'ALL' && room.blockGender !== hostelType) return false;
@@ -118,25 +119,19 @@ export default function RoomOccupancy() {
       if (occupancyFilter === 'PARTIALLY_VACANT' && (room.occupiedBedsInRoom === 0 || room.occupiedBedsInRoom === room.capacity)) return false;
       if (roomSearch && !room.roomNo.toLowerCase().includes(roomSearch.toLowerCase())) return false;
 
-      // Student level filters - Room passes if ANY student in it matches the criteria, OR if no student filters are applied
-      const hasStudentFilters = studentSearch || idSearch || deptSearch || yearSearch !== 'ALL';
-      
-      if (hasStudentFilters) {
-        if (room.studentsInRoom.length === 0) return false; // If searching for students, empty rooms fail
-        
-        const hasMatchingStudent = room.studentsInRoom.some((student: any) => {
-          const matchName = !studentSearch || student.studentName.toLowerCase().includes(studentSearch.toLowerCase());
-          const matchId = !idSearch || student.usn.toLowerCase().includes(idSearch.toLowerCase());
-          const matchDept = !deptSearch || student.department.toLowerCase().includes(deptSearch.toLowerCase());
-          const matchYear = yearSearch === 'ALL' || student.yearSem === yearSearch;
-          return matchName && matchId && matchDept && matchYear;
+      if (studentSearch || idSearch || deptSearch || yearSearch !== 'ALL') {
+        const hasMatchingStudent = room.studentsInRoom.some((s: any) => {
+          if (studentSearch && !s.studentName?.toLowerCase().includes(studentSearch.toLowerCase())) return false;
+          if (idSearch && !s.usn?.toLowerCase().includes(idSearch.toLowerCase())) return false;
+          if (deptSearch && !s.department?.toLowerCase().includes(deptSearch.toLowerCase())) return false;
+          if (yearSearch !== 'ALL' && s.yearSem !== yearSearch) return false;
+          return true;
         });
-        
         if (!hasMatchingStudent) return false;
       }
 
       return true;
-    });
+    }).sort((a: any, b: any) => a.roomNo.localeCompare(b.roomNo, undefined, { numeric: true, sensitivity: 'base' }));
   }, [flatRooms, hostelType, blockFilter, floorFilter, occupancyFilter, roomSearch, studentSearch, idSearch, deptSearch, yearSearch]);
 
   const statCards = [
@@ -268,16 +263,7 @@ export default function RoomOccupancy() {
               <option value="PARTIALLY_VACANT">Partially Vacant</option>
             </select>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Year / Sem</label>
-            <select className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none" value={yearSearch} onChange={e => setYearSearch(e.target.value)}>
-              <option value="ALL">All Years</option>
-              <option value="1">1st Year</option>
-              <option value="2">2nd Year</option>
-              <option value="3">3rd Year</option>
-              <option value="4">4th Year</option>
-            </select>
-          </div>
+          
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-100">

@@ -23,7 +23,7 @@ export default function StudentControlsIndex() {
     { id: 'circulars', label: 'Circulars', icon: FileText },
     { id: 'social', label: 'Social Connect', icon: Users },
     { id: 'leaves', label: 'Leave Applications', icon: Calendar },
-    { id: 'payments', label: 'Payments', icon: CreditCard },
+    { id: 'payments', label: 'Payment Gateway', icon: CreditCard },
   ];
 
   const activeTabData = tabs.find(t => t.id === activeTab)!;

@@ -75,7 +75,7 @@ export interface SupportContact {
 export const mockStudent: Student = {
   id: "",
   applicationId: "",
-  name: "Guest Student",
+  name: "",
   usn: "",
   department: "",
   semester: 0,

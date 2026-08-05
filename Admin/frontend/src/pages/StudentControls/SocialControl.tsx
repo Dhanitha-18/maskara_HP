@@ -237,13 +237,17 @@ export default function SocialControl() {
     }
   };
 
-  const handleDeleteChannel = async (id: string, name: string) => {
-    if (['general', 'marketplace', 'study', 'lostfound', 'sports'].includes(id)) {
-      toast.error('Default system channels cannot be deleted');
-      return;
-    }
+  const formatChannelTitle = (name: string) => {
+    if (!name) return '';
+    const cleanName = name.replace(/^#/, '').replace(/[-_]+/g, ' ');
+    return cleanName
+      .split(' ')
+      .map(w => w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : '')
+      .join(' ');
+  };
 
-    if (confirm(`Are you sure you want to delete channel #${name}? This will permanently clear all its chat history.`)) {
+  const handleDeleteChannel = async (id: string, name: string) => {
+    if (confirm(`Are you sure you want to delete channel "${formatChannelTitle(name)}"? This will permanently clear all its chat history.`)) {
       try {
         const res = await fetch(`http://localhost:5000/api/chat/channels/${id}`, {
           method: 'DELETE'
@@ -315,7 +319,7 @@ export default function SocialControl() {
                   leftTab === 'directory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Directory ({filteredResidents.length})
+                Directory
               </button>
             </div>
 
@@ -327,7 +331,6 @@ export default function SocialControl() {
                   <div className="space-y-1">
                     {channels.map(ch => {
                       const Icon = getChannelIcon(ch.iconName);
-                      const isDefault = ['general', 'marketplace', 'study', 'lostfound', 'sports'].includes(ch.id);
 
                       return (
                         <div 
@@ -341,7 +344,7 @@ export default function SocialControl() {
                         >
                           <div className="flex items-center gap-2 truncate">
                             <Icon className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">#{ch.name}</span>
+                            <span className="truncate">{formatChannelTitle(ch.name)}</span>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             {ch.badge && (
@@ -351,32 +354,30 @@ export default function SocialControl() {
                                 {ch.badge}
                               </span>
                             )}
-                            {!isDefault && (
-                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRenameValue(ch.name);
-                                    setRenameDescValue(ch.desc);
-                                    setShowRenameChannelModal(ch);
-                                  }}
-                                  className={`p-0.5 rounded hover:bg-slate-300 ${activeChannelId === ch.id ? 'text-white hover:text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
-                                  title="Rename"
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteChannel(ch.id, ch.name);
-                                  }}
-                                  className={`p-0.5 rounded hover:bg-red-500 hover:text-white ${activeChannelId === ch.id ? 'text-white' : 'text-slate-400'}`}
-                                  title="Delete"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRenameValue(ch.name);
+                                  setRenameDescValue(ch.desc);
+                                  setShowRenameChannelModal(ch);
+                                }}
+                                className={`p-0.5 rounded hover:bg-slate-300 ${activeChannelId === ch.id ? 'text-white hover:text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+                                title="Edit Channel"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteChannel(ch.id, ch.name);
+                                }}
+                                className={`p-0.5 rounded hover:bg-red-500 hover:text-white ${activeChannelId === ch.id ? 'text-white' : 'text-slate-400'}`}
+                                title="Delete Channel"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -401,29 +402,38 @@ export default function SocialControl() {
                 </div>
                 
                 <div className="space-y-1 overflow-y-auto flex-grow">
-                  {filteredResidents.map((r: any) => (
-                    <div 
-                      key={r.id}
-                      onClick={() => setSelectedResident({
-                        name: r.studentName,
-                        usn: r.usn,
-                        room: `Room ${r.roomNo || 'N/A'}`,
-                        gender: r.gender,
-                        phone: r.phoneNumber
-                      })}
-                      className="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 cursor-pointer border border-transparent hover:border-slate-200"
-                    >
-                      <div className="w-7 h-7 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center font-black text-indigo-700 uppercase">
-                        {r.studentName.charAt(0)}
-                      </div>
-                      <div className="truncate">
-                        <div className="text-[10px] font-black text-slate-800 truncate">{r.studentName}</div>
-                        <div className="text-[8px] font-mono text-slate-400 mt-0.5">{r.usn}</div>
-                      </div>
+                  {directorySearch.trim() === '' ? (
+                    <div className="flex flex-col items-center justify-center py-10 px-4 text-center text-slate-400 space-y-2">
+                      <Search className="w-8 h-8 text-slate-300" />
+                      <p className="text-[11px] font-semibold">Type a resident's name or USN above to search the directory.</p>
                     </div>
-                  ))}
-                  {filteredResidents.length === 0 && (
-                    <div className="text-center py-6 text-slate-400 italic text-[10px]">No matches found</div>
+                  ) : (
+                    <>
+                      {filteredResidents.map((r: any) => (
+                        <div 
+                          key={r.id}
+                          onClick={() => setSelectedResident({
+                            name: r.studentName,
+                            usn: r.usn,
+                            room: `Room ${r.roomNo || 'N/A'}`,
+                            gender: r.gender,
+                            phone: r.phoneNumber
+                          })}
+                          className="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 cursor-pointer border border-transparent hover:border-slate-200"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center font-black text-indigo-700 uppercase">
+                            {r.studentName.charAt(0)}
+                          </div>
+                          <div className="truncate">
+                            <div className="text-[10px] font-black text-slate-800 truncate">{r.studentName}</div>
+                            <div className="text-[8px] font-mono text-slate-400 mt-0.5">{r.usn}</div>
+                          </div>
+                        </div>
+                      ))}
+                      {filteredResidents.length === 0 && (
+                        <div className="text-center py-6 text-slate-400 italic text-[10px]">No resident matches found</div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -452,8 +462,8 @@ export default function SocialControl() {
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
               <div>
-                <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
-                  #{activeChannel.name}
+                <h3 className="text-xs sm:text-sm font-black text-slate-900 tracking-wider">
+                  {formatChannelTitle(activeChannel.name)}
                 </h3>
                 <p className="text-[10px] text-slate-400 font-semibold">{activeChannel.desc}</p>
               </div>
@@ -617,36 +627,9 @@ export default function SocialControl() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-black mb-1">Icon Style</label>
-                  <select 
-                    value={newChannelIcon} 
-                    onChange={e => setNewChannelIcon(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl p-2.5 bg-white outline-none font-bold"
-                  >
-                    <option value="MessageSquare">Message Square (Chat)</option>
-                    <option value="ShoppingBag">Shopping Bag (Market)</option>
-                    <option value="Users">Users (Study Groups)</option>
-                    <option value="HelpCircle">Help Circle (Lost/Found)</option>
-                    <option value="Sparkles">Sparkles (Events)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-black mb-1">Optional Badge</label>
-                  <input 
-                    type="text"
-                    placeholder="e.g. Active or New"
-                    value={newChannelBadge}
-                    onChange={e => setNewChannelBadge(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold"
-                  />
-                </div>
-              </div>
-
               <button
                 type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all cursor-pointer shadow-md"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all cursor-pointer shadow-md mt-2"
               >
                 Create Channel
               </button>

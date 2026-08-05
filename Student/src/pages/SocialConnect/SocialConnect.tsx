@@ -272,7 +272,7 @@ export const SocialConnect: React.FC = () => {
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            {ch.name}
+            {formatChannelTitle(ch.name)}
           </button>
         ))}
       </div>
@@ -300,7 +300,7 @@ export const SocialConnect: React.FC = () => {
                   leftTab === 'directory' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Directory ({filteredResidents.length})
+                Directory
               </button>
             </div>
 
@@ -310,7 +310,6 @@ export const SocialConnect: React.FC = () => {
                   <span className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-2">Hostel Channels</span>
                   <div className="space-y-1">
                     {channels.map(ch => {
-                      const Icon = getChannelIcon(ch.iconName);
                       return (
                         <button
                           key={ch.id}
@@ -321,9 +320,8 @@ export const SocialConnect: React.FC = () => {
                               : 'text-slate-700 hover:bg-slate-200/60'
                           }`}
                         >
-                          <div className="flex items-center gap-2 truncate">
-                            <Icon className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">{ch.name}</span>
+                          <div className="truncate">
+                            <span className="truncate">{formatChannelTitle(ch.name)}</span>
                           </div>
                           {ch.badge && (
                             <span className={`text-[8.5px] px-1.5 py-0.5 rounded font-black uppercase ${
@@ -348,35 +346,44 @@ export const SocialConnect: React.FC = () => {
                     type="text"
                     value={directorySearch}
                     onChange={e => setDirectorySearch(e.target.value)}
-                    placeholder="Search residents..."
+                    placeholder="Search residents by name or USN..."
                     className="w-full pl-8 pr-2.5 py-1.5 text-[10px] font-bold bg-white border border-border rounded-lg outline-none"
                   />
                 </div>
                 
                 <div className="space-y-1 overflow-y-auto flex-grow">
-                  {filteredResidents.map((r: any) => (
-                    <div 
-                      key={r.id}
-                      onClick={() => setSelectedResident({
-                        name: r.studentName,
-                        usn: r.usn,
-                        room: `Room ${r.roomNo || 'N/A'}`,
-                        gender: r.gender,
-                        status: 'Active'
-                      })}
-                      className="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 cursor-pointer border border-transparent hover:border-slate-200"
-                    >
-                      <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-black text-primary uppercase">
-                        {r.studentName.charAt(0)}
-                      </div>
-                      <div className="truncate">
-                        <div className="text-[10px] font-black text-slate-800 truncate">{r.studentName}</div>
-                        <div className="text-[8px] font-mono text-slate-400 mt-0.5">{r.usn}</div>
-                      </div>
+                  {directorySearch.trim() === '' ? (
+                    <div className="flex flex-col items-center justify-center py-10 px-4 text-center text-slate-400 space-y-2">
+                      <Search className="w-8 h-8 text-slate-300" />
+                      <p className="text-[11px] font-semibold">Type a resident's name or USN above to search the directory.</p>
                     </div>
-                  ))}
-                  {filteredResidents.length === 0 && (
-                    <div className="text-center py-6 text-slate-400 italic text-[10px]">No matches found</div>
+                  ) : (
+                    <>
+                      {filteredResidents.map((r: any) => (
+                        <div 
+                          key={r.id}
+                          onClick={() => setSelectedResident({
+                            name: r.studentName,
+                            usn: r.usn,
+                            room: `Room ${r.roomNo || 'N/A'}`,
+                            gender: r.gender,
+                            status: 'Active'
+                          })}
+                          className="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 cursor-pointer border border-transparent hover:border-slate-200"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-black text-primary uppercase">
+                            {r.studentName.charAt(0)}
+                          </div>
+                          <div className="truncate">
+                            <div className="text-[10px] font-black text-slate-800 truncate">{r.studentName}</div>
+                            <div className="text-[8px] font-mono text-slate-400 mt-0.5">{r.usn}</div>
+                          </div>
+                        </div>
+                      ))}
+                      {filteredResidents.length === 0 && (
+                        <div className="text-center py-6 text-slate-400 italic text-[10px]">No resident matches found</div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -404,8 +411,8 @@ export const SocialConnect: React.FC = () => {
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-success rounded-full animate-pulse" />
               <div>
-                <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
-                  {activeChannel.name}
+                <h3 className="text-xs sm:text-sm font-black text-slate-900 tracking-wider">
+                  {formatChannelTitle(activeChannel.name)}
                 </h3>
                 <p className="text-[10px] text-slate-400 font-semibold">{activeChannel.desc}</p>
               </div>

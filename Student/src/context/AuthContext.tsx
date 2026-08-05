@@ -18,7 +18,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [studentName, setStudentName] = useState<string | null>(null);
   const [studentPhone, setStudentPhone] = useState<string | null>(null);
 
-  // Restore session from localStorage on mount
+  // Restore session from localStorage on mount so page refresh preserves login session
   useEffect(() => {
     const savedUsn = localStorage.getItem('student_usn');
     const savedName = localStorage.getItem('student_name');

@@ -21,7 +21,7 @@ export default function PaymentsControl() {
     subtitle: '',
     amount: '',
     dueDate: '',
-    googleFormUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSeGj_HFh1FvceJCVuQhY7L4dY74CjjjjHccehN69MDOg6-Egw/viewform',
+    googleFormUrl: '',
     enabled: true
   });
 
@@ -94,7 +94,7 @@ export default function PaymentsControl() {
         subtitle: '',
         amount: '',
         dueDate: '',
-        googleFormUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSeGj_HFh1FvceJCVuQhY7L4dY74CjjjjHccehN69MDOg6-Egw/viewform',
+        googleFormUrl: '',
         enabled: true
       });
     },
