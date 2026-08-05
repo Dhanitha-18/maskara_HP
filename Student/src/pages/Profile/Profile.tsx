@@ -29,7 +29,10 @@ export const Profile: React.FC = () => {
   useEffect(() => {
     setEditedUsn(student.usn || appData.usn || authUsn || '');
     setEditedEmail(student.email || appData.email || '');
-    setSelectedYear(appData.yearSem || (student as any).yearSem || (student.semester ? `${student.semester}st Year` : '1st Year'));
+    const savedYear = appData.yearSem || appData.year || (student as any).yearSem || (student as any).year || (typeof student.semester === 'string' ? student.semester : '1st Year');
+    if (savedYear) {
+      setSelectedYear(savedYear);
+    }
   }, [student, appData, authUsn]);
 
   const handleSaveProfile = async () => {
@@ -44,7 +47,8 @@ export const Profile: React.FC = () => {
           usn: currentUsnToUse,
           newUsn: editedUsn,
           email: editedEmail,
-          year: selectedYear
+          year: selectedYear,
+          yearSem: selectedYear
         })
       });
 
@@ -53,10 +57,12 @@ export const Profile: React.FC = () => {
       updateStudent({
         usn: editedUsn,
         email: editedEmail,
-        semester: selectedYear as any
+        semester: selectedYear as any,
+        yearSem: selectedYear as any,
+        year: selectedYear as any
       });
 
-      setSaveSuccessMsg('Profile updated successfully! Synced with Admin Portal Student Database.');
+      setSaveSuccessMsg('Profile updated successfully! Saved permanently in database.');
       setIsEditing(false);
       setTimeout(() => setSaveSuccessMsg(null), 4000);
     } catch {
@@ -114,7 +120,6 @@ export const Profile: React.FC = () => {
       <HeroBanner 
         image="/facilities/block4.jpeg" 
         title="Student Profile & Application Details" 
-        subtitle="Official student residence record and application form profile." 
       />
 
       {/* RESIDENT PROFILE VIEW */}
@@ -231,14 +236,6 @@ export const Profile: React.FC = () => {
                       </button>
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setShowAppFormModal(true)}
-                    className="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span>View Raw Form</span>
-                  </button>
                 </div>
               </div>
 

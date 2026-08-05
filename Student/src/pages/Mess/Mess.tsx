@@ -7,6 +7,7 @@ import {
   Sandwich, Loader2
 } from 'lucide-react';
 import { apiRequest } from '../../services/api';
+import { io } from 'socket.io-client';
 
 interface MealDetail {
   name: string;
@@ -67,9 +68,21 @@ export const Mess: React.FC = () => {
           }
         });
     };
-    
+
     fetchMessMenu();
-    return () => { active = false; };
+
+    const socket = io('http://localhost:5000');
+    socket.on('MESS_MENU_UPDATED', (updatedMenu: any) => {
+      if (active && updatedMenu) {
+        setCmsData(updatedMenu);
+      }
+    });
+    socket.on('data_updated', () => fetchMessMenu());
+
+    return () => {
+      active = false;
+      socket.disconnect();
+    };
   }, []);
   // Interactive Guest Pass State
   const [showGuestPassModal, setShowGuestPassModal] = useState(false);
@@ -236,18 +249,18 @@ export const Mess: React.FC = () => {
       />
 
       {/* Main Toolbar & View Controllers */}
-      <div className="bg-white border border-border p-4 rounded-2xl shadow-soft space-y-4">
+      <div className="bg-white border border-border p-4 rounded-2xl shadow-soft space-y-4 overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
           {/* Day Switcher */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+          <div className="flex items-center flex-wrap gap-1.5">
             {days.map(d => (
               <button
                 key={d}
                 onClick={() => { setActiveDay(d); setSearchTerm(''); }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold tracking-wide transition-all whitespace-nowrap ${
                   activeDay === d 
-                    ? 'bg-primary text-white shadow-sm scale-[1.02]' 
+                    ? 'bg-primary text-white shadow-sm' 
                     : 'bg-slate-50 border border-border text-slate-700 hover:bg-slate-100'
                 }`}
                 type="button"

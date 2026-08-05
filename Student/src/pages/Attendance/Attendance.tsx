@@ -104,10 +104,7 @@ export const Attendance: React.FC = () => {
       {/* Hero Banner */}
       <HeroBanner
         title="ATTENDANCE HISTORY"
-        subtitle="View your daily presence and absence records marked by hostel administration in calendar or list view."
-        bgImage={ATTENDANCE_HERO_IMAGE}
-        icon={UserCheck}
-        badgeText="HOSTEL ATTENDANCE RECORD"
+        image={ATTENDANCE_HERO_IMAGE}
       />
 
       {/* Summary Metrics */}
@@ -185,14 +182,6 @@ export const Attendance: React.FC = () => {
                 <span>List View</span>
               </button>
             </div>
-
-            <button
-              onClick={fetchAttendanceHistory}
-              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all"
-              title="Refresh History"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </button>
           </div>
         </div>
 

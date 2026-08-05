@@ -44,9 +44,10 @@ interface Filters {
   status: string;
   month: string;
   year: string;
+  block: string;
 }
 
-const emptyFilters: Filters = { status: '', month: '', year: '' };
+const emptyFilters: Filters = { status: '', month: '', year: '', block: '' };
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
@@ -148,6 +149,23 @@ export default function PaymentDashboard() {
     },
   });
 
+  const { data: realBlocks = [] } = useQuery<any[]>({
+    queryKey: ['blocks'],
+    queryFn: async () => {
+      const res = await fetch(`${API}/blocks`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const blockOptions = useMemo(() => {
+    if (Array.isArray(realBlocks) && realBlocks.length > 0) {
+      const names = realBlocks.map(b => b.name).filter(Boolean);
+      if (names.length > 0) return names;
+    }
+    return ['Block A', 'Block B', 'Block C', 'Girls Hostel', 'Boys Hostel'];
+  }, [realBlocks]);
+
   // Socket Listeners
   useEffect(() => {
     const handleDataUpdate = () => {
@@ -230,6 +248,13 @@ export default function PaymentDashboard() {
 
       // Status Filter
       if (filters.status && p.status !== filters.status) return false;
+
+      // Block Filter
+      if (filters.block) {
+        const itemBlock = (p.block || (p as any).hostelBlock || '').trim().toLowerCase();
+        const targetBlock = filters.block.trim().toLowerCase();
+        if (!itemBlock.includes(targetBlock) && !targetBlock.includes(itemBlock)) return false;
+      }
 
       // Month/Year Filter
       if (p.paymentDate) {
@@ -378,7 +403,21 @@ export default function PaymentDashboard() {
 
         {/* Expandable Filter Panel */}
         {showFilters && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div>
+              <label className="block text-[10px] font-extrabold uppercase text-slate-400 mb-1">Hostel Block</label>
+              <select
+                value={filters.block}
+                onChange={e => setFilters({ ...filters, block: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-700 outline-none cursor-pointer"
+              >
+                <option value="">All Blocks</option>
+                {blockOptions.map(blockName => (
+                  <option key={blockName} value={blockName}>{blockName}</option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-[10px] font-extrabold uppercase text-slate-400 mb-1">Month</label>
               <select

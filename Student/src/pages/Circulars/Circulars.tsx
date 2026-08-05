@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { CIRCULARS_HERO_IMAGE } from '../../assets/heroBanners';
+import { usePayment } from '../../context/PaymentContext';
 import { 
   Download, Eye, Calendar, Filter, Search, Share2, MessageSquare, 
   ThumbsUp, Heart, HelpCircle, CheckCircle2, FileText, Image as ImageIcon, 
@@ -189,11 +190,25 @@ const INITIAL_NOTICES: Notice[] = [
 ];
 
 export const Circulars: React.FC = () => {
+  const { student } = usePayment();
   const [notices, setNotices] = useState<Notice[]>(INITIAL_NOTICES);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'card' | 'timeline'>('card');
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
+
+  const studentBlock = (student as any)?.allocatedBlock || (student as any)?.block || '';
+
+  const blockFilteredNotices = useMemo(() => {
+    return notices.filter(n => {
+      const noticeBlock = (n as any).block || (n as any).hostelBlock;
+      if (!noticeBlock || noticeBlock === 'ALL' || noticeBlock === 'All Blocks') return true;
+      if (!studentBlock) return true;
+      const cleanStudentB = studentBlock.trim().toLowerCase();
+      const cleanNoticeB = String(noticeBlock).trim().toLowerCase();
+      return cleanNoticeB.includes(cleanStudentB) || cleanStudentB.includes(cleanNoticeB);
+    });
+  }, [notices, studentBlock]);
   
   // PDF Viewer Modal Controls
   const [pdfZoom, setPdfZoom] = useState<number>(100);
@@ -467,181 +482,46 @@ export const Circulars: React.FC = () => {
         title="Circulars & Announcement Hub"
       />
 
-      {/* Clean 3-Card Statistics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-border p-4 rounded-2xl shadow-soft flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Total Notices</p>
-            <h3 className="text-xl font-black text-slate-900 mt-1">{stats.total}</h3>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-            <Layers className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white border border-border p-4 rounded-2xl shadow-soft flex items-center justify-between border-l-4 border-l-primary">
-          <div>
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Unread Notices</p>
-            <h3 className="text-xl font-black text-primary mt-1">{stats.unread}</h3>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-primary flex items-center justify-center relative">
-            <Bell className="w-5 h-5" />
-            {stats.unread > 0 && (
-              <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full animate-ping" />
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white border border-border p-4 rounded-2xl shadow-soft flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Archived Notices</p>
-            <h3 className="text-xl font-black text-slate-500 mt-1">{stats.archived}</h3>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center">
-            <Layers className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
-
-      {/* Control Toolbar: Search Bar & View Mode */}
-      <div className="bg-white border border-border p-4 rounded-2xl shadow-soft space-y-4">
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-          
-          {/* Search Bar */}
-          <div className="relative w-full sm:w-96">
-            <Search className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text"
-              placeholder="Search title, keywords, category, date, author..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full border border-border rounded-xl pl-9 pr-4 py-2.5 text-xs font-semibold text-text placeholder:text-text-muted/60 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-slate-50/50"
-            />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-slate-700 text-xs font-bold"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-            <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-border text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => setViewMode('card')}
-                className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
-                  viewMode === 'card' ? 'bg-white text-primary shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Card View</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('timeline')}
-                className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
-                  viewMode === 'timeline' ? 'bg-white text-primary shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Timeline</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Single-Select Filter Chips Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-2 border-t border-slate-100">
-          <span className="text-[10px] font-black text-text-muted uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
-            <Filter className="w-3.5 h-3.5 text-primary" /> Filter:
+      {/* Institutional Announcements */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+            Institutional Announcements
+          </h3>
+          <span className="text-[11px] font-bold text-text-muted">
+            Showing {blockFilteredNotices.length} notice(s)
           </span>
-          {categories.map(cat => {
-            const isSelected = activeCategory === cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => handleCategorySelect(cat)}
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold shrink-0 transition-all border ${
-                  isSelected
-                    ? 'bg-primary text-white border-primary shadow-sm'
-                    : 'bg-white text-slate-700 border-border hover:bg-slate-50'
-                }`}
-              >
-                {cat}
-                {cat === 'Unread' && stats.unread > 0 && (
-                  <span className={`ml-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                    isSelected ? 'bg-white text-primary' : 'bg-primary text-white'
-                  }`}>
-                    {stats.unread}
-                  </span>
-                )}
-              </button>
-            );
-          })}
         </div>
-      </div>
 
-      {/* CARD VIEW MODE */}
-      {viewMode === 'card' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-              Institutional Announcements
-            </h3>
-            <span className="text-[11px] font-bold text-text-muted">
-              Showing {filteredNotices.length} notice(s)
-            </span>
-          </div>
-
-          {filteredNotices.length === 0 ? (
-            <div className="bg-white border border-border p-12 text-center rounded-2xl shadow-soft space-y-4">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
-                <Layers className="w-8 h-8" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-black text-slate-800">No notices found</h4>
-                <p className="text-xs text-text-muted font-medium">Try clearing your search query or selecting a different filter chip.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setActiveCategory('All'); setSearchQuery(''); }}
-                className="bg-primary hover:bg-primary-dark text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
-              >
-                Reset Filters
-              </button>
+        {blockFilteredNotices.length === 0 ? (
+          <div className="bg-white border border-border p-12 text-center rounded-2xl shadow-soft space-y-4">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+              <Layers className="w-8 h-8" />
             </div>
-          ) : (
-            filteredNotices.map(notice => (
-              <div 
-                key={notice.id}
-                className={`bg-white border rounded-2xl shadow-sm p-6 space-y-5 transition-all duration-200 hover:shadow-md hover:border-slate-300 group ${
-                  !notice.isRead ? 'border-l-4 border-l-primary bg-slate-50/40' : 'border-slate-200/90'
-                }`}
-              >
-                {/* Card Header Tags & Date */}
-                <div className="flex flex-wrap justify-between items-center gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {!notice.isRead && (
-                      <span className="bg-primary text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-xs animate-pulse">
-                        <span className="w-1.5 h-1.5 bg-white rounded-full" /> NEW
-                      </span>
-                    )}
+            <div className="space-y-1">
+              <h4 className="text-sm font-black text-slate-800">No notices available</h4>
+              <p className="text-xs text-text-muted font-medium font-semibold">Institutional circulars will appear here when issued by administration.</p>
+            </div>
+          </div>
+        ) : (
+          blockFilteredNotices.map(notice => (
+            <div 
+              key={notice.id}
+              className="bg-white border rounded-2xl shadow-sm p-6 space-y-5 transition-all duration-200 hover:shadow-md hover:border-slate-300 group border-slate-200/90"
+            >
+              {/* Card Header Tags & Date */}
+              <div className="flex flex-wrap justify-between items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary px-3 py-0.5 rounded-full border border-primary/20">
+                    {notice.category}
+                  </span>
 
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary px-3 py-0.5 rounded-full border border-primary/20">
-                      {notice.category}
-                    </span>
-
-                    <span className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5 ml-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      {notice.date} ({notice.time})
-                    </span>
-                  </div>
+                  <span className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5 ml-1">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    {notice.date} ({notice.time})
+                  </span>
                 </div>
+              </div>
 
                 {/* Title & Issued By & Description */}
                 <div className="space-y-2">
@@ -722,57 +602,6 @@ export const Circulars: React.FC = () => {
             ))
           )}
         </div>
-      )}
-
-      {/* TIMELINE VIEW MODE */}
-      {viewMode === 'timeline' && (
-        <div className="bg-white border border-border p-6 rounded-2xl shadow-soft space-y-6">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" /> Chronological Notice Timeline
-            </h3>
-            <span className="text-[10px] text-text-muted font-bold">July 2026</span>
-          </div>
-
-          <div className="relative border-l-2 border-primary/20 ml-4 space-y-8 py-2">
-            {filteredNotices.map((notice) => (
-              <div key={notice.id} className="relative pl-6 group">
-                
-                {/* Timeline node icon */}
-                <div className="absolute -left-[17px] top-0 w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs shadow-sm transition-transform group-hover:scale-110 bg-primary border-white text-white">
-                  <Calendar className="w-3.5 h-3.5" />
-                </div>
-
-                <div className="bg-slate-50 border border-slate-200 hover:border-primary p-4 rounded-xl space-y-2 transition-all cursor-pointer" onClick={() => openNoticeViewer(notice)}>
-                  <div className="flex justify-between items-start gap-2">
-                    <span className="text-[10px] font-black uppercase text-primary bg-primary/10 px-2 py-0.5 rounded">
-                      {notice.date} ({notice.time})
-                    </span>
-                    <span className="text-[9px] font-bold text-text-muted uppercase">
-                      {notice.category}
-                    </span>
-                  </div>
-
-                  <h4 className="text-xs font-black text-slate-900 group-hover:text-primary transition-colors">
-                    {notice.title}
-                  </h4>
-                  <p className="text-[11px] text-text-muted leading-relaxed font-medium line-clamp-2">
-                    {notice.desc}
-                  </p>
-
-                  <div className="pt-2 flex justify-between items-center text-[10px] font-bold text-slate-600">
-                    <span>By: {notice.author}</span>
-                    <span className="text-primary flex items-center gap-1 hover:underline">
-                      View PDF <Eye className="w-3 h-3" />
-                    </span>
-                  </div>
-                </div>
-
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* PDF PREVIEW MODAL */}
       {selectedNotice && (

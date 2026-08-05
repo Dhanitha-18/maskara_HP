@@ -57,26 +57,10 @@ export default function MessMenuControl() {
     }
   });
 
-  // Load data into local state
+  // Load data into local state — set exactly what the server returns, no auto-filling
   useEffect(() => {
     if (serverData) {
-      const initialized = { ...serverData };
-      if (!initialized.menu) initialized.menu = {};
-      DAYS.forEach(day => {
-        if (!initialized.menu[day]) initialized.menu[day] = {};
-        MEALS.forEach(meal => {
-          if (!initialized.menu[day][meal]) {
-            initialized.menu[day][meal] = {
-              name: `${meal} Menu`,
-              desc: `Daily ${meal} menu details`,
-              time: meal === 'Breakfast' ? '7:30 AM - 9:00 AM' : meal === 'Lunch' ? '12:30 PM - 2:00 PM' : meal === 'Snacks' ? '5:00 PM - 6:00 PM' : '7:35 PM - 9:00 PM',
-              img: '',
-              type: 'Veg'
-            };
-          }
-        });
-      });
-      setCmsData(initialized);
+      setCmsData(serverData);
     }
   }, [serverData]);
 
@@ -119,28 +103,34 @@ export default function MessMenuControl() {
       if (!res.ok) throw new Error(data.error || 'Upload failed');
       
       const uploadedUrl = 'http://localhost:5000' + data.imageUrl;
+      let updatedMenu: any = null;
       setCmsData((prev: any) => {
         const copy = { ...prev };
         if (copy.menu[activeDay] && copy.menu[activeDay][mealKey]) {
           copy.menu[activeDay][mealKey].img = uploadedUrl;
         }
+        updatedMenu = copy;
         return copy;
       });
-      toast.success('Image uploaded successfully', { id: toastId });
+      if (updatedMenu) mutation.mutate(updatedMenu);
+      toast.success('Image uploaded and synced live to Student Portal!', { id: toastId });
     } catch (error: any) {
       toast.error(error.message, { id: toastId });
     }
   };
 
   const handleImageDelete = (mealKey: string) => {
+    let updatedMenu: any = null;
     setCmsData((prev: any) => {
       const copy = { ...prev };
       if (copy.menu[activeDay] && copy.menu[activeDay][mealKey]) {
         copy.menu[activeDay][mealKey].img = '';
       }
+      updatedMenu = copy;
       return copy;
     });
-    toast.success('Image cleared from meal card');
+    if (updatedMenu) mutation.mutate(updatedMenu);
+    toast.success('Image deleted and synced live to Student Portal!');
   };
 
   // Header Editors
@@ -187,11 +177,13 @@ export default function MessMenuControl() {
   const deleteMeal = (key: string) => {
     if (confirm(`Are you sure you want to delete ${key} from ${activeDay}'s menu?`)) {
       setCmsData((prev: any) => {
-        const copy = { ...prev };
+        const copy = JSON.parse(JSON.stringify(prev)); // deep copy to avoid mutation
         delete copy.menu[activeDay][key];
+        // Auto-save immediately to server so deletion persists after refresh
+        mutation.mutate(copy);
         return copy;
       });
-      toast.success(`${key} deleted from ${activeDay}.`);
+      toast.success(`${key} deleted from ${activeDay} and saved to server.`);
     }
   };
 
@@ -337,18 +329,18 @@ export default function MessMenuControl() {
 
 
       {/* Main Toolbar & View Controllers */}
-      <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm space-y-4">
+      <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm space-y-4 overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
           {/* Day Switcher */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+          <div className="flex items-center flex-wrap gap-1.5">
             {DAYS.map(d => (
               <button
                 key={d}
                 onClick={() => { setActiveDay(d); setSearchTerm(''); }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold tracking-wide transition-all whitespace-nowrap cursor-pointer ${
                   activeDay === d 
-                    ? 'bg-indigo-600 text-white shadow-sm scale-[1.02]' 
+                    ? 'bg-indigo-600 text-white shadow-sm' 
                     : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
               >

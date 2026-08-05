@@ -88,7 +88,6 @@ function Sidebar() {
     { name: 'Student Database', path: '/database', icon: Database },
     { name: 'Block Overview', path: '/blocks', icon: Building },
     { name: 'Live Occupancy', path: '/occupancy', icon: Users },
-    { name: 'Daily Attendance', path: '/attendance', icon: UserCheck },
     { name: 'Communication Center', path: '/communication', icon: Mail },
     { name: 'Payments', path: '/payments', icon: CreditCard },
     { name: 'Student Controls', path: '/student-controls', icon: Monitor },

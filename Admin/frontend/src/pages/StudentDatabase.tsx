@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
 import { API_BASE_URL } from '../lib/api';
 
 const getPhotoUrl = (url: string) => {
@@ -38,6 +39,97 @@ const formatSubmissionDate = (dateStr: string | null | undefined) => {
 const displayVal = (val: any) => {
   if (val === undefined || val === null || String(val).trim() === '' || val === '-' || val === 'Not Available' || val === 'N/A') return '-';
   return val;
+};
+
+const handleDownloadPDF = (app: any) => {
+  if (!app) return;
+  const doc = new jsPDF({
+    orientation: 'p',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  // Header Title
+  doc.setFillColor(49, 46, 129);
+  doc.rect(0, 0, 210, 40, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.text('STUDENT ADMISSION RECORD', 15, 20);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text('BMS Institute of Technology and Management', 15, 28);
+  doc.text('Consolidated Student Application & Profile Record', 15, 33);
+
+  let currentY = 50;
+
+  const drawSectionHeader = (title: string) => {
+    doc.setFillColor(243, 244, 246);
+    doc.rect(15, currentY, 180, 8, 'F');
+    doc.setTextColor(31, 41, 55);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(title, 20, currentY + 6);
+    currentY += 14;
+  };
+
+  const drawFieldRow = (label1: string, val1: string, label2?: string, val2?: string) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(107, 114, 128);
+    doc.text(label1, 20, currentY);
+    
+    if (label2) {
+      doc.text(label2, 110, currentY);
+    }
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(17, 24, 39);
+    doc.setFontSize(9.5);
+    doc.text(val1 || 'N/A', 20, currentY + 5);
+    
+    if (label2 && val2 !== undefined) {
+      doc.text(val2 || 'N/A', 110, currentY + 5);
+    }
+    
+    currentY += 12;
+  };
+
+  const formattedAppId = app.id ? (app.id.startsWith('APP-') ? app.id : `APP-2026-${app.id.slice(0, 6).toUpperCase()}`) : 'N/A';
+  const subDate = formatSubmissionDate(app.createdAt || app.appliedAt);
+  
+  drawSectionHeader('APPLICATION DETAILS');
+  drawFieldRow('Unique Application ID', formattedAppId, 'Submission Date', subDate);
+  drawFieldRow('Application Status', app.status || 'N/A', 'BMSIT Reference ID', app.bmsitId || 'N/A');
+
+  drawSectionHeader('STUDENT INFORMATION');
+  drawFieldRow('Student Name', app.studentName || 'N/A', 'USN / Roll Number', app.usn || app.bmsitId || 'N/A');
+  drawFieldRow('Gender', app.gender || 'N/A', 'Date of Birth', app.dob ? new Date(app.dob).toLocaleDateString('en-IN') : 'N/A');
+  drawFieldRow('Department / Branch', app.branch || app.department || 'N/A', 'Year', app.year || app.semester || app.yearSem || 'N/A');
+  drawFieldRow('Personal Email', app.email || 'N/A', 'Phone Number', app.phoneNumber || 'N/A');
+  drawFieldRow('College Email', app.collegeEmail || 'N/A', 'Blood Group', app.bloodGroup || 'N/A');
+  drawFieldRow('Aadhaar Number', app.aadhaarNumber || 'N/A', 'Nationality / Religion', `${app.nationality || 'Indian'} / ${app.religion || 'N/A'}`);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(107, 114, 128);
+  doc.text('Permanent Address', 20, currentY);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(17, 24, 39);
+  doc.setFontSize(9.5);
+  doc.text(app.permanentAddress || app.address || 'N/A', 20, currentY + 5);
+  currentY += 15;
+
+  drawSectionHeader('PARENT & GUARDIAN INFORMATION');
+  drawFieldRow("Father's Name", app.fatherName || 'N/A', "Father's Phone", app.fatherPhone || 'N/A');
+  drawFieldRow("Mother's Name", app.motherName || 'N/A', "Mother's Phone", app.motherPhone || 'N/A');
+  drawFieldRow("Guardian's Name", app.guardianName || 'N/A', "Guardian Phone", app.guardianPhone || 'N/A');
+  drawFieldRow('Emergency Contact', app.emergencyContact || 'N/A', "Guardian Email", app.guardianEmail || 'N/A');
+
+  const safeName = (app.studentName || 'Student').replace(/[^a-zA-Z0-9]/g, '_');
+  doc.save(`${safeName}_Information_${formattedAppId}.pdf`);
 };
 
 import { useAuthStore } from '../store/useAuthStore';
@@ -163,7 +255,8 @@ export default function StudentDatabase() {
       'Email',
       'Date of Birth',
       'Program',
-      'Semester',
+      'Year',
+      'College Email',
       'Branch',
       'Blood Group',
       'Aadhaar Number',
@@ -211,7 +304,8 @@ export default function StudentDatabase() {
         displayVal(app.email),
         dobStr,
         displayVal(app.program),
-        displayVal(app.semester || app.yearSem),
+        displayVal(app.year || app.semester || app.yearSem),
+        displayVal(app.collegeEmail),
         displayVal(app.branch || app.department),
         displayVal(app.bloodGroup),
         displayVal(app.aadhaarNumber),
@@ -378,7 +472,8 @@ export default function StudentDatabase() {
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Email</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Date of Birth</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Program</th>
-                  <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Semester</th>
+                  <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Year</th>
+                  <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">College Email</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Branch</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Blood Group</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Aadhaar Number</th>
@@ -455,7 +550,8 @@ export default function StudentDatabase() {
                         <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.email)}</td>
                         <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{app.dob ? new Date(app.dob).toLocaleDateString('en-IN') : '-'}</td>
                         <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.program)}</td>
-                        <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.semester || app.yearSem)}</td>
+                        <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.year || app.semester || app.yearSem)}</td>
+                        <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.collegeEmail)}</td>
                         <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.branch || app.department)}</td>
                         <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.bloodGroup)}</td>
                         <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.aadhaarNumber)}</td>
@@ -613,8 +709,12 @@ export default function StudentDatabase() {
                                             <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.program)}</p>
                                           </div>
                                           <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Semester / Year</p>
-                                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.semester || app.yearSem)}</p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Year</p>
+                                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.year || app.semester || app.yearSem)}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">College Email</p>
+                                            <p className="font-semibold text-slate-700 truncate mt-0.5" title={app.collegeEmail}>{displayVal(app.collegeEmail)}</p>
                                           </div>
                                           <div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase">Branch / Dept</p>
@@ -897,7 +997,7 @@ export default function StudentDatabase() {
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Modal Header */}
-                <div className="bg-slate-900 text-white p-5 sm:p-6 flex items-center justify-between shrink-0">
+                <div className="bg-gradient-to-r from-indigo-700 via-indigo-800 to-purple-800 text-white p-5 sm:p-6 flex items-center justify-between shrink-0 shadow-sm">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-16 rounded-xl border-2 border-indigo-400/30 bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 shadow-md">
                       {app.photoUrl || app.passportPhoto ? (
@@ -1004,8 +1104,12 @@ export default function StudentDatabase() {
                             <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.program)}</p>
                           </div>
                           <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Semester / Year</p>
-                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.semester || app.yearSem)}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Year</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.year || app.semester || app.yearSem)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">College Email</p>
+                            <p className="font-semibold text-slate-700 truncate mt-0.5" title={app.collegeEmail}>{displayVal(app.collegeEmail)}</p>
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase">Branch / Dept</p>
@@ -1243,12 +1347,14 @@ export default function StudentDatabase() {
                 </div>
 
                 {/* Modal Footer */}
-                <div className="bg-slate-100 p-4 border-t border-slate-200 flex items-center justify-end shrink-0">
+                <div className="bg-slate-100 p-4 border-t border-slate-200 flex items-center justify-between shrink-0">
+                  <span className="text-xs text-slate-500 font-semibold">Click Download PDF to export full student record</span>
                   <button
-                    onClick={() => setSelectedStudentApp(null)}
-                    className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+                    onClick={() => handleDownloadPDF(app)}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-2"
                   >
-                    Close Window
+                    <Download className="w-4 h-4" />
+                    <span>Download PDF</span>
                   </button>
                 </div>
               </motion.div>

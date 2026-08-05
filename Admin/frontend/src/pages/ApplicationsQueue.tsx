@@ -121,8 +121,9 @@ const handleDownloadPDF = async (app: any) => {
   drawSectionHeader('STUDENT INFORMATION');
   drawFieldRow('Student Name', app.studentName, 'USN / Roll Number', app.usn);
   drawFieldRow('Gender', app.gender, 'Date of Birth', app.dob ? new Date(app.dob).toLocaleDateString('en-IN') : 'N/A');
-  drawFieldRow('Department', app.department, 'Semester', app.yearSem);
+  drawFieldRow('Department', app.department, 'Year', app.year || app.yearSem || 'N/A');
   drawFieldRow('Student Email', app.email, 'Phone Number', app.phoneNumber);
+  drawFieldRow('College Email', app.collegeEmail || 'N/A', 'Blood Group', app.bloodGroup || 'N/A');
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
@@ -211,7 +212,7 @@ export default function ApplicationsQueue() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectCount, setSelectCount] = useState('');
   const [activeTab, setActiveTab] = useState<'FEMALE' | 'MALE'>('FEMALE');
-  const [activeView, setActiveView] = useState<'PENDING' | 'ALLOCATED'>('PENDING');
+  const [activeView, setActiveView] = useState<'PENDING' | 'ALLOCATED' | 'REJECTED'>('PENDING');
   const [sharingFilter, setSharingFilter] = useState('ALL');
 
   const { data: applications, isLoading } = useQuery({
@@ -321,8 +322,9 @@ export default function ApplicationsQueue() {
     if (app.gender.toUpperCase() !== activeTab) return false;
     
     // View filtering
-    if (activeView === 'PENDING' && (app.status === 'ALLOCATED' || app.status === 'TRANSFERRED')) return false;
+    if (activeView === 'PENDING' && (app.status === 'ALLOCATED' || app.status === 'TRANSFERRED' || app.status === 'REJECTED')) return false;
     if (activeView === 'ALLOCATED' && app.status !== 'ALLOCATED') return false;
+    if (activeView === 'REJECTED' && app.status !== 'REJECTED') return false;
 
     // Sharing preference filtering
     if (sharingFilter !== 'ALL' && app.hostelPref !== sharingFilter) return false;
@@ -392,6 +394,12 @@ export default function ApplicationsQueue() {
                 className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeView === 'ALLOCATED' ? 'bg-white text-slate-800 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Allocated
+              </button>
+              <button 
+                onClick={() => { setActiveView('REJECTED'); setSelectedIds([]); }}
+                className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeView === 'REJECTED' ? 'bg-white text-rose-700 shadow-sm border border-rose-200' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Rejected
               </button>
             </div>
           </div>
@@ -561,7 +569,7 @@ export default function ApplicationsQueue() {
                     
                     <div className="hidden lg:block">
                       <p className="text-sm font-semibold text-slate-700">{app.department}</p>
-                      <p className="text-xs font-medium text-slate-500 mt-0.5">Sem {app.yearSem}</p>
+                      <p className="text-xs font-medium text-slate-500 mt-0.5">{app.year || app.yearSem}</p>
                     </div>
 
                     <div className="hidden lg:block">

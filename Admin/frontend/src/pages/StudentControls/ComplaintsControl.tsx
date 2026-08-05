@@ -43,6 +43,8 @@ export default function ComplaintsControl() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
+  const [selectedBlockFilter, setSelectedBlockFilter] = useState('ALL');
+  const [availableBlocks, setAvailableBlocks] = useState<string[]>([]);
 
   // Modal State
   const [selectedComplaint, setSelectedComplaint] = useState<ComplaintItem | null>(null);
@@ -183,6 +185,19 @@ export default function ComplaintsControl() {
     }
   };
 
+  // Fetch real-time available blocks for filter
+  useEffect(() => {
+    fetch('http://localhost:5000/api/blocks')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const names = data.map((b: any) => b.name).filter(Boolean);
+          if (names.length > 0) setAvailableBlocks(names);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const { role, allowedBlocks } = useAuthStore();
 
   const isBlockAllowed = (itemBlock?: string) => {
@@ -205,8 +220,12 @@ export default function ComplaintsControl() {
                             formatTicketId(c.id).toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'ALL' || c.status === statusFilter;
       const matchesPriority = priorityFilter === 'ALL' || c.priority === priorityFilter;
-      const matchesBlock = isBlockAllowed(c.block);
-      return matchesSearch && matchesStatus && matchesPriority && matchesBlock;
+      const matchesBlockAllowed = isBlockAllowed(c.block);
+      const matchesSelectedBlock = selectedBlockFilter === 'ALL' ||
+        (c.block || '').trim().toLowerCase().includes(selectedBlockFilter.trim().toLowerCase()) ||
+        selectedBlockFilter.trim().toLowerCase().includes((c.block || '').trim().toLowerCase());
+
+      return matchesSearch && matchesStatus && matchesPriority && matchesBlockAllowed && matchesSelectedBlock;
     });
 
   // Calculate counters
@@ -274,6 +293,19 @@ export default function ComplaintsControl() {
       <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs font-semibold">
         <div className="flex flex-wrap items-center gap-3">
           <div>
+            <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Block Filter</label>
+            <select
+              value={selectedBlockFilter}
+              onChange={e => setSelectedBlockFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none font-bold text-slate-700 cursor-pointer"
+            >
+              <option value="ALL">All Blocks</option>
+              {(availableBlocks.length > 0 ? availableBlocks : ['Block A', 'Block B', 'Block C', 'Girls Hostel', 'Boys Hostel']).map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Status Filter</label>
             <select
               value={statusFilter}
@@ -333,7 +365,6 @@ export default function ComplaintsControl() {
                 <th className="p-3.5">Submitted</th>
                 <th className="p-3.5">Status</th>
                 <th className="p-3.5 text-center">Likes / Me Too</th>
-                <th className="p-3.5">Technician / Resolution</th>
                 <th className="p-3.5">Update Status</th>
               </tr>
             </thead>
@@ -376,16 +407,6 @@ export default function ComplaintsControl() {
                     <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 font-black px-2.5 py-1 rounded-lg border border-indigo-200 text-xs">
                       👍 {item.upvotes || 1}
                     </span>
-                  </td>
-                  <td className="p-3.5 max-w-[180px]">
-                    {item.assignedTo ? (
-                      <div className="font-bold text-slate-800 truncate">🔧 {item.assignedTo}</div>
-                    ) : (
-                      <div className="text-[10px] text-slate-400 italic">No technician</div>
-                    )}
-                    {item.resolutionNotes && (
-                      <p className="text-[9px] text-emerald-600 truncate mt-0.5">✔ {item.resolutionNotes}</p>
-                    )}
                   </td>
                   <td className="p-3.5 whitespace-nowrap">
                     <select

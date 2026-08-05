@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
 import { 
-  Calendar, Building, CheckCircle2, XCircle, Users, RefreshCw, Search, Check, X, Send, Save, AlertCircle
+  Calendar, CheckCircle2, XCircle, Users, RefreshCw, Search, Save, AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '../store/useAuthStore';
@@ -30,6 +29,30 @@ export default function AttendanceManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState<'MARK' | 'HISTORY'>('MARK');
+  const [historyList, setHistoryList] = useState<any[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+
+  const fetchHistory = async () => {
+    setIsHistoryLoading(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/attendance/history');
+      const data = await res.json();
+      if (res.ok && data.history) {
+        setHistoryList(data.history);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'HISTORY') {
+      fetchHistory();
+    }
+  }, [activeTab]);
 
   // Fetch blocks
   useEffect(() => {
@@ -211,6 +234,83 @@ export default function AttendanceManagement() {
         </div>
       </div>
 
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl w-fit border border-slate-200">
+        <button
+          onClick={() => setActiveTab('MARK')}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'MARK' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Mark Daily Attendance
+        </button>
+        <button
+          onClick={() => setActiveTab('HISTORY')}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'HISTORY' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Attendance History
+        </button>
+      </div>
+
+      {activeTab === 'HISTORY' && (
+        <div className="bg-white/80 backdrop-blur-2xl border border-white/60 rounded-3xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-black text-slate-900">Attendance History Logs</h3>
+            <button
+              onClick={fetchHistory}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isHistoryLoading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
+
+          {isHistoryLoading ? (
+            <div className="py-12 text-center text-slate-400 font-semibold text-xs">Loading history logs...</div>
+          ) : historyList.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 font-semibold text-xs">No attendance history records found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-950 text-white font-bold uppercase text-[10px] tracking-wider">
+                    <th className="p-3.5">Date</th>
+                    <th className="p-3.5">Student Details</th>
+                    <th className="p-3.5">USN</th>
+                    <th className="p-3.5">Block & Room</th>
+                    <th className="p-3.5 text-center">Attendance Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {historyList.map((rec: any, idx: number) => {
+                    const isPresent = rec.status === 'PRESENT';
+                    return (
+                      <tr key={rec.id || idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3.5 font-mono font-bold text-slate-800">{rec.date}</td>
+                        <td className="p-3.5 font-bold text-slate-900">{rec.studentName}</td>
+                        <td className="p-3.5 font-mono font-bold text-indigo-600">{rec.studentUsn}</td>
+                        <td className="p-3.5 text-slate-700 font-semibold">{rec.block} • Room {rec.roomNo}</td>
+                        <td className="p-3.5 text-center">
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            isPresent ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'
+                          }`}>
+                            {rec.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'MARK' && (
+        <>
+
       {/* Control Bar & Action Buttons */}
       <div className="bg-white/80 backdrop-blur-2xl border border-white/60 rounded-3xl p-6 shadow-[10px_10px_40px_-10px_rgba(0,0,0,0.05)] space-y-4">
         {hasUnsavedChanges && (
@@ -325,8 +425,7 @@ export default function AttendanceManagement() {
                   <th className="p-4">USN</th>
                   <th className="p-4">Block & Room</th>
                   <th className="p-4">Date</th>
-                  <th className="p-4 text-center">Attendance Status</th>
-                  <th className="p-4 text-right rounded-tr-xl">Toggle Action</th>
+                  <th className="p-4 text-center rounded-tr-xl">Toggle Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
@@ -361,28 +460,35 @@ export default function AttendanceManagement() {
                         {item.date}
                       </td>
 
-                      <td className="p-4 text-center">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                          isPresent 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}>
-                          {isPresent ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                          {isPresent ? 'Present' : 'Absent'}
-                        </span>
-                      </td>
-
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => handleToggleIndividualStatus(item)}
-                          className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                            isPresent
-                              ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                          }`}
-                        >
-                          Mark {isPresent ? 'Absent' : 'Present'}
-                        </button>
+                      <td className="p-4">
+                        <div className="flex items-center justify-center gap-3">
+                          <span className={`text-[11px] font-black uppercase tracking-wider ${isPresent ? 'text-slate-300' : 'text-rose-600'}`}>
+                            Absent
+                          </span>
+                          <button
+                            onClick={() => handleToggleIndividualStatus(item)}
+                            className={`relative w-14 h-7 rounded-full transition-all duration-300 ease-in-out cursor-pointer shadow-inner focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                              isPresent
+                                ? 'bg-emerald-500 focus:ring-emerald-400'
+                                : 'bg-rose-500 focus:ring-rose-400'
+                            }`}
+                            title={isPresent ? 'Currently Present — click to mark Absent' : 'Currently Absent — click to mark Present'}
+                          >
+                            <span
+                              className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-300 ease-in-out flex items-center justify-center ${
+                                isPresent ? 'left-[30px]' : 'left-0.5'
+                              }`}
+                            >
+                              {isPresent
+                                ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                : <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                              }
+                            </span>
+                          </button>
+                          <span className={`text-[11px] font-black uppercase tracking-wider ${isPresent ? 'text-emerald-600' : 'text-slate-300'}`}>
+                            Present
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -392,6 +498,8 @@ export default function AttendanceManagement() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

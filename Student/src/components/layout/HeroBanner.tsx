@@ -15,7 +15,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ image, title, subtitle }
         className="w-full h-full object-cover brightness-[0.45] contrast-105"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex flex-col justify-end">
-        <div className="max-w-7xl w-full mx-auto p-6 sm:p-10">
+        <div className="max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
           <span className="text-[10px] sm:text-xs text-amber-400 font-black tracking-widest uppercase block mb-1">OM SAI PG</span>
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight uppercase leading-tight drop-shadow-md">
             {title}

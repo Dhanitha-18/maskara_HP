@@ -111,9 +111,16 @@ export const Complaints: React.FC = () => {
       .then(res => res.json())
       .then(data => {
         if (active) {
-          // Filter to show only this student's complaints
+          // Filter to show complaints for this student's allocated block or their own tickets
+          const studentBlock = (student as any)?.allocatedBlock || (student as any)?.block || '';
           const studentComplaints = data
-            .filter((c: any) => c.usn === student.usn)
+            .filter((c: any) => {
+              if (c.usn === student.usn) return true;
+              if (!studentBlock) return true;
+              const cBlock = (c.block || '').trim().toLowerCase();
+              const sBlock = studentBlock.trim().toLowerCase();
+              return cBlock.includes(sBlock) || sBlock.includes(cBlock);
+            })
             .map((c: any) => ({
               ...c,
               date: new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -196,13 +203,18 @@ export const Complaints: React.FC = () => {
       return;
     }
 
+    // Synchronously set votedKey to eliminate race conditions / multi-clicks
+    localStorage.setItem(votedKey, 'true');
+    setComplaints(prev => prev.map(c => c.id === id ? { ...c, upvotes: c.upvotes + 1, upvotedByMe: true } : c));
+
     try {
       const res = await fetch(`http://localhost:5000/api/complaints/${id}/like`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usn: student.usn })
       });
       if (res.ok) {
         const updated = await res.json();
-        localStorage.setItem(votedKey, 'true');
         setComplaints(prev => prev.map(c => c.id === id ? { ...c, upvotes: updated.upvotes, upvotedByMe: true } : c));
       }
     } catch (err) {

@@ -58,6 +58,9 @@ model Application {
   fatherEmailSentAt    DateTime?
   motherEmailSentAt    DateTime?
   bmsitId              String?
+  collegeEmail         String?
+  year                 String?
+  passportPhoto        String?
   allocations          Allocation[]
   documents            Document[]
 }
@@ -227,14 +230,32 @@ model SocialPost {
 }
 
 model LeaveApplication {
-  id          String   @id @default(uuid())
-  studentName String
-  usn         String
-  reason      String
-  fromDate    DateTime
-  toDate      DateTime
-  status      String   @default("Pending")
-  appliedAt   DateTime @default(now())
+  id                  String   @id @default(uuid())
+  studentName         String
+  usn                 String
+  roomNo              String?
+  block               String?
+  leaveType           String?
+  fromDate            DateTime
+  toDate              DateTime
+  totalDays           Int?
+  destination         String?
+  reason              String
+  emergencyContact    String?
+  expectedReturnTime  String?
+  parentName          String?
+  relationship        String?
+  parentPhone         String?
+  parentEmail         String?
+  parentAddress       String?
+  bankName            String?
+  accountHolder       String?
+  accountNumber       String?
+  ifscCode            String?
+  depositAmount       Float?
+  signatureDataUrl    String?  @db.Text
+  status              String   @default("Pending")
+  appliedAt           DateTime @default(now())
 }
 
 model Notice {

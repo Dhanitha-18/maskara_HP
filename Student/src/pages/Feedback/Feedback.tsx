@@ -12,6 +12,20 @@ import {
   ExternalLink
 } from 'lucide-react';
 
+const isValidGoogleUrl = (raw: string): boolean => {
+  if (!raw || !raw.trim()) return false;
+  const u = raw.trim();
+  if (u.includes('Cjjjj') || u.includes('-default') || u.includes('1FAIpQLSeGj_HFh1FvceJCVuQhY7L4dY74CjjjjHccehN69MDOg6-Egw')) {
+    return false;
+  }
+  try {
+    const parsed = new URL(u);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Convert any Google Form URL to the proper embeddable format.
  * Handles:
@@ -20,32 +34,23 @@ import {
  *   - raw form URL without /viewform -> append /viewform?embedded=true
  */
 const toEmbedUrl = (raw: string): string => {
-  if (!raw || !raw.trim()) return '';
-  let url = raw.trim();
-  // Strip trailing slash
-  url = url.replace(/\/+$/, '');
-  // If already has embedded=true, return as-is
+  if (!isValidGoogleUrl(raw)) return '';
+  let url = raw.trim().replace(/\/+$/, '');
   if (url.includes('embedded=true')) return url;
-  // If URL ends with /viewform (possibly with query params), append embedded=true
   if (url.includes('/viewform')) {
     return url.includes('?') ? `${url}&embedded=true` : `${url}?embedded=true`;
   }
-  // If it's a Google Form URL but missing /viewform, append it
   if (url.includes('docs.google.com/forms')) {
     return `${url}/viewform?embedded=true`;
   }
-  // For any other URL, return as-is (non-Google form link)
   return url;
 };
 
 /** Extract the original (non-embedded) form URL for "Open in New Tab" */
 const toDirectUrl = (raw: string): string => {
-  if (!raw || !raw.trim()) return '';
+  if (!isValidGoogleUrl(raw)) return '';
   let url = raw.trim().replace(/\/+$/, '');
-  // Remove embedded=true param for the direct link
-  url = url.replace(/[?&]embedded=true/, '');
-  // Clean up trailing ? or &
-  url = url.replace(/[?&]$/, '');
+  url = url.replace(/[?&]embedded=true/, '').replace(/[?&]$/, '');
   if (!url.includes('/viewform') && url.includes('docs.google.com/forms')) {
     url = `${url}/viewform`;
   }

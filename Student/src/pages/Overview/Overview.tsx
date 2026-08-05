@@ -182,29 +182,26 @@ export const Overview: React.FC = () => {
               {SLIDE_IMAGES[currentSlide].subtitle} — Premium off-campus student residence partnered with BMSIT&M. Fully furnished rooms, 24/7 security, 4-meal daily dining, and high-speed Wi-Fi.
             </p>
 
-          
-
             {/* Action Buttons */}
-            {/* Action Buttons */}
-<div className="flex flex-wrap items-center gap-3.5 pt-1">
-  <button
-    onClick={() => navigate('/facilities')}
-    className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider border border-slate-200 transition-all flex items-center gap-2"
-    type="button"
-  >
-    <Building2 className="w-4 h-4 text-primary" />
-    <span>Facilities</span>
-  </button>
+            <div className="flex flex-wrap items-center gap-3.5 pt-1">
+              <button
+                onClick={() => navigate('/facilities')}
+                className="bg-primary hover:bg-primary-dark text-white font-bold py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-2 shadow-md hover:scale-105"
+                type="button"
+              >
+                <Building2 className="w-4 h-4 text-white" />
+                <span>Facilities</span>
+              </button>
 
-  <button
-    onClick={() => navigate('/mess')}
-    className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider border border-slate-200 transition-all flex items-center gap-2"
-    type="button"
-  >
-    <UtensilsCrossed className="w-4 h-4 text-primary" />
-    <span>Mess Menu</span>
-  </button>
-</div>
+              <button
+                onClick={() => navigate('/mess')}
+                className="bg-primary hover:bg-primary-dark text-white font-bold py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-2 shadow-md hover:scale-105"
+                type="button"
+              >
+                <UtensilsCrossed className="w-4 h-4 text-white" />
+                <span>Mess Menu</span>
+              </button>
+            </div>
           </div>
 
           {/* Right Building Showcase — Almost full screen height */}

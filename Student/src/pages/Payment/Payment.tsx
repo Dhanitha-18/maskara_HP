@@ -16,7 +16,7 @@ import {
   Send
 } from 'lucide-react';
 
-const DEFAULT_GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeGj_HFh1FvceJCVuQhY7L4dY74CjjjjHccehN69MDOg6-Egw/viewform';
+const DEFAULT_GOOGLE_FORM_URL = '';
 
 export const Payment: React.FC = () => {
   const { student, hostel } = usePayment();
@@ -48,6 +48,7 @@ export const Payment: React.FC = () => {
   const [pgFormData, setPgFormData] = useState({
     name: '',
     usn: '',
+    block: 'Block A',
     semester: '1st Year',
     amountDate: new Date().toISOString().split('T')[0],
     utrNo: '',
@@ -57,12 +58,23 @@ export const Payment: React.FC = () => {
     accountHolderContact: ''
   });
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [availableBlocks, setAvailableBlocks] = useState<string[]>([]);
 
   useEffect(() => {
     fetch('http://localhost:5000/api/settings/bank-details')
       .then(res => res.json())
       .then(data => {
         if (data && data.holderName) setBankDetails(data);
+      })
+      .catch(() => {});
+
+    fetch('http://localhost:5000/api/blocks')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const names = data.map((b: any) => b.name).filter(Boolean);
+          if (names.length > 0) setAvailableBlocks(names);
+        }
       })
       .catch(() => {});
   }, []);
@@ -120,6 +132,7 @@ export const Payment: React.FC = () => {
     setPgFormData({
       name: student.name || '',
       usn: student.usn || '',
+      block: (student as any).allocatedBlock || (student as any).block || 'Block A',
       semester: (student as any).yearSem || (student.semester ? `${student.semester}st Year` : '1st Year'),
       amountDate: new Date().toISOString().split('T')[0],
       utrNo: '',
@@ -187,6 +200,7 @@ export const Payment: React.FC = () => {
         body: JSON.stringify({
           studentUsn: pgFormData.usn || student.usn,
           studentName: pgFormData.name || student.name,
+          block: pgFormData.block || (student as any).allocatedBlock || 'Block A',
           semester: pgFormData.semester,
           paymentTitle: item?.title || 'Hostel Fee Payment',
           amount: Number(item?.amount || 143000),
@@ -505,19 +519,16 @@ export const Payment: React.FC = () => {
                           <FileText className="w-3.5 h-3.5" />
                           <span>PG Form Popup</span>
                         </button>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
+                        <label 
+                          className="flex items-center gap-1.5 cursor-not-allowed opacity-80" 
+                          title="PG Verification status is automatically filled upon completing the PG Form Popup"
+                        >
                           <input 
                             type="checkbox"
-                            disabled={isAlreadySubmitted}
+                            disabled={true}
                             checked={itemState.pg}
-                            onChange={(e) => {
-                              const val = e.target.checked;
-                              setItemCheckboxes(prev => ({
-                                ...prev,
-                                [itemId]: { ...prev[itemId], pg: val }
-                              }));
-                            }}
-                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+                            readOnly
+                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 pointer-events-none"
                           />
                           <span className="text-[11px] font-bold text-slate-600">Filled</span>
                         </label>
@@ -611,7 +622,7 @@ export const Payment: React.FC = () => {
 
                 {/* 3. Semester (Prefilled from DB) */}
                 <div>
-                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">3. Semester / Academic Year</label>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">3. Academic Year</label>
                   <select
                     value={pgFormData.semester}
                     onChange={e => setPgFormData({ ...pgFormData, semester: e.target.value })}
@@ -621,6 +632,20 @@ export const Payment: React.FC = () => {
                     <option value="2nd Year">2nd Year</option>
                     <option value="3rd Year">3rd Year</option>
                     <option value="4th Year">4th Year</option>
+                  </select>
+                </div>
+
+                {/* 4. Hostel Block */}
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">4. Hostel Block</label>
+                  <select
+                    value={pgFormData.block}
+                    onChange={e => setPgFormData({ ...pgFormData, block: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                  >
+                    {(availableBlocks.length > 0 ? availableBlocks : ['Block A', 'Block B', 'Block C', 'Girls Hostel', 'Boys Hostel']).map(blockName => (
+                      <option key={blockName} value={blockName}>{blockName}</option>
+                    ))}
                   </select>
                 </div>
 

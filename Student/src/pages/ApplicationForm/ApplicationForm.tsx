@@ -29,9 +29,10 @@ export const ApplicationForm: React.FC = () => {
   const [program, setProgram] = useState('');
   const [branch, setBranch] = useState('');
   const [course] = useState('');
-  const [sem, setSem] = useState('1st Semester');
+  const [sem, setSem] = useState('1st Year');
   const [contact, setContact] = useState('');
   const [email, setEmail] = useState('');
+  const [collegeEmail, setCollegeEmail] = useState('');
   const [permanentAddress, setPermanentAddress] = useState('');
   const [photoName, setPhotoName] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -121,15 +122,16 @@ export const ApplicationForm: React.FC = () => {
         return;
       }
       if (!sem) {
-        setFormErrors("Year / Semester is required.");
+        setFormErrors("Year is required.");
         return;
       }
-      if (!contact.trim()) {
-        setFormErrors("Contact Number is required.");
+      const cleanContact = contact.replace(/\D/g, '');
+      if (!cleanContact) {
+        setFormErrors("Contact Phone Number is required.");
         return;
       }
-      if (contact.trim().length !== 10) {
-        setFormErrors("Contact Number must be a valid 10-digit phone number.");
+      if (cleanContact.length !== 10) {
+        setFormErrors("Contact Phone Number must be a valid 10-digit number.");
         return;
       }
       if (!email.trim() || !email.includes('@')) {
@@ -138,6 +140,10 @@ export const ApplicationForm: React.FC = () => {
       }
       if (!permanentAddress.trim()) {
         setFormErrors("Permanent Address is required.");
+        return;
+      }
+      if (!photoFile) {
+        setFormErrors("Passport size photo is mandatory. Please upload your photo.");
         return;
       }
     } else if (step === 2) {
@@ -180,6 +186,10 @@ export const ApplicationForm: React.FC = () => {
 
     if (isSubmitting || submittingRef.current) return;
 
+    if (!photoFile) {
+      setFormErrors("Passport size photo is mandatory. Please upload your photo to proceed.");
+      return;
+    }
     if (!emergencyContact.trim()) {
       setFormErrors("Emergency Contact Number is required.");
       return;
@@ -241,11 +251,12 @@ export const ApplicationForm: React.FC = () => {
         parentContact: `${fatherName} (${fatherPhone})`,
       });
 
+      const cleanContact = contact.replace(/\D/g, '') || contact.trim();
       await submitApplication({
         bmsitId: bmsitId || null,
         studentName: fullName,
         gender: gender,
-        phoneNumber: contact,
+        phoneNumber: cleanContact,
         email: email,
         dob: dob,
         program: program || null,
@@ -271,6 +282,9 @@ export const ApplicationForm: React.FC = () => {
         allergies: allergies || null,
         currentMedications: medication || null,
         emergencyContact: emergencyContact,
+
+        collegeEmail: collegeEmail || null,
+        year: sem || null,
 
         // Legacy compatibility
         usn: finalUsn,
@@ -534,14 +548,14 @@ export const ApplicationForm: React.FC = () => {
                 
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Year / Semester *</label>
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Year *</label>
                   <select 
                     value={sem} 
                     onChange={e => setSem(e.target.value)}
                     className="w-full border border-border rounded-lg p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
                   >
-                    {['1st Semester', '2nd Semester', '3rd Semester', '4th Semester', '5th Semester', '6th Semester', '7th Semester', '8th Semester'].map(s => (
-                      <option key={s} value={s}>{s}</option>
+                    {['1st Year', '2nd Year', '3rd Year', '4th Year'].map(y => (
+                      <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
                 </div>
@@ -558,13 +572,23 @@ export const ApplicationForm: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Email Address *</label>
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Personal Email Address *</label>
                   <input 
                     type="email" 
                     placeholder="student@domain.com"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required
+                    className="w-full border border-border rounded-lg p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">College Mail ID <span className="text-slate-400 normal-case font-semibold">(Optional)</span></label>
+                  <input 
+                    type="email" 
+                    placeholder="student@bmsit.in"
+                    value={collegeEmail}
+                    onChange={e => setCollegeEmail(e.target.value)}
                     className="w-full border border-border rounded-lg p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
                 </div>
@@ -582,9 +606,14 @@ export const ApplicationForm: React.FC = () => {
                 />
               </div>
 
-              {/* Photo Upload block */}
-              <div className="border border-dashed border-border rounded-xl p-4 flex flex-col items-center justify-center bg-slate-50/50">
-                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Upload Student Photo (Passport Size)</span>
+              {/* Photo Upload block — MANDATORY */}
+              <div className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center transition-colors ${
+                photoFile ? 'border-success bg-success/5' : 'border-danger/40 bg-danger/5'
+              }`}>
+                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                  Upload Student Photo (Passport Size) <span className="text-danger">*</span>
+                </span>
+                <p className="text-[9px] text-danger font-bold mt-0.5">Mandatory — application cannot be submitted without a photo</p>
                 <input 
                   type="file" 
                   id="photo-upload" 
@@ -600,10 +629,12 @@ export const ApplicationForm: React.FC = () => {
                   htmlFor="photo-upload" 
                   className="mt-2 bg-white hover:bg-slate-100 border border-border text-slate-700 font-bold py-1.5 px-3 rounded-lg text-[10px] cursor-pointer shadow-sm transition-colors"
                 >
-                  Choose Image File
+                  {photoFile ? '↩ Change Photo' : 'Choose Image File'}
                 </label>
-                {photoName && (
+                {photoFile ? (
                   <span className="text-[10px] text-success font-bold mt-1">✓ {photoName} selected</span>
+                ) : (
+                  <span className="text-[10px] text-danger/70 font-bold mt-1">⚠ No photo selected</span>
                 )}
               </div>
 

@@ -320,9 +320,65 @@ export const LeaveApplication: React.FC = () => {
   };
 
   // Submit Vacating Form
-  const handleVacateSubmit = (e: React.FormEvent) => {
+  const handleVacateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    triggerToast('Permanent Vacating Application submitted successfully!');
+    if (!vacateData.vacatingDate) {
+      alert('Please select your Intended Vacating Date.');
+      return;
+    }
+    if (!vacateData.reason.trim()) {
+      alert('Please specify the reason for vacating the hostel.');
+      return;
+    }
+    if (!vacateData.bankName || !vacateData.accountNumber || !vacateData.ifscCode) {
+      alert('Please fill in complete Bank Refund account details.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    const nameToUse = studentName || student?.name || 'Student';
+    const usnToUse = studentUsn || student?.usn || '1BM22CS001';
+
+    let finalSignature = vacateData.signatureDataUrl;
+    if (!finalSignature && signatureMode === 'draw' && canvasRef.current) {
+      finalSignature = canvasRef.current.toDataURL();
+    }
+
+    try {
+      const res = await fetch('http://localhost:5000/api/leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentName: nameToUse,
+          usn: usnToUse,
+          roomNo: student?.allocatedRoom || '',
+          block: student?.allocatedBlock || '',
+          leaveType: 'Permanent Hostel Vacating',
+          fromDate: vacateData.vacatingDate,
+          toDate: vacateData.vacatingDate,
+          totalDays: 0,
+          reason: vacateData.reason.trim(),
+          bankName: vacateData.bankName.trim(),
+          accountHolder: vacateData.accountHolder.trim() || nameToUse,
+          accountNumber: vacateData.accountNumber.trim(),
+          ifscCode: vacateData.ifscCode.trim(),
+          depositAmount: Number(vacateData.depositAmount || 15000),
+          signatureDataUrl: finalSignature || '',
+          status: 'Pending'
+        })
+      });
+
+      if (res.ok) {
+        triggerToast('Permanent Hostel Vacating Application submitted successfully! Admin notified in real-time.');
+        await fetchBackendLeaves();
+      } else {
+        alert('Failed to submit vacating application. Please try again.');
+      }
+    } catch {
+      alert('Failed to submit vacating application. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -384,9 +440,8 @@ export const LeaveApplication: React.FC = () => {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-primary" />
-                        Multi-Step Leave Application
+                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                        Leave Application
                       </h3>
                       <p className="text-[11px] text-text-muted font-semibold mt-0.5">
                         Step {wizardStep} of 3: {
@@ -907,10 +962,55 @@ export const LeaveApplication: React.FC = () => {
                     >
                       ✏️ Draw Signature
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setSignatureMode('upload')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                        signatureMode === 'upload' ? 'bg-white text-primary shadow-xs' : 'text-slate-600'
+                      }`}
+                    >
+                      📷 Upload Image
+                    </button>
                   </div>
                 </div>
 
-                {signatureMode === 'draw' ? (
+                {signatureMode === 'upload' ? (
+                  <div className="space-y-2">
+                    <div className="border border-dashed border-primary/40 bg-slate-50 p-4 rounded-xl text-center flex flex-col items-center justify-center">
+                      {vacateData.signatureDataUrl ? (
+                        <div className="space-y-2">
+                          <img src={vacateData.signatureDataUrl} alt="Uploaded Signature" className="max-h-24 max-w-full object-contain mx-auto border rounded p-1 bg-white shadow-sm" />
+                          <button
+                            type="button"
+                            onClick={() => setVacateData({ ...vacateData, signatureDataUrl: '' })}
+                            className="text-[10px] text-rose-600 font-bold hover:underline block mx-auto cursor-pointer"
+                          >
+                            Remove Image
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  setVacateData({ ...vacateData, signatureDataUrl: reader.result as string });
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary file:text-white hover:file:bg-primary-dark cursor-pointer"
+                          />
+                          <span className="text-[10px] text-slate-400 block">Select signature photo or image from your device gallery.</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
                   <div className="space-y-2">
                     <div className="border border-border rounded-xl overflow-hidden bg-slate-50 relative">
                       <canvas 
@@ -932,7 +1032,7 @@ export const LeaveApplication: React.FC = () => {
                       Clear Signature
                     </button>
                   </div>
-                ) : null}
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex justify-end">

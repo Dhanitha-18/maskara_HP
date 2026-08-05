@@ -212,7 +212,7 @@ app.post('/api/applications', async (req, res) => {
 
       usn: data.usn || data.bmsitId,
       department: data.department || data.branch || data.program || 'General',
-      yearSem: data.yearSem || data.semester || data.sem || '1st Semester',
+      yearSem: data.yearSem || data.year || data.semester || data.sem || '1st Year',
       address: data.address || data.permanentAddress || '',
       category: data.category || null,
       hostelPref: data.hostelPref || (data.gender === "Female" ? "Girls Hostel" : "Boys Hostel"),
@@ -220,7 +220,10 @@ app.post('/api/applications', async (req, res) => {
       remarks: data.remarks || null,
       status: "PENDING",
       holdReason: null,
-      guardianEmail: data.guardianEmail || data.guardianAddress || null
+      guardianEmail: data.guardianEmail || data.guardianAddress || null,
+      collegeEmail: data.collegeEmail || null,
+      year: data.year || data.yearSem || data.semester || data.sem || null,
+      passportPhoto: data.passportPhoto || data.photoUrl || null
     };
 
     const cleanUsn = String(data.usn || data.bmsitId || '').trim().toUpperCase();
@@ -253,14 +256,11 @@ app.post('/api/applications', async (req, res) => {
       });
     }
 
-    const duplicateNamePhone = existingApps.find(a => 
-      a.studentName && String(a.studentName).trim().toLowerCase() === cleanName.toLowerCase() &&
-      a.phoneNumber && String(a.phoneNumber).trim() === cleanPhone
-    );
-    if (duplicateNamePhone) {
+    const duplicatePhone = existingApps.find(a => a.phoneNumber && String(a.phoneNumber).trim() === cleanPhone);
+    if (duplicatePhone) {
       return res.status(400).json({
         success: false,
-        error: `Application with name '${cleanName}' and phone number '${cleanPhone}' already exists.`
+        error: `An application with phone number '${cleanPhone}' already exists. Contact phone number must be unique for every student.`
       });
     }
 
@@ -405,8 +405,8 @@ app.get('/api/applications', async (req, res) => {
       return {
         ...app,
         createdAt: app.appliedAt,
-        passportPhoto: photoDoc ? photoDoc.url : null,
-        photoUrl: photoDoc ? photoDoc.url : null,
+        passportPhoto: photoDoc ? photoDoc.url : (app.passportPhoto || null),
+        photoUrl: photoDoc ? photoDoc.url : (app.passportPhoto || null),
         sentEmails,
         hasApprovedPayment: approvedUsns.has(app.usn)
       };
@@ -2184,6 +2184,43 @@ app.put('/api/admin/accounts/:id', async (req, res) => {
 // ==================== ATTENDANCE ENDPOINTS ====================
 
 // Get attendance records for a specific date and optional block
+// GET Attendance History endpoint
+app.get('/api/attendance/history', async (req, res) => {
+  try {
+    const records = await (prisma as any).attendanceRecord.findMany({
+      orderBy: { date: 'desc' },
+      take: 500
+    }).catch(() => []);
+
+    const studentUsns = Array.from(new Set(records.map((r: any) => r.studentUsn)));
+    const applications = await prisma.application.findMany({
+      where: { usn: { in: studentUsns } },
+      select: { usn: true, studentName: true, phoneNumber: true, hostelPref: true }
+    }).catch(() => []);
+
+    const appMap = new Map(applications.map((a: any) => [a.usn, a]));
+
+    const history = records.map((r: any) => {
+      const app = appMap.get(r.studentUsn);
+      return {
+        id: r.id,
+        date: r.date,
+        studentUsn: r.studentUsn,
+        studentName: app?.studentName || r.studentUsn,
+        phoneNumber: app?.phoneNumber || '',
+        block: r.block || 'Main Block',
+        roomNo: r.roomNo || 'N/A',
+        status: r.status,
+        remarks: r.remarks || null
+      };
+    });
+
+    res.json({ success: true, history });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch attendance history' });
+  }
+});
+
 app.get('/api/attendance', async (req, res) => {
   try {
     const { date, block } = req.query;
@@ -3569,8 +3606,20 @@ app.put('/api/complaints/:id', async (req, res) => {
   }
 });
 
+const complaintVotesSet = new Set<string>();
+
 app.post('/api/complaints/:id/like', async (req, res) => {
   try {
+    const { usn } = req.body || {};
+    const voteKey = `${req.params.id}_${usn || 'anonymous'}`;
+
+    if (usn && complaintVotesSet.has(voteKey)) {
+      const complaint = await prisma.complaint.findUnique({ where: { id: req.params.id } });
+      return res.json(complaint);
+    }
+
+    if (usn) complaintVotesSet.add(voteKey);
+
     const complaint = await prisma.complaint.update({
       where: { id: req.params.id },
       data: { upvotes: { increment: 1 } }
@@ -3748,19 +3797,75 @@ app.get('/api/leaves', async (req, res) => {
 app.post('/api/leaves', async (req, res) => {
   try {
     const data = { ...req.body };
-    if (data.fromDate && typeof data.fromDate === 'string' && data.fromDate.includes('-')) {
-      data.fromDate = new Date(data.fromDate);
+
+    // Parse Dates
+    let fromDateVal = new Date();
+    if (data.fromDate) {
+      const parsed = new Date(data.fromDate);
+      if (!isNaN(parsed.getTime())) fromDateVal = parsed;
     }
-    if (data.toDate && typeof data.toDate === 'string' && data.toDate.includes('-')) {
-      data.toDate = new Date(data.toDate);
+
+    let toDateVal = new Date();
+    if (data.toDate) {
+      const parsed = new Date(data.toDate);
+      if (!isNaN(parsed.getTime())) toDateVal = parsed;
     }
-    const leave = await (prisma as any).leaveApplication.create({ data });
+
+    const payload: any = {
+      studentName: String(data.studentName || 'Student').trim(),
+      usn: String(data.usn || '').trim(),
+      roomNo: data.roomNo ? String(data.roomNo) : null,
+      block: data.block ? String(data.block) : null,
+      leaveType: data.leaveType ? String(data.leaveType) : 'Temporary Leave',
+      fromDate: fromDateVal,
+      toDate: toDateVal,
+      totalDays: Number(data.totalDays) || 1,
+      destination: data.destination ? String(data.destination) : null,
+      reason: String(data.reason || 'Leave requested').trim(),
+      emergencyContact: data.emergencyContact ? String(data.emergencyContact) : null,
+      expectedReturnTime: data.expectedReturnTime ? String(data.expectedReturnTime) : null,
+      parentName: data.parentName ? String(data.parentName) : null,
+      relationship: data.relationship ? String(data.relationship) : null,
+      parentPhone: data.parentPhone ? String(data.parentPhone) : null,
+      parentEmail: data.parentEmail ? String(data.parentEmail) : null,
+      parentAddress: data.parentAddress ? String(data.parentAddress) : null,
+      bankName: data.bankName ? String(data.bankName) : null,
+      accountHolder: data.accountHolder ? String(data.accountHolder) : null,
+      accountNumber: data.accountNumber ? String(data.accountNumber) : null,
+      ifscCode: data.ifscCode ? String(data.ifscCode) : null,
+      depositAmount: typeof data.depositAmount === 'number' ? data.depositAmount : (parseFloat(data.depositAmount) || 0),
+      signatureDataUrl: data.signatureDataUrl ? String(data.signatureDataUrl) : null,
+      status: String(data.status || 'Pending').trim()
+    };
+
+    let leave;
+    try {
+      leave = await (prisma as any).leaveApplication.create({ data: payload });
+    } catch (createErr: any) {
+      console.warn("Prisma create error, falling back to raw sql query:", createErr?.message);
+      const id = `LEV-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO LeaveApplication (
+          id, studentName, usn, roomNo, block, leaveType, fromDate, toDate, totalDays, 
+          destination, reason, emergencyContact, expectedReturnTime, parentName, relationship, 
+          parentPhone, parentEmail, parentAddress, bankName, accountHolder, accountNumber, 
+          ifscCode, depositAmount, signatureDataUrl, status, appliedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        id, payload.studentName, payload.usn, payload.roomNo, payload.block, payload.leaveType, 
+        payload.fromDate, payload.toDate, payload.totalDays, payload.destination, payload.reason, 
+        payload.emergencyContact, payload.expectedReturnTime, payload.parentName, payload.relationship, 
+        payload.parentPhone, payload.parentEmail, payload.parentAddress, payload.bankName, payload.accountHolder, 
+        payload.accountNumber, payload.ifscCode, payload.depositAmount, payload.signatureDataUrl, payload.status
+      );
+      leave = { id, ...payload, appliedAt: new Date() };
+    }
+
     io.emit('LEAVE_CREATED', leave);
     io.emit('data_updated');
     res.json(leave);
   } catch (error: any) {
     console.error('Submit leave error:', error);
-    res.status(500).json({ error: 'Failed to submit leave application' });
+    res.status(500).json({ error: error?.message || 'Failed to submit leave application' });
   }
 });
 
@@ -4223,6 +4328,8 @@ app.put('/api/settings/mess-menu', async (req, res) => {
       update: { value: JSON.stringify(menu) },
       create: { key: 'MESS_MENU', value: JSON.stringify(menu) }
     });
+    io.emit('MESS_MENU_UPDATED', menu);
+    io.emit('data_updated');
     res.json({ success: true, message: 'Mess menu updated' });
   } catch (error) {
     console.error(error);
@@ -4830,7 +4937,7 @@ app.post('/api/settings/payment-requests', async (req, res) => {
       subtitle: subtitle || 'Admission & Hostel Charges',
       amount: Number(amount) || 143000,
       dueDate: dueDate || '30 August 2026',
-      googleFormUrl: googleFormUrl || 'https://docs.google.com/forms/d/e/1FAIpQLSeGj_HFh1FvceJCVuQhY7L4dY74CjjjjHccehN69MDOg6-Egw/viewform',
+      googleFormUrl: googleFormUrl || '',
       enabled: enabled !== false,
       createdAt: new Date().toISOString()
     };
@@ -4926,7 +5033,7 @@ app.put('/api/student/profile', async (req, res) => {
         data: {
           usn: updatedUsn,
           ...(updatedEmail ? { email: updatedEmail } : {}),
-          ...(updatedYear ? { yearSem: updatedYear } : {})
+          ...(updatedYear ? { yearSem: updatedYear, year: updatedYear } : {})
         }
       });
     }
@@ -4950,7 +5057,7 @@ app.put('/api/student/profile', async (req, res) => {
 
 // Feedback Google Form Config Store
 let feedbackFormConfig = {
-  googleFormUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSe-default/viewform?embedded=true',
+  googleFormUrl: '',
   enabled: true
 };
 

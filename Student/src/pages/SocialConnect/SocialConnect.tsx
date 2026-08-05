@@ -87,12 +87,20 @@ export const SocialConnect: React.FC = () => {
       })
       .catch(err => console.error('Failed to load channels', err));
 
-    // Fetch Resident list from applications (for Directory)
+    // Fetch Resident list from applications (for Directory filtered by student block)
     fetch('http://localhost:5000/api/applications')
       .then(res => res.json())
       .then(all => {
         if (Array.isArray(all)) {
-          const approved = all.filter((a: any) => a.status === 'APPROVED' || a.status === 'ALLOCATED');
+          const studentBlock = (student as any)?.allocatedBlock || (student as any)?.block || '';
+          const approved = all.filter((a: any) => {
+            const isApp = a.status === 'APPROVED' || a.status === 'ALLOCATED';
+            if (!isApp) return false;
+            if (!studentBlock) return true;
+            const aBlock = (a.block || a.allocations?.[0]?.bed?.room?.block?.name || '').trim().toLowerCase();
+            const sBlock = studentBlock.trim().toLowerCase();
+            return !aBlock || aBlock.includes(sBlock) || sBlock.includes(aBlock);
+          });
           setResidents(approved);
         }
       })
@@ -679,17 +687,10 @@ export const SocialConnect: React.FC = () => {
                 <span className="text-[10px] text-text-muted font-mono">{selectedResident.usn}</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 bg-slate-50 border border-slate-200 p-3 rounded-xl text-left">
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-left">
                 <div>
                   <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider block">Room Number</span>
-                  <span className="text-slate-800 font-bold">{selectedResident.room}</span>
-                </div>
-                <div>
-                  <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider block">Status / Activity</span>
-                  <span className="text-success font-black flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-success rounded-full animate-ping" />
-                    {selectedResident.status || 'Active'}
-                  </span>
+                  <span className="text-slate-800 font-bold">{selectedResident.room || 'Hostel Resident'}</span>
                 </div>
               </div>
             </div>
