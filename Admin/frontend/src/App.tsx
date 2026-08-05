@@ -5,7 +5,6 @@ import ApplicationsQueue from './pages/ApplicationsQueue';
 import DashboardStats from './pages/DashboardStats';
 import BlockOverview from './pages/BlockOverview';
 import RoomOccupancy from './pages/RoomOccupancy';
-import SettingsPage from './pages/Settings';
 import CommunicationCenter from './pages/CommunicationCenter';
 import PaymentDashboard from './pages/PaymentDashboard';
 import StudentControlsIndex from './pages/StudentControls';
@@ -93,8 +92,7 @@ function Sidebar() {
     { name: 'Communication Center', path: '/communication', icon: Mail },
     { name: 'Payments', path: '/payments', icon: CreditCard },
     { name: 'Student Controls', path: '/student-controls', icon: Monitor },
-    { name: 'Admin Management', path: '/admin-management', icon: ShieldCheck, chiefOnly: true },
-    { name: 'Settings', path: '/settings', icon: SettingsPage ? Monitor : Building }
+    { name: 'Admin Management', path: '/admin-management', icon: ShieldCheck, chiefOnly: true }
   ];
 
   const navItems = allNavItems.filter(item => {
@@ -224,7 +222,6 @@ function AnimatedRoutes() {
           <Route path="/payments" element={<RouteGuard path="/payments"><PaymentDashboard /></RouteGuard>} />
           <Route path="/student-controls" element={<RouteGuard path="/student-controls"><StudentControlsIndex /></RouteGuard>} />
           <Route path="/admin-management" element={<RouteGuard path="/admin-management"><AdminManagement /></RouteGuard>} />
-          <Route path="/settings" element={<RouteGuard path="/settings"><SettingsPage /></RouteGuard>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </motion.div>

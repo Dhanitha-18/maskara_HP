@@ -50,7 +50,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
             name: 'Sindhu Sharma',
             role: 'CHIEF' as const,
             title: 'Chief Warden & Administrator',
-            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings', '/admin-management'],
+            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/admin-management'],
             allowedBlocks: ['ALL']
           });
           onLogin();
@@ -61,7 +61,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
             name: 'jyo',
             role: 'SUB_ADMIN' as const,
             title: 'Assistant Warden',
-            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings'],
+            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls'],
             allowedBlocks: ['Block-A']
           });
           onLogin();
@@ -72,7 +72,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
             name: 'dhani',
             role: 'SUB_ADMIN' as const,
             title: 'Assistant Warden',
-            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings'],
+            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls'],
             allowedBlocks: ['nilaya']
           });
           onLogin();
@@ -89,7 +89,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
           name: 'Sindhu Sharma',
           role: 'CHIEF' as const,
           title: 'Chief Warden & Administrator',
-          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings', '/admin-management'],
+          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/admin-management'],
           allowedBlocks: ['ALL']
         });
         onLogin();
@@ -100,7 +100,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
           name: 'jyo',
           role: 'SUB_ADMIN' as const,
           title: 'Assistant Warden',
-          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings'],
+          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls'],
           allowedBlocks: ['Block-A']
         });
         onLogin();
@@ -111,7 +111,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
           name: 'dhani',
           role: 'SUB_ADMIN' as const,
           title: 'Assistant Warden',
-          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/settings'],
+          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls'],
           allowedBlocks: ['nilaya']
         });
         onLogin();

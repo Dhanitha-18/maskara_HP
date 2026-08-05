@@ -5,6 +5,7 @@ import {
   Check, X, Calendar, User, Phone, MapPin, FileText, Clock, AlertCircle, CheckCircle2, XCircle, Search, Filter, ShieldCheck
 } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export default function LeaveControl() {
   const queryClient = useQueryClient();
@@ -83,7 +84,21 @@ export default function LeaveControl() {
     );
   };
 
+  const { role, allowedBlocks } = useAuthStore();
+
+  const isBlockAllowed = (itemBlock?: string) => {
+    if (role === 'CHIEF') return true;
+    if (!allowedBlocks || allowedBlocks.includes('ALL')) return true;
+    if (!itemBlock) return true;
+    const cleanItemBlock = itemBlock.trim().toLowerCase();
+    return allowedBlocks.some(b => {
+      const cleanB = b.trim().toLowerCase();
+      return cleanItemBlock.includes(cleanB) || cleanB.includes(cleanItemBlock);
+    });
+  };
+
   const filteredLeaves = leaves.filter((leave: any) => {
+    if (!isBlockAllowed(leave.block || leave.hostelBlock)) return false;
     if (statusFilter !== 'ALL') {
       if (String(leave.status).toUpperCase() !== statusFilter.toUpperCase()) return false;
     }

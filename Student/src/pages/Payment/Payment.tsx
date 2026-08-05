@@ -529,7 +529,7 @@ export const Payment: React.FC = () => {
                       {isAlreadySubmitted ? (
                         <span className="bg-emerald-50 text-emerald-700 border border-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 mx-auto shadow-xs">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          Submitted & Verified ✓
+                          Submitted
                         </span>
                       ) : (
                         <button

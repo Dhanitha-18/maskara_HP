@@ -21,7 +21,6 @@ const DEFAULT_TABS = [
   '/communication',
   '/payments',
   '/student-controls',
-  '/settings',
   '/admin-management'
 ];
 

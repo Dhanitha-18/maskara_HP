@@ -430,8 +430,22 @@ app.post('/api/applications/batch-status', async (req, res) => {
 
     if (String(status).toUpperCase() === 'REJECTED') {
       const apps = await prisma.application.findMany({ where: { id: { in: ids } } });
-      const usns = apps.map(a => a.usn);
+      const usns = apps.map(a => a.usn).filter(Boolean);
+      const phones = apps.map(a => a.phoneNumber).filter(Boolean);
+
+      // 1. Delete student account / credentials from StudentAccount DB table
       await (prisma as any).studentAccount.deleteMany({
+        where: {
+          OR: [
+            { applicationId: { in: ids } },
+            { usn: { in: usns } },
+            { phoneNumber: { in: phones } }
+          ]
+        }
+      }).catch(() => {});
+
+      // 2. Delete bed allocations if any
+      await prisma.bedAllocation.deleteMany({
         where: {
           OR: [
             { applicationId: { in: ids } },
@@ -439,6 +453,12 @@ app.post('/api/applications/batch-status', async (req, res) => {
           ]
         }
       }).catch(() => {});
+
+      // 3. Delete Application records from DB so rejected student data is not stored
+      await prisma.application.deleteMany({
+        where: { id: { in: ids } }
+      }).catch(() => {});
+
       io.emit('student_account_deleted', { usns });
     }
 
@@ -629,6 +649,10 @@ app.post('/api/reallocate', async (req, res) => {
   try {
     const { allocationId, newBedId, adminName, reason } = req.body;
 
+    if (!allocationId || !newBedId) {
+      return res.status(400).json({ error: 'allocationId and newBedId are required' });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       // Fetch old allocation with flexible fallback lookup
       let oldAllocation: any = null;
@@ -666,7 +690,15 @@ app.post('/api/reallocate', async (req, res) => {
         }
       }
 
-      // 2. Occupy the new bed safely
+      // 2. Remove any stale/orphaned allocation records on the new bed to avoid unique constraint violation
+      await tx.allocation.deleteMany({
+        where: {
+          bedId: newBedId,
+          id: { not: oldAllocation.id }
+        }
+      }).catch(() => {});
+
+      // 3. Occupy the new bed safely
       const targetBedExists = await tx.bed.findUnique({ where: { id: newBedId } }).catch(() => null);
       if (!targetBedExists) throw new Error('Target bed not found');
 
@@ -675,13 +707,27 @@ app.post('/api/reallocate', async (req, res) => {
         data: { status: 'OCCUPIED' }
       });
 
-      // 3. Update Allocation record
+      // 4. Update Allocation record with new bed, refreshed timestamp, and ensure ACTIVE status
       const updatedAllocation = await tx.allocation.update({
         where: { id: oldAllocation.id },
-        data: { bedId: newBedId }
+        data: {
+          bedId: newBedId,
+          allocatedAt: new Date(),
+          status: 'ACTIVE'
+        },
+        include: {
+          application: true,
+          bed: {
+            include: {
+              room: {
+                include: { block: true }
+              }
+            }
+          }
+        }
       });
 
-      // 4. Create History Record
+      // 5. Create History Record
       await tx.allocationHistory.create({
         data: {
           studentName: oldAllocation.application.studentName,
@@ -696,19 +742,28 @@ app.post('/api/reallocate', async (req, res) => {
         }
       });
 
-      // 5. Send real email
+      // 6. Send real email with detailed new room info
       await sendRealEmail(
         oldAllocation.application.email,
         'Hostel Reallocation Notice',
-        `<p>Dear ${oldAllocation.application.studentName},</p><p>Your hostel bed has been reallocated. Reason: ${reason || 'Admin Reallocation'}</p>`
+        `<p>Dear ${oldAllocation.application.studentName},</p>
+         <p>Your hostel bed has been reallocated.</p>
+         <p><b>Previous:</b> ${oldAllocation.bed.room.block.name} → Room ${oldAllocation.bed.room.roomNo} → Bed ${oldAllocation.bed.bedNo}</p>
+         <p><b>New:</b> ${newBed.room.block.name} → Room ${newBed.room.roomNo} → Bed ${newBed.bedNo}</p>
+         <p><b>Reason:</b> ${reason || 'Admin Reallocation'}</p>`
       );
 
       return updatedAllocation;
-    });
+    }, { timeout: 30000, maxWait: 10000 });
 
+    // Emit granular events for both admin and student portal real-time updates
     io.emit('data_updated');
-    res.json(result);
+    io.emit('BED_ALLOCATED', { bedId: newBedId, applicationId: result.applicationId });
+    io.emit('APPLICATION_UPDATED', { applicationId: result.applicationId, status: 'ALLOCATED' });
+
+    res.json({ success: true, allocation: result });
   } catch (error: any) {
+    console.error('Reallocation error:', error);
     res.status(400).json({ error: error.message || 'Failed to reallocate' });
   }
 });

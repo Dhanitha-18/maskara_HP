@@ -32,6 +32,11 @@ interface Channel {
   badge?: string;
 }
 
+function formatChannelTitle(name?: string): string {
+  if (!name) return 'GENERAL LOUNGE';
+  return name.replace(/^#/, '').replace(/-/g, ' ').toUpperCase();
+}
+
 export const SocialConnect: React.FC = () => {
   const { student, hostel } = usePayment();
   const [activeChannelId, setActiveChannelId] = useState<string>('general');
@@ -147,10 +152,10 @@ export const SocialConnect: React.FC = () => {
     };
   }, [activeChannelId, student.usn]);
 
-  // Auto-scroll on messages change
+  // Scroll window to top on page mount
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    window.scrollTo(0, 0);
+  }, []);
 
   const activeChannel = channels.find(c => c.id === activeChannelId) || channels[0] || { name: 'general-lounge', desc: '' };
 

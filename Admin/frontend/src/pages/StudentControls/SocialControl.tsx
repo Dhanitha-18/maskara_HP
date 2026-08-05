@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { io } from 'socket.io-client';
+import { useAuthStore } from '../../store/useAuthStore';
 
 interface ChatMessage {
   id: string;
@@ -35,6 +36,19 @@ interface Channel {
 
 export default function SocialControl() {
   const queryClient = useQueryClient();
+  const { role, allowedBlocks } = useAuthStore();
+
+  const isBlockAllowed = (itemBlock?: string) => {
+    if (role === 'CHIEF') return true;
+    if (!allowedBlocks || allowedBlocks.includes('ALL')) return true;
+    if (!itemBlock) return true;
+    const cleanItemBlock = itemBlock.trim().toLowerCase();
+    return allowedBlocks.some(b => {
+      const cleanB = b.trim().toLowerCase();
+      return cleanItemBlock.includes(cleanB) || cleanB.includes(cleanItemBlock);
+    });
+  };
+
   const [activeChannelId, setActiveChannelId] = useState<string>('general');
   const [inputText, setInputText] = useState('');
   
@@ -152,10 +166,12 @@ export default function SocialControl() {
     }
   }, [serverMessages]);
 
-  // Auto scroll to bottom
+  // Scroll window to top on page mount
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    window.scrollTo(0, 0);
+  }, []);
+
+  const visibleMessages = messages.filter(msg => msg.isSelf || isBlockAllowed((msg as any).block));
 
   const activeChannel = channels.find(c => c.id === activeChannelId) || channels[0] || { name: 'general-lounge', desc: '' };
 
@@ -488,7 +504,7 @@ export default function SocialControl() {
 
           {/* Messages display container */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30">
-            {messages.map(msg => (
+            {visibleMessages.map(msg => (
               <div 
                 key={msg.id}
                 className={`flex gap-3 max-w-[88%] ${msg.isSelf ? 'ml-auto flex-row-reverse' : ''}`}

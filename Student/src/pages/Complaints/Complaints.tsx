@@ -188,15 +188,21 @@ export const Complaints: React.FC = () => {
     }
   }, [hostel]);
 
-  // Handle Upvote / Me Too (Real-time sync to Admin)
+  // Handle Upvote / Me Too (Real-time sync to Admin, 1-time vote limit per user)
   const handleUpvote = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const votedKey = `complaint_voted_${student.usn}_${id}`;
+    if (localStorage.getItem(votedKey) === 'true') {
+      return;
+    }
+
     try {
       const res = await fetch(`http://localhost:5000/api/complaints/${id}/like`, {
         method: 'POST'
       });
       if (res.ok) {
         const updated = await res.json();
+        localStorage.setItem(votedKey, 'true');
         setComplaints(prev => prev.map(c => c.id === id ? { ...c, upvotes: updated.upvotes, upvotedByMe: true } : c));
       }
     } catch (err) {
@@ -385,18 +391,24 @@ export const Complaints: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={(e) => handleUpvote(item.id, e)}
-                          className={`flex items-center gap-1 px-3 py-1 rounded-lg border text-[10px] font-bold transition-all cursor-pointer ${
-                            item.upvotedByMe 
-                              ? 'bg-primary/10 text-primary border-primary/30' 
-                              : 'bg-slate-50 text-slate-600 border-border hover:bg-slate-100'
-                          }`}
-                        >
-                          <ThumbsUp className={`w-3 h-3 ${item.upvotedByMe ? 'fill-primary' : ''}`} />
-                          <span>Me Too ({item.upvotes || 1})</span>
-                        </button>
+                        {(() => {
+                          const isVoted = item.upvotedByMe || localStorage.getItem(`complaint_voted_${student.usn}_${item.id}`) === 'true';
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => handleUpvote(item.id, e)}
+                              disabled={isVoted}
+                              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border text-[10px] font-bold transition-all ${
+                                isVoted 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 cursor-not-allowed opacity-90' 
+                                  : 'bg-slate-50 text-slate-600 border-border hover:bg-slate-100 cursor-pointer'
+                              }`}
+                            >
+                              <ThumbsUp className={`w-3 h-3 ${isVoted ? 'fill-emerald-600 text-emerald-600' : ''}`} />
+                              <span>{isVoted ? `Supported (${item.upvotes || 1}) ✓` : `Me Too (${item.upvotes || 1})`}</span>
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
 

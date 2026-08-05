@@ -49,10 +49,19 @@ export default function ReallocationModal({ isOpen, onClose, allocationId, gende
       return res.json();
     },
     onSuccess: () => {
+      // Invalidate all relevant query caches so admin portal reflects changes everywhere
       queryClient.invalidateQueries({ queryKey: ['allocations'] });
       queryClient.invalidateQueries({ queryKey: ['blocks'] });
       queryClient.invalidateQueries({ queryKey: ['occupancy'] });
+      queryClient.invalidateQueries({ queryKey: ['applications_all'] });
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
       toast.success(`Successfully reallocated bed for ${studentName}!`);
+      // Reset form fields
+      setBlockId('');
+      setFloor('');
+      setRoomId('');
+      setBedId('');
+      setReason('');
       onClose();
     },
     onError: (error: any) => {

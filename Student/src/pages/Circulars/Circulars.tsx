@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { CIRCULARS_HERO_IMAGE } from '../../assets/heroBanners';
 import { 
@@ -7,6 +7,7 @@ import {
   FileSpreadsheet, Link2, Printer, ZoomIn, ZoomOut, Maximize2, X, Bell, 
   Layers, Clock, Send, Award, Sparkles
 } from 'lucide-react';
+import { io } from 'socket.io-client';
 
 export interface Attachment {
   name: string;

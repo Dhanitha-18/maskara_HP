@@ -8,148 +8,146 @@ datasource db {
 }
 
 model Application {
-  id                  String   @id @default(uuid())
-  bmsitId             String?
-  studentName         String
-  gender              String   // MALE, FEMALE
-  phoneNumber         String
-  email               String
-  dob                 DateTime
-  program             String?
-  semester            String?
-  branch              String?
-  bloodGroup          String?
-  aadhaarNumber       String?
-  nationality         String?
-  religion            String?
-  permanentAddress    String?
-  fatherName          String
-  fatherOccupation    String?
-  fatherPhone         String
-  fatherEmail         String?
-  motherName          String?
-  motherOccupation    String?
-  motherPhone         String?
-  motherEmail         String?
+  id                   String       @id @default(uuid())
+  usn                  String       @unique(map: "usn")
+  studentName          String
+  gender               String
+  phoneNumber          String
+  email                String
+  dob                  DateTime
+  program              String?
+  semester             String?
+  branch               String?
+  bloodGroup           String?
+  aadhaarNumber        String?
+  nationality          String?
+  religion             String?
+  permanentAddress     String?
+  fatherName           String
+  fatherOccupation     String?
+  fatherPhone          String
+  fatherEmail          String?
+  motherName           String?
+  motherOccupation     String?
+  motherPhone          String?
+  motherEmail          String?
   communicationAddress String?
-  guardianName        String?
+  guardianName         String?
   guardianRelationship String?
-  guardianPhone       String?
-  guardianAddress     String?
-  healthIssues        String?
-  allergies           String?
-  currentMedications  String?
-  emergencyContact    String
-
-  usn                 String   @unique
-  department          String
-  yearSem             String
-  address             String
-  category            String?
-  hostelPref          String
-  medicalInfo         String?
-  remarks             String?
-  status              String   // PENDING, HOLD, APPROVED, REJECTED
-  holdReason          String?
-  appliedAt           DateTime @default(now())
-  guardianEmail       String?
-  studentEmailSent   Boolean?  @default(false)
-  fatherEmailSent    Boolean?  @default(false)
-  motherEmailSent    Boolean?  @default(false)
-  studentEmailSentAt DateTime?
-  fatherEmailSentAt  DateTime?
-  motherEmailSentAt  DateTime?
-
-  allocations     Allocation[]
-  documents       Document[]
+  guardianPhone        String?
+  guardianAddress      String?
+  healthIssues         String?
+  allergies            String?
+  currentMedications   String?
+  emergencyContact     String
+  department           String
+  yearSem              String
+  address              String
+  category             String?
+  hostelPref           String
+  medicalInfo          String?
+  remarks              String?
+  status               String
+  holdReason           String?
+  appliedAt            DateTime     @default(now())
+  guardianEmail        String?
+  studentEmailSent     Boolean?     @default(false)
+  fatherEmailSent      Boolean?     @default(false)
+  motherEmailSent      Boolean?     @default(false)
+  studentEmailSentAt   DateTime?
+  fatherEmailSentAt    DateTime?
+  motherEmailSentAt    DateTime?
+  bmsitId              String?
+  allocations          Allocation[]
+  documents            Document[]
 }
 
 model Document {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   applicationId String
   name          String
   url           String
   application   Application @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId], map: "Document_applicationId_fkey")
 }
 
 model Block {
   id       String  @id @default(uuid())
   name     String
-  gender   String  // MALE, FEMALE
+  gender   String
   imageUrl String?
   rooms    Room[]
 }
 
 model Room {
-  id       String  @id @default(uuid())
+  id       String @id @default(uuid())
   blockId  String
   roomNo   String
   floor    Int
   capacity Int
-  type     String  // e.g., "4 Sharing"
-  block    Block   @relation(fields: [blockId], references: [id])
+  type     String
   beds     Bed[]
+  block    Block  @relation(fields: [blockId], references: [id])
+
+  @@index([blockId], map: "Room_blockId_fkey")
 }
 
 model Bed {
-  id          String   @id @default(uuid())
-  roomId      String
-  bedNo       Int
-  status      String   // AVAILABLE, OCCUPIED, RESERVED, MAINTENANCE
-  room        Room     @relation(fields: [roomId], references: [id])
-  allocation  Allocation?
+  id         String      @id @default(uuid())
+  roomId     String
+  bedNo      Int
+  status     String
+  allocation Allocation?
+  room       Room        @relation(fields: [roomId], references: [id])
+
+  @@index([roomId], map: "Bed_roomId_fkey")
 }
 
 model Allocation {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   applicationId String
-  bedId         String   @unique
-  allocatedAt   DateTime @default(now())
-  status        String   // ACTIVE, CANCELLED, TRANSFERRED
-  
+  bedId         String      @unique
+  allocatedAt   DateTime    @default(now())
+  status        String
   application   Application @relation(fields: [applicationId], references: [id])
   bed           Bed         @relation(fields: [bedId], references: [id])
+
+  @@index([applicationId], map: "Allocation_applicationId_fkey")
 }
 
 model AuditLog {
-  id          String   @id @default(uuid())
-  adminName   String
-  action      String
-  details     String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  adminName String
+  action    String
+  details   String
+  createdAt DateTime @default(now())
 }
 
 model AllocationHistory {
-  id              String   @id @default(uuid())
-  studentName     String
-  previousBlock   String?
-  previousRoom    String?
-  previousBed     String?
-  newBlock        String
-  newRoom         String
-  newBed          String
-  adminName       String
-  reason          String?
-  createdAt       DateTime @default(now())
+  id            String   @id @default(uuid())
+  studentName   String
+  previousBlock String?
+  previousRoom  String?
+  previousBed   String?
+  newBlock      String
+  newRoom       String
+  newBed        String
+  adminName     String
+  reason        String?
+  createdAt     DateTime @default(now())
 }
 
 model Payment {
   id                    String    @id @default(uuid())
   studentName           String
   studentUsn            String
-  semester              String?
   hostelName            String
   block                 String
   floor                 String?
   roomNumber            String
   utrNumber             String    @unique
-  paymentTitle          String?
-  amount                Float?
   paymentDate           DateTime
-  transferBank          String?
-  accountHolderName     String?
-  accountHolderRelation String?
-  accountHolderContact  String?
   screenshotUrl         String?
   status                String    @default("PENDING_REVIEW")
   emailStatus           String    @default("PENDING")
@@ -158,8 +156,14 @@ model Payment {
   remarks               String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+  amount                Float?
+  paymentTitle          String?
+  accountHolderContact  String?
+  accountHolderName     String?
+  accountHolderRelation String?
+  semester              String?
+  transferBank          String?
 }
-
 
 model EmailTemplate {
   id        String   @id @default(uuid())
@@ -194,32 +198,32 @@ model Feedback {
 }
 
 model Complaint {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   studentName     String
   usn             String
   roomNo          String
-  block           String   @default("Block A")
-  floor           String   @default("1")
+  block           String    @default("Block A")
+  floor           String    @default("1")
   category        String
-  priority        String   @default("Medium")
-  subject         String   @default("Hostel Issue")
-  description     String   @db.Text
-  status          String   @default("Pending")
-  upvotes         Int      @default(1)
+  priority        String    @default("Medium")
+  subject         String    @default("Hostel Issue")
+  description     String    @db.Text
+  status          String    @default("Pending")
   assignedTo      String?
-  resolutionNotes String?  @db.Text
-  createdAt       DateTime @default(now())
+  resolutionNotes String?   @db.Text
+  createdAt       DateTime  @default(now())
   resolvedAt      DateTime?
+  upvotes         Int       @default(1)
 }
 
 model SocialPost {
-  id          String   @id @default(uuid())
-  title       String
-  content     String
-  imageUrl    String?
-  author      String
-  type        String   @default("General")
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  imageUrl  String?
+  author    String
+  type      String   @default("General")
+  createdAt DateTime @default(now())
 }
 
 model LeaveApplication {
@@ -242,10 +246,10 @@ model Notice {
   priority     String
   author       String
   fileSize     String?
-  documentUrl  String?
+  createdAt    DateTime @default(now())
   documentName String?
   documentType String?
-  createdAt    DateTime @default(now())
+  documentUrl  String?
 }
 
 model EmailHistory {
@@ -288,8 +292,9 @@ model ChatMessage {
   categoryTag String?
   imgUrl      String?
   createdAt   DateTime    @default(now())
-  
   channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId], map: "ChatMessage_channelId_fkey")
 }
 
 model StudentAccount {
@@ -311,13 +316,13 @@ model AdminAccount {
   email         String   @unique
   password      String
   name          String
-  role          String   @default("SUB_ADMIN") // CHIEF, SUB_ADMIN
+  role          String   @default("SUB_ADMIN")
   title         String   @default("Warden / Administrator")
-  allowedTabs   String   @db.Text // JSON string array of allowed tab paths, e.g. ["/applications", "/database"]
-  allowedBlocks String   @db.Text // JSON string array of allowed block names, e.g. ["ALL"] or ["Block A", "Block B"]
+  allowedTabs   String   @db.Text
   status        String   @default("ACTIVE")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  allowedBlocks String   @db.Text
 
   @@index([email])
 }
@@ -327,8 +332,8 @@ model AttendanceRecord {
   studentUsn  String
   studentName String
   block       String
-  date        String   // YYYY-MM-DD
-  status      String   // PRESENT, ABSENT
+  date        String
+  status      String
   remarks     String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

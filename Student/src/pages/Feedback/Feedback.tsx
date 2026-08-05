@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { usePayment } from '../../context/PaymentContext';
 import { useAuth } from '../../context/AuthContext';
 import { HeroBanner } from '../../components/layout/HeroBanner';
@@ -8,26 +8,70 @@ import {
   Send, 
   Sparkles,
   AlertCircle,
-  Clock,
   Lock,
   ExternalLink
 } from 'lucide-react';
+
+/**
+ * Convert any Google Form URL to the proper embeddable format.
+ * Handles:
+ *   - /viewform -> /viewform?embedded=true
+ *   - already has ?embedded=true -> no change
+ *   - raw form URL without /viewform -> append /viewform?embedded=true
+ */
+const toEmbedUrl = (raw: string): string => {
+  if (!raw || !raw.trim()) return '';
+  let url = raw.trim();
+  // Strip trailing slash
+  url = url.replace(/\/+$/, '');
+  // If already has embedded=true, return as-is
+  if (url.includes('embedded=true')) return url;
+  // If URL ends with /viewform (possibly with query params), append embedded=true
+  if (url.includes('/viewform')) {
+    return url.includes('?') ? `${url}&embedded=true` : `${url}?embedded=true`;
+  }
+  // If it's a Google Form URL but missing /viewform, append it
+  if (url.includes('docs.google.com/forms')) {
+    return `${url}/viewform?embedded=true`;
+  }
+  // For any other URL, return as-is (non-Google form link)
+  return url;
+};
+
+/** Extract the original (non-embedded) form URL for "Open in New Tab" */
+const toDirectUrl = (raw: string): string => {
+  if (!raw || !raw.trim()) return '';
+  let url = raw.trim().replace(/\/+$/, '');
+  // Remove embedded=true param for the direct link
+  url = url.replace(/[?&]embedded=true/, '');
+  // Clean up trailing ? or &
+  url = url.replace(/[?&]$/, '');
+  if (!url.includes('/viewform') && url.includes('docs.google.com/forms')) {
+    url = `${url}/viewform`;
+  }
+  return url;
+};
 
 export const Feedback: React.FC = () => {
   const { student } = usePayment();
   const { studentName: authName, studentUsn: authUsn } = useAuth();
 
   const [formConfig, setFormConfig] = useState<{ googleFormUrl: string; enabled: boolean }>({
-    googleFormUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSe-default/viewform?embedded=true',
+    googleFormUrl: '',
     enabled: true
   });
 
   const [hasResponded, setHasResponded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessToast, setIsSuccessToast] = useState(false);
+  const [iframeError, setIframeError] = useState(false);
 
   const studentName = student.name || authName || 'Student';
   const studentUsn = student.usn || authUsn || '1BM22CS001';
+
+  // Compute embed & direct URLs from admin-provided URL
+  const embedUrl = useMemo(() => toEmbedUrl(formConfig.googleFormUrl), [formConfig.googleFormUrl]);
+  const directUrl = useMemo(() => toDirectUrl(formConfig.googleFormUrl), [formConfig.googleFormUrl]);
 
   // Fetch Google Form config from Admin backend
   useEffect(() => {
@@ -129,14 +173,59 @@ export const Feedback: React.FC = () => {
             )}
           </div>
 
+          {/* Open in New Tab Button - Always visible when URL is configured */}
+          {directUrl && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black text-indigo-900">
+                  Having trouble viewing the form below? Open it directly in a new tab.
+                </p>
+                <p className="text-[11px] text-indigo-600 font-semibold mt-0.5">
+                  If the embedded form shows an error or blank page, use the button to open the Google Form in a new window.
+                </p>
+              </div>
+              <a
+                href={directUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-md shrink-0"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open Google Form in New Tab
+              </a>
+            </div>
+          )}
+
           {/* Embedded Google Form Container */}
           <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-inner min-h-[600px] relative">
-            {formConfig.googleFormUrl ? (
-              <iframe
-                src={formConfig.googleFormUrl}
-                title="Student Feedback Google Form"
-                className="w-full h-[650px] border-0"
-              />
+            {embedUrl ? (
+              <>
+                {iframeError && (
+                  <div className="absolute inset-0 z-10 bg-white/95 flex flex-col items-center justify-center p-8 text-center space-y-4">
+                    <AlertCircle className="w-12 h-12 text-amber-500" />
+                    <h4 className="text-sm font-black text-slate-800">Unable to load the form in this window</h4>
+                    <p className="text-xs text-slate-600 font-semibold max-w-md">
+                      This Google Form may require sign-in or has restrictions that prevent it from loading inside the portal. Please use the button above to open the form directly.
+                    </p>
+                    <a
+                      href={directUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-6 py-3 rounded-xl flex items-center gap-2 transition-all shadow-md"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Open Google Form in New Tab
+                    </a>
+                  </div>
+                )}
+                <iframe
+                  src={embedUrl}
+                  title="Student Feedback Google Form"
+                  className="w-full h-[650px] border-0"
+                  onError={() => setIframeError(true)}
+                  sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                />
+              </>
             ) : (
               <div className="p-12 text-center text-slate-500 space-y-3">
                 <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { io } from 'socket.io-client';
+import { useAuthStore } from '../../store/useAuthStore';
 
 interface ComplaintItem {
   id: string;
@@ -182,6 +183,19 @@ export default function ComplaintsControl() {
     }
   };
 
+  const { role, allowedBlocks } = useAuthStore();
+
+  const isBlockAllowed = (itemBlock?: string) => {
+    if (role === 'CHIEF') return true;
+    if (!allowedBlocks || allowedBlocks.includes('ALL')) return true;
+    if (!itemBlock) return true;
+    const cleanItemBlock = itemBlock.trim().toLowerCase();
+    return allowedBlocks.some(b => {
+      const cleanB = b.trim().toLowerCase();
+      return cleanItemBlock.includes(cleanB) || cleanB.includes(cleanItemBlock);
+    });
+  };
+
   const filteredComplaints = complaints
     .filter(c => {
       const matchesSearch = c.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -191,7 +205,8 @@ export default function ComplaintsControl() {
                             formatTicketId(c.id).toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'ALL' || c.status === statusFilter;
       const matchesPriority = priorityFilter === 'ALL' || c.priority === priorityFilter;
-      return matchesSearch && matchesStatus && matchesPriority;
+      const matchesBlock = isBlockAllowed(c.block);
+      return matchesSearch && matchesStatus && matchesPriority && matchesBlock;
     });
 
   // Calculate counters
@@ -319,7 +334,7 @@ export default function ComplaintsControl() {
                 <th className="p-3.5">Status</th>
                 <th className="p-3.5 text-center">Likes / Me Too</th>
                 <th className="p-3.5">Technician / Resolution</th>
-                <th className="p-3.5">Actions</th>
+                <th className="p-3.5">Update Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 font-medium">
@@ -373,34 +388,15 @@ export default function ComplaintsControl() {
                     )}
                   </td>
                   <td className="p-3.5 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={item.status}
-                        onChange={e => handleQuickStatusChange(item.id, e.target.value)}
-                        className="bg-slate-50 border border-slate-200 rounded-lg p-1 text-[11px] outline-none font-bold text-slate-700"
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Resolved">Resolved</option>
-                      </select>
-                      <button
-                        onClick={() => openManageModal(item)}
-                        className="text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-2 py-1 rounded-lg cursor-pointer transition-colors"
-                      >
-                        Manage
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to delete complaint ${formatTicketId(item.id)}?`)) {
-                            deleteMutation.mutate(item.id);
-                          }
-                        }}
-                        className="p-1.5 text-rose-600 hover:bg-rose-50 border border-rose-200 hover:border-rose-300 rounded-lg cursor-pointer transition-colors"
-                        title="Delete Complaint"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <select
+                      value={item.status}
+                      onChange={e => handleQuickStatusChange(item.id, e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-lg p-1 text-[11px] outline-none font-bold text-slate-700 cursor-pointer"
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Resolved">Resolved</option>
+                    </select>
                   </td>
                 </tr>
               ))}

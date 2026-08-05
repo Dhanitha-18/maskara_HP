@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePayment } from '../../context/PaymentContext';
 import { useAuth } from '../../context/AuthContext';
 import { 
@@ -117,53 +117,8 @@ export const Profile: React.FC = () => {
         subtitle="Official student residence record and application form profile." 
       />
 
-      {/* RESTRICTION NOTICE: If admin has not allocated a bed yet */}
-      {!isRoomAllotted ? (
-        <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 shadow-xl text-center space-y-6">
-          <div className="w-20 h-20 bg-amber-50 border-2 border-amber-200 rounded-full flex items-center justify-center mx-auto text-amber-600 shadow-inner">
-            <Lock className="w-10 h-10" />
-          </div>
-
-          <div className="space-y-2 max-w-xl mx-auto">
-            <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider">
-              <Clock className="w-3.5 h-3.5" /> Profile Creation Pending Allotment
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
-              Hostel Profile Not Created Yet
-            </h2>
-            <p className="text-slate-600 text-sm font-medium leading-relaxed">
-              Unless and until the Hostel Administration approves your application and allocates a room & bed, your official student profile will not be created.
-            </p>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-6 max-w-lg mx-auto text-left space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Current Application Status</h4>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-slate-800">Application Form</span>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                applicationState === 'applied' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600'
-              }`}>
-                {applicationState === 'applied' ? 'Submitted — Under Admin Review' : 'Not Submitted'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 font-normal">
-              Once room allotment is processed by the warden, your full photo profile, resident ID, and application details will automatically activate here.
-            </p>
-          </div>
-
-          {applicationState === 'not_applied' && (
-            <button
-              onClick={() => navigate('/apply')}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl text-sm shadow-md transition-all"
-            >
-              <span>Submit Application Form Now</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      ) : (
-        /* ALLOTTED RESIDENT PROFILE VIEW */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      {/* RESIDENT PROFILE VIEW */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           
           {/* Left Column: Student Avatar/Photo Card */}
           <div className="space-y-6">
@@ -547,7 +502,6 @@ export const Profile: React.FC = () => {
           </div>
 
         </div>
-      )}
 
       {/* Modal: View Filled Application Form */}
       {showAppFormModal && (

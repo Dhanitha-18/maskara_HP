@@ -105,21 +105,17 @@ export const AppRouter: React.FC = () => {
         <Route path="mess" element={<Mess />} />
         <Route path="apply" element={<ApplicationForm />} />
 
-        {/* Circulars / Announcements */}
-        <Route path="circulars" element={<Circulars />} />
-        <Route path="circular" element={<Circulars />} />
-
-        {/* Social Connect / Community Chat (Supports both hyphen and underscore URLs) */}
-        <Route path="social-connect" element={<SocialConnect />} />
-        <Route path="social_connect" element={<SocialConnect />} />
-        <Route path="socialconnect" element={<SocialConnect />} />
-
-        {/* Protected student features */}
+        {/* Protected student features requiring student login and allocation */}
+        <Route path="circulars" element={<RequireApplicationGuard><Circulars /></RequireApplicationGuard>} />
+        <Route path="circular" element={<RequireApplicationGuard><Circulars /></RequireApplicationGuard>} />
+        <Route path="social-connect" element={<RequireApplicationGuard><SocialConnect /></RequireApplicationGuard>} />
+        <Route path="social_connect" element={<RequireApplicationGuard><SocialConnect /></RequireApplicationGuard>} />
+        <Route path="socialconnect" element={<RequireApplicationGuard><SocialConnect /></RequireApplicationGuard>} />
+        <Route path="profile" element={<RequireApplicationGuard><Profile /></RequireApplicationGuard>} />
         <Route path="payment" element={<RequireApplicationGuard><Payment /></RequireApplicationGuard>} />
         <Route path="complaints" element={<RequireApplicationGuard><Complaints /></RequireApplicationGuard>} />
         <Route path="attendance" element={<RequireApplicationGuard><Attendance /></RequireApplicationGuard>} />
         <Route path="leave-application" element={<RequireApplicationGuard><LeaveApplication /></RequireApplicationGuard>} />
-        <Route path="profile" element={<RequireApplicationGuard><Profile /></RequireApplicationGuard>} />
         <Route path="feedback" element={<RequireApplicationGuard><Feedback /></RequireApplicationGuard>} />
 
         {/* Redirect unknown routes to Overview */}

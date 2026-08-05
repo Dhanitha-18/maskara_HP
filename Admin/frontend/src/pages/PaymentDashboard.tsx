@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { socket } from '../lib/socket';
+import { useAuthStore } from '../store/useAuthStore';
 
 const API = 'http://localhost:5000/api';
 
@@ -198,9 +199,24 @@ export default function PaymentDashboard() {
     onError: (err: any) => toast.error(err.message || 'Failed to reject payment'),
   });
 
+  const { role, allowedBlocks } = useAuthStore();
+
+  const isBlockAllowed = (itemBlock?: string) => {
+    if (role === 'CHIEF') return true;
+    if (!allowedBlocks || allowedBlocks.includes('ALL')) return true;
+    if (!itemBlock) return true;
+    const cleanItemBlock = itemBlock.trim().toLowerCase();
+    return allowedBlocks.some(b => {
+      const cleanB = b.trim().toLowerCase();
+      return cleanItemBlock.includes(cleanB) || cleanB.includes(cleanItemBlock);
+    });
+  };
+
   // Filter Payments
   const filteredPayments = useMemo(() => {
     return payments.filter(p => {
+      if (!isBlockAllowed(p.block || (p as any).hostelBlock)) return false;
+
       // Search Query Filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -224,7 +240,7 @@ export default function PaymentDashboard() {
 
       return true;
     });
-  }, [payments, searchQuery, filters]);
+  }, [payments, searchQuery, filters, role, allowedBlocks]);
 
   // CSV Export Handler
   const handleExportCSV = () => {
@@ -362,21 +378,7 @@ export default function PaymentDashboard() {
 
         {/* Expandable Filter Panel */}
         {showFilters && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div>
-              <label className="block text-[10px] font-extrabold uppercase text-slate-400 mb-1">Status</label>
-              <select
-                value={filters.status}
-                onChange={e => setFilters({ ...filters, status: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-700 outline-none cursor-pointer"
-              >
-                <option value="">All Statuses</option>
-                <option value="PENDING_REVIEW">Pending Verification</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-              </select>
-            </div>
-
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
               <label className="block text-[10px] font-extrabold uppercase text-slate-400 mb-1">Month</label>
               <select
@@ -425,8 +427,6 @@ export default function PaymentDashboard() {
                   <th className="p-4">Bank Transferred From</th>
                   <th className="p-4">Account Holder Details</th>
                   <th className="p-4 text-center">Receipt</th>
-                  <th className="p-4 text-center">Status</th>
-                  <th className="p-4 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 font-semibold">
@@ -490,37 +490,6 @@ export default function PaymentDashboard() {
                       ) : (
                         <span className="text-[10px] text-slate-400">No Image</span>
                       )}
-                    </td>
-
-                    {/* Verification Status */}
-                    <td className="p-4 text-center">
-                      <StatusBadge status={p.status} />
-                    </td>
-
-                    {/* Approve / Reject Actions */}
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {p.status !== 'APPROVED' && (
-                          <button
-                            onClick={() => approveMutation.mutate({ id: p.id })}
-                            disabled={approveMutation.isPending}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-2.5 rounded-lg text-[10px] transition-all cursor-pointer shadow-xs"
-                            title="Approve Payment"
-                          >
-                            Approve
-                          </button>
-                        )}
-                        {p.status !== 'REJECTED' && (
-                          <button
-                            onClick={() => rejectMutation.mutate({ id: p.id })}
-                            disabled={rejectMutation.isPending}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-1.5 px-2.5 rounded-lg text-[10px] transition-all cursor-pointer"
-                            title="Reject Payment"
-                          >
-                            Reject
-                          </button>
-                        )}
-                      </div>
                     </td>
 
                   </tr>

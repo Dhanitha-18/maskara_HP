@@ -4,7 +4,7 @@ import {
   Loader2, Search, Download, Filter, FileSpreadsheet, ChevronDown, ChevronRight, 
   User, Users, Building2, Activity, FileText, Calendar, Mail, Phone, MapPin, 
   CreditCard, ShieldCheck, HeartPulse, Eye, ExternalLink, Sparkles, FolderCheck, 
-  CheckCircle2, Clock, AlertCircle
+  CheckCircle2, Clock, AlertCircle, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
@@ -36,7 +36,7 @@ const formatSubmissionDate = (dateStr: string | null | undefined) => {
 };
 
 const displayVal = (val: any) => {
-  if (val === undefined || val === null || String(val).trim() === '' || val === '-') return 'Not Available';
+  if (val === undefined || val === null || String(val).trim() === '' || val === '-' || val === 'Not Available' || val === 'N/A') return '-';
   return val;
 };
 
@@ -48,6 +48,8 @@ export default function StudentDatabase() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [genderFilter, setGenderFilter] = useState('ALL');
   const [blockFilter, setBlockFilter] = useState('ALL');
+  const [selectedStudentApp, setSelectedStudentApp] = useState<any | null>(null);
+  const [activeModalTab, setActiveModalTab] = useState<string>('ALL');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [expandedTabState, setExpandedTabState] = useState<Record<string, string>>({});
 
@@ -420,11 +422,11 @@ export default function StudentDatabase() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         className="hover:bg-slate-50 transition-colors group cursor-pointer"
-                        onClick={() => setExpandedRow(expandedRow === app.id ? null : app.id)}
+                        onClick={() => { setSelectedStudentApp(app); setActiveModalTab('ALL'); }}
                       >
                         <td className="p-3 text-center border-r border-slate-100">
-                          <button className="text-slate-400 hover:text-indigo-600 transition-colors">
-                            {expandedRow === app.id ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                          <button className="text-slate-400 group-hover:text-indigo-600 transition-colors" title="View Full Details Modal">
+                            <Eye className="w-4 h-4" />
                           </button>
                         </td>
                         <td className="p-3 border-r border-slate-100">
@@ -861,6 +863,400 @@ export default function StudentDatabase() {
           </div>
         )}
       </div>
+      {/* Centered Rectangular Student Details Modal Popup */}
+      <AnimatePresence>
+        {selectedStudentApp && (() => {
+          const app = selectedStudentApp;
+          const alloc = app.allocations && app.allocations.length > 0 ? app.allocations[0] : null;
+          const isAllocated = app.status === 'ALLOCATED' && alloc;
+          const appIdFormatted = app.id ? (app.id.startsWith('APP-') ? app.id : `APP-2026-${app.id.slice(0, 6).toUpperCase()}`) : '-';
+
+          const modalSectionButtons = [
+            { id: 'ALL', label: 'All Details', icon: FolderCheck },
+            { id: 'STUDENT', label: 'Student Info', icon: User },
+            { id: 'PARENT', label: 'Parent Info', icon: Users },
+            { id: 'HOSTEL', label: 'Hostel & Room', icon: Building2 },
+            { id: 'HEALTH', label: 'Emergency & Health', icon: HeartPulse },
+            { id: 'DOCUMENTS', label: 'Documents', icon: FileText },
+            { id: 'APPLICATION', label: 'Application Details', icon: Calendar },
+          ];
+
+          const showAll = activeModalTab === 'ALL';
+
+          return (
+            <div 
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+              onClick={() => setSelectedStudentApp(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.2 }}
+                className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden my-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="bg-slate-900 text-white p-5 sm:p-6 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-16 rounded-xl border-2 border-indigo-400/30 bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 shadow-md">
+                      {app.photoUrl || app.passportPhoto ? (
+                        <img 
+                          src={getPhotoUrl(app.photoUrl || app.passportPhoto)} 
+                          alt={app.studentName} 
+                          className="w-full h-full object-cover" 
+                        />
+                      ) : (
+                        <User className="w-7 h-7 text-indigo-300" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-xl font-black text-white">{displayVal(app.studentName)}</h3>
+                        <span className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${getStatusColor(app.status)}`}>
+                          {app.status}
+                        </span>
+                        {app.latestPayment && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Payment: {app.latestPayment.status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-300 font-medium">
+                        <span><strong className="text-slate-400">USN:</strong> {displayVal(app.bmsitId || app.usn)}</span>
+                        <span>•</span>
+                        <span><strong className="text-slate-400">App ID:</strong> {appIdFormatted}</span>
+                        <span>•</span>
+                        <span><strong className="text-slate-400">Branch:</strong> {displayVal(app.branch || app.department)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedStudentApp(null)}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    title="Close Modal"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Sub-tab Navigation Bar */}
+                <div className="bg-slate-100/80 p-3 border-b border-slate-200 flex flex-wrap gap-1.5 shrink-0">
+                  {modalSectionButtons.map(btn => {
+                    const Icon = btn.icon;
+                    const isActive = activeModalTab === btn.id;
+                    return (
+                      <button
+                        key={btn.id}
+                        onClick={() => setActiveModalTab(btn.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          isActive 
+                            ? 'bg-indigo-600 text-white shadow-sm' 
+                            : 'text-slate-600 hover:text-indigo-600 hover:bg-white'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{btn.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Scrollable Content Body */}
+                <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-slate-50/50 custom-scrollbar">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    
+                    {/* 1. STUDENT INFORMATION */}
+                    {(showAll || activeModalTab === 'STUDENT') && (
+                      <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 text-indigo-700 font-extrabold text-sm uppercase tracking-wider">
+                          <User className="w-4 h-4 text-indigo-600" />
+                          <span>Student Information</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Full Name</p>
+                            <p className="font-bold text-slate-800 mt-0.5">{displayVal(app.studentName)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">USN / BMSIT ID</p>
+                            <p className="font-bold text-indigo-700 font-mono mt-0.5">{displayVal(app.bmsitId || app.usn)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Gender</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.gender)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Date of Birth</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{app.dob ? new Date(app.dob).toLocaleDateString('en-IN') : '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Contact Number</p>
+                            <p className="font-semibold text-slate-700 font-mono mt-0.5">{displayVal(app.phoneNumber)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Email Address</p>
+                            <p className="font-semibold text-slate-700 truncate mt-0.5" title={app.email}>{displayVal(app.email)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Program</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.program)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Semester / Year</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.semester || app.yearSem)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Branch / Dept</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.branch || app.department)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Blood Group</p>
+                            <p className="font-semibold text-rose-600 mt-0.5">{displayVal(app.bloodGroup)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Aadhaar Number</p>
+                            <p className="font-semibold text-slate-700 font-mono mt-0.5">{displayVal(app.aadhaarNumber)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Nationality / Religion</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.nationality)} • {displayVal(app.religion)}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Permanent Address</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.permanentAddress || app.address)}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Communication Address</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{displayVal(app.communicationAddress)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2. PARENT INFORMATION */}
+                    {(showAll || activeModalTab === 'PARENT') && (
+                      <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 text-indigo-700 font-extrabold text-sm uppercase tracking-wider">
+                          <Users className="w-4 h-4 text-indigo-600" />
+                          <span>Parent & Guardian Information</span>
+                        </div>
+                        
+                        {/* Father Info */}
+                        <div className="space-y-2 bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+                          <p className="text-xs font-bold text-indigo-900 border-b border-slate-200/60 pb-1">Father Information</p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Name</p><p className="font-semibold text-slate-800">{displayVal(app.fatherName)}</p></div>
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Occupation</p><p className="font-semibold text-slate-800">{displayVal(app.fatherOccupation || app.fatherOcc)}</p></div>
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Phone</p><p className="font-semibold text-slate-800 font-mono">{displayVal(app.fatherPhone)}</p></div>
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Email</p><p className="font-semibold text-slate-800 truncate" title={app.fatherEmail}>{displayVal(app.fatherEmail)}</p></div>
+                          </div>
+                        </div>
+
+                        {/* Mother Info */}
+                        <div className="space-y-2 bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+                          <p className="text-xs font-bold text-indigo-900 border-b border-slate-200/60 pb-1">Mother Information</p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Name</p><p className="font-semibold text-slate-800">{displayVal(app.motherName)}</p></div>
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Occupation</p><p className="font-semibold text-slate-800">{displayVal(app.motherOccupation || app.motherOcc)}</p></div>
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Phone</p><p className="font-semibold text-slate-800 font-mono">{displayVal(app.motherPhone)}</p></div>
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Email</p><p className="font-semibold text-slate-800 truncate" title={app.motherEmail}>{displayVal(app.motherEmail)}</p></div>
+                          </div>
+                        </div>
+
+                        {/* Guardian Info */}
+                        <div className="space-y-2 bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+                          <p className="text-xs font-bold text-indigo-900 border-b border-slate-200/60 pb-1">Local Guardian Information</p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Name</p><p className="font-semibold text-slate-800">{displayVal(app.guardianName)}</p></div>
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Relationship</p><p className="font-semibold text-slate-800">{displayVal(app.guardianRelationship)}</p></div>
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Phone</p><p className="font-semibold text-slate-800 font-mono">{displayVal(app.guardianPhone)}</p></div>
+                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Address / Email</p><p className="font-semibold text-slate-800 truncate">{displayVal(app.guardianAddress || app.guardianEmail)}</p></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. HOSTEL & ROOM ALLOCATION */}
+                    {(showAll || activeModalTab === 'HOSTEL') && (
+                      <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 text-indigo-700 font-extrabold text-sm uppercase tracking-wider">
+                          <Building2 className="w-4 h-4 text-indigo-600" />
+                          <span>Hostel Information & Room Allocation</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Hostel Type</p>
+                            <p className="font-bold text-slate-800 mt-0.5">{isAllocated ? (alloc.bed?.room?.block?.gender === 'FEMALE' ? 'Girls Hostel' : 'Boys Hostel') : '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Block Name</p>
+                            <p className="font-bold text-indigo-700 mt-0.5">{isAllocated ? displayVal(alloc.bed?.room?.block?.name) : '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Floor Level</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{isAllocated ? displayVal(alloc.bed?.room?.floor ? `Floor ${alloc.bed.room.floor}` : null) : '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Room Number</p>
+                            <p className="font-bold text-slate-800 mt-0.5">{isAllocated ? displayVal(alloc.bed?.room?.roomNo) : '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Bed Number</p>
+                            <p className="font-bold text-indigo-700 font-mono mt-0.5">{isAllocated ? displayVal(alloc.bed?.bedNo) : '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Allocation Date</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{isAllocated && alloc.allocatedAt ? new Date(alloc.allocatedAt).toLocaleDateString('en-IN') : '-'}</p>
+                          </div>
+                          <div className="col-span-2 bg-indigo-50/60 p-3 rounded-xl border border-indigo-100">
+                            <p className="text-[10px] font-extrabold text-indigo-600 uppercase">Current Allocation Status</p>
+                            <p className="font-black text-indigo-900 text-sm mt-0.5">{app.status}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4. EMERGENCY CONTACT & HEALTH */}
+                    {(showAll || activeModalTab === 'HEALTH') && (
+                      <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 text-rose-700 font-extrabold text-sm uppercase tracking-wider">
+                          <HeartPulse className="w-4 h-4 text-rose-600" />
+                          <span>Emergency Contact & Health Info</span>
+                        </div>
+                        <div className="space-y-3 text-xs">
+                          <div className="bg-rose-50/60 p-3 rounded-xl border border-rose-100">
+                            <p className="text-[10px] font-bold text-rose-700 uppercase">Emergency Contact Number</p>
+                            <p className="font-black text-rose-900 text-sm font-mono mt-0.5">{displayVal(app.emergencyContact)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Existing Health Issues / Medical Info</p>
+                            <p className="font-semibold text-slate-800 mt-0.5">{displayVal(app.healthIssues || app.medicalInfo)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Allergies</p>
+                            <p className="font-semibold text-slate-800 mt-0.5">{displayVal(app.allergies)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Current Medications</p>
+                            <p className="font-semibold text-slate-800 mt-0.5">{displayVal(app.currentMedications)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 5. DOCUMENTS */}
+                    {(showAll || activeModalTab === 'DOCUMENTS') && (
+                      <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 text-indigo-700 font-extrabold text-sm uppercase tracking-wider">
+                          <FileText className="w-4 h-4 text-indigo-600" />
+                          <span>Uploaded Documents</span>
+                        </div>
+                        <div className="space-y-3 text-xs">
+                          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 text-indigo-600" />
+                              <div>
+                                <p className="font-bold text-slate-800">Passport Photo</p>
+                                <p className="text-[10px] text-slate-400 font-medium">Student Identification Photo</p>
+                              </div>
+                            </div>
+                            {app.photoUrl || app.passportPhoto ? (
+                              <a 
+                                href={getPhotoUrl(app.photoUrl || app.passportPhoto)} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg text-[11px] hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> View
+                              </a>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-bold">Not Uploaded</span>
+                            )}
+                          </div>
+
+                          {app.documents && app.documents.length > 0 ? (
+                            app.documents.map((doc: any) => (
+                              <div key={doc.id || doc.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="w-4 h-4 text-indigo-600" />
+                                  <div>
+                                    <p className="font-bold text-slate-800">{doc.name}</p>
+                                    <p className="text-[10px] text-slate-400 font-medium">{doc.type || 'Document'}</p>
+                                  </div>
+                                </div>
+                                <a 
+                                  href={getPhotoUrl(doc.url)} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg text-[11px] hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" /> View
+                                </a>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-slate-400 text-[11px] italic text-center py-2">No additional document files uploaded.</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 6. APPLICATION DETAILS */}
+                    {(showAll || activeModalTab === 'APPLICATION') && (
+                      <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 text-indigo-700 font-extrabold text-sm uppercase tracking-wider">
+                          <Calendar className="w-4 h-4 text-indigo-600" />
+                          <span>Application & Submission Details</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div className="col-span-2">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Submission Date & Time</p>
+                            <p className="font-bold text-indigo-900 font-mono mt-0.5">{formatSubmissionDate(app.appliedAt || app.createdAt)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Application ID</p>
+                            <p className="font-bold text-indigo-700 font-mono mt-0.5">{appIdFormatted}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Application Status</p>
+                            <p className="font-bold text-slate-800 mt-0.5">{app.status}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Payment Status</p>
+                            <p className="font-bold text-emerald-700 mt-0.5">{app.latestPayment?.status || 'Pending'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Payment UTR Number</p>
+                            <p className="font-semibold text-slate-700 font-mono mt-0.5">{app.latestPayment?.utrNumber || '-'}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Payment Submission Date</p>
+                            <p className="font-semibold text-slate-700 mt-0.5">{app.latestPayment?.paymentDate ? new Date(app.latestPayment.paymentDate).toLocaleDateString('en-IN') : '-'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="bg-slate-100 p-4 border-t border-slate-200 flex items-center justify-end shrink-0">
+                  <button
+                    onClick={() => setSelectedStudentApp(null)}
+                    className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+                  >
+                    Close Window
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar {
           height: 12px;

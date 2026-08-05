@@ -14,6 +14,7 @@ import {
   Save
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -89,6 +90,19 @@ export default function FeedbackControl() {
 
   const isLoading = isFeedbackLoading || isAppsLoading;
 
+  const { role, allowedBlocks } = useAuthStore();
+
+  const isBlockAllowed = (itemBlock?: string) => {
+    if (role === 'CHIEF') return true;
+    if (!allowedBlocks || allowedBlocks.includes('ALL')) return true;
+    if (!itemBlock) return true;
+    const cleanItemBlock = itemBlock.trim().toLowerCase();
+    return allowedBlocks.some(b => {
+      const cleanB = b.trim().toLowerCase();
+      return cleanItemBlock.includes(cleanB) || cleanB.includes(cleanItemBlock);
+    });
+  };
+
   // Map students with feedback response status (Responded / Not Responded)
   const studentFeedbackStatuses = useMemo(() => {
     const apps = Array.isArray(applicationsList) ? applicationsList : [];
@@ -104,22 +118,25 @@ export default function FeedbackControl() {
     });
 
     // Merge applications list
-    const combined = apps.map((app: any) => {
-      const u = String(app.usn || '').trim().toUpperCase();
-      const fbRecord = respondedMap.get(u);
-      return {
-        id: app.id,
-        studentName: app.studentName || 'Student',
-        usn: app.usn || 'N/A',
-        department: app.department || 'General',
-        phoneNumber: app.phoneNumber || 'N/A',
-        hasResponded: Boolean(fbRecord),
-        submittedAt: fbRecord?.createdAt || null
-      };
-    });
+    const combined = apps
+      .filter((app: any) => isBlockAllowed(app.block || app.hostelBlock || app.roomBlock))
+      .map((app: any) => {
+        const u = String(app.usn || '').trim().toUpperCase();
+        const fbRecord = respondedMap.get(u);
+        return {
+          id: app.id,
+          studentName: app.studentName || 'Student',
+          usn: app.usn || 'N/A',
+          department: app.department || 'General',
+          phoneNumber: app.phoneNumber || 'N/A',
+          hasResponded: Boolean(fbRecord),
+          submittedAt: fbRecord?.createdAt || null
+        };
+      });
 
     // Also include any feedback submissions not matched with application
     fbs.forEach(fb => {
+      if (!isBlockAllowed(fb.block || fb.hostelBlock)) return;
       const u = String(fb.usn || '').trim().toUpperCase();
       const alreadyInList = combined.some(c => String(c.usn).trim().toUpperCase() === u);
       if (!alreadyInList) {
@@ -143,7 +160,7 @@ export default function FeedbackControl() {
         student.usn.toLowerCase().includes(q)
       );
     });
-  }, [applicationsList, feedbackList, searchQuery]);
+  }, [applicationsList, feedbackList, searchQuery, role, allowedBlocks]);
 
   // Export to XLSX
   const handleExportXLSX = () => {

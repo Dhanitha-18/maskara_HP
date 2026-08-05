@@ -26,6 +26,7 @@ interface LeftSidebarProps {
 
 // Tabs accessible WITHOUT login
 const PUBLIC_PATHS = ['/', '/facilities', '/mess'];
+const AUTH_ACCESSIBLE_PATHS: string[] = [];
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({ isOpen, onClose }) => {
   const { resetPayment, applicationState } = usePayment();
@@ -79,7 +80,8 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ isOpen, onClose }) => 
       <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
         {navItems.map(item => {
           const isPublic = PUBLIC_PATHS.includes(item.path);
-          const isLocked = !isPublic && (!isLoggedIn || !isAllocationCompleted);
+          const isAuthOnly = AUTH_ACCESSIBLE_PATHS.includes(item.path);
+          const isLocked = isAuthOnly ? !isLoggedIn : (!isPublic && (!isLoggedIn || !isAllocationCompleted));
 
           return (
             <NavLink

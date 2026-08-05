@@ -27,8 +27,7 @@ const AVAILABLE_TABS = [
   { id: '/occupancy', label: 'Live Occupancy', category: 'Infrastructure' },
   { id: '/communication', label: 'Communication Center', category: 'Broadcast' },
   { id: '/payments', label: 'Payments Dashboard', category: 'Finance' },
-  { id: '/student-controls', label: 'Student Controls', category: 'Management' },
-  { id: '/settings', label: 'System Settings', category: 'System' },
+  { id: '/student-controls', label: 'Student Controls', category: 'Management' }
 ];
 
 const STUDENT_CONTROL_SUBTABS = [
