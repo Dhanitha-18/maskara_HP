@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Filter, Download, Eye, CheckCircle, XCircle, Clock,
   CreditCard, ChevronDown, X, ZoomIn, ZoomOut, RotateCcw,
-  AlertTriangle, Loader2, Building, TrendingUp,
-  Bell, RefreshCw, Inbox, FileSpreadsheet, Mail
+  AlertTriangle, Building, RefreshCw, FileSpreadsheet,
+  Check, Phone, User, Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { socket } from '../lib/socket';
@@ -17,12 +17,19 @@ interface Payment {
   id: string;
   studentName: string;
   studentUsn: string;
+  semester?: string | null;
   hostelName: string;
   block: string;
   floor: string | null;
   roomNumber: string;
   utrNumber: string;
+  paymentTitle?: string | null;
+  amount: number | null;
   paymentDate: string;
+  transferBank?: string | null;
+  accountHolderName?: string | null;
+  accountHolderRelation?: string | null;
+  accountHolderContact?: string | null;
   screenshotUrl: string | null;
   status: string;
   emailStatus: string;
@@ -32,34 +39,14 @@ interface Payment {
   createdAt: string;
 }
 
-interface PaymentStats {
-  pendingReview: number;
-  approvedTotal: number;
-  approvedToday: number;
-  rejected: number;
-  totalThisMonth: number;
-  blockStats: Record<string, { total: number; paid: number }>;
-}
-
 interface Filters {
-  hostel: string;
-  block: string;
-  floor: string;
-  room: string;
   status: string;
   month: string;
   year: string;
 }
 
-interface ConfirmAction {
-  type: 'approve-selected' | 'reject-selected' | 'approve-all' | 'reject-all';
-  ids: string[];
-  label: string;
-}
+const emptyFilters: Filters = { status: '', month: '', year: '' };
 
-const emptyFilters: Filters = { hostel: '', block: '', floor: '', room: '', status: '', month: '', year: '' };
-
-// ─── Helpers ──────────────────────────────────────────────────
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
   try {
@@ -72,12 +59,11 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   label: new Date(2000, i).toLocaleString('default', { month: 'long' })
 }));
 
-// ─── StatusBadge ──────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
   const configs: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
-    PENDING_REVIEW: { label: 'Pending Review', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200/60', dot: 'bg-amber-500' },
-    APPROVED: { label: 'Approved', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200/60', dot: 'bg-emerald-500' },
-    REJECTED: { label: 'Rejected', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200/60', dot: 'bg-rose-500' },
+    PENDING_REVIEW: { label: 'Pending Verification', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
+    APPROVED: { label: 'Approved', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+    REJECTED: { label: 'Rejected', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
   };
   const cfg = configs[status] || configs.PENDING_REVIEW;
   return (
@@ -116,15 +102,15 @@ function ScreenshotModal({ url, onClose }: { url: string; onClose: () => void })
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
-          <h3 className="text-lg font-bold text-slate-800">Payment Screenshot</h3>
+          <h3 className="text-base font-bold text-slate-800">Transaction Receipt Screenshot</h3>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors" title="Zoom Out"><ZoomOut className="w-4 h-4" /></button>
+            <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500" title="Zoom Out"><ZoomOut className="w-4 h-4" /></button>
             <span className="text-xs font-bold text-slate-400 w-12 text-center">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors" title="Zoom In"><ZoomIn className="w-4 h-4" /></button>
-            <button onClick={() => setZoom(1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors" title="Reset Zoom"><RotateCcw className="w-4 h-4" /></button>
+            <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500" title="Zoom In"><ZoomIn className="w-4 h-4" /></button>
+            <button onClick={() => setZoom(1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500" title="Reset Zoom"><RotateCcw className="w-4 h-4" /></button>
             <div className="w-px h-6 bg-slate-200 mx-1" />
-            <button onClick={handleDownload} className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors" title="Download"><Download className="w-4 h-4" /></button>
-            <button onClick={onClose} className="p-2 rounded-xl hover:bg-rose-50 text-rose-500 transition-colors" title="Close"><X className="w-4 h-4" /></button>
+            <button onClick={handleDownload} className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600" title="Download"><Download className="w-4 h-4" /></button>
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-rose-50 text-rose-500" title="Close"><X className="w-4 h-4" /></button>
           </div>
         </div>
         <div className="overflow-auto max-h-[70vh] p-6 flex items-center justify-center bg-slate-50/50">
@@ -146,1167 +132,416 @@ export default function PaymentDashboard() {
   const queryClient = useQueryClient();
 
   // State
-  const [activeTab, setActiveTab] = useState<'incoming' | 'approved' | 'all' | 'spreadsheet'>('incoming');
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
-
-  // Google Form & Sheet URL Settings State
-  const [showFormModal, setShowFormModal] = useState(false);
-  const [currentFormUrl, setCurrentFormUrl] = useState('');
-  const [formUrlInput, setFormUrlInput] = useState('');
-  const [currentSheetUrl, setCurrentSheetUrl] = useState('');
-  const [sheetUrlInput, setSheetUrlInput] = useState('');
-  const [isSavingUrl, setIsSavingUrl] = useState(false);
-  const [isSyncingSheet, setIsSyncingSheet] = useState(false);
-
-  // Fetch settings on load
-  useEffect(() => {
-    fetch(`${API}/settings/google-form`)
-      .then(res => res.json())
-      .then(data => {
-        if (data?.url) {
-          setCurrentFormUrl(data.url);
-          setFormUrlInput(data.url);
-        }
-      })
-      .catch(() => { });
-
-    fetch(`${API}/settings/google-sheet`)
-      .then(res => res.json())
-      .then(data => {
-        if (data?.url) {
-          setCurrentSheetUrl(data.url);
-          setSheetUrlInput(data.url);
-        }
-      })
-      .catch(() => { });
-  }, []);
-
-  // Trigger Google Sheet payments sync when Payments page loads
-  useEffect(() => {
-    fetch(`${API}/payments/sync`, { method: 'POST' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.importedCount > 0) {
-          queryClient.invalidateQueries({ queryKey: ['payments'] });
-          queryClient.invalidateQueries({ queryKey: ['payment-stats'] });
-          toast.info(`Auto-sync imported ${data.importedCount} new payment(s) from Google Sheet.`);
-        }
-      })
-      .catch(() => {});
-  }, [queryClient]);
-
-  const handleSyncGoogleSheet = async () => {
-    setIsSyncingSheet(true);
-    try {
-      const res = await fetch(`${API}/payments/sync`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Sync failed');
-      
-      if (data.success) {
-        queryClient.invalidateQueries({ queryKey: ['payments'] });
-        queryClient.invalidateQueries({ queryKey: ['payment-stats'] });
-        toast.success(`Sync completed! Imported: ${data.importedCount}, Skipped: ${data.skippedCount}`);
-      } else {
-        throw new Error(data.error || 'Sync returned unsuccessful');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to sync Google Sheet');
-    } finally {
-      setIsSyncingSheet(false);
-    }
-  };
-
-  const handleSaveFormUrl = async () => {
-    if (!formUrlInput.trim()) {
-      toast.error('Please enter a valid Google Form URL');
-      return;
-    }
-    setIsSavingUrl(true);
-    try {
-      // Save Form URL
-      const formRes = await fetch(`${API}/settings/google-form`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: formUrlInput.trim() }),
-      });
-      const formData = await formRes.json();
-      if (!formRes.ok) throw new Error(formData.error || 'Failed to save Google Form URL');
-      setCurrentFormUrl(formData.url);
-
-      // Save Sheet URL if provided
-      if (sheetUrlInput.trim()) {
-        const sheetRes = await fetch(`${API}/settings/google-sheet`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: sheetUrlInput.trim() }),
-        });
-        const sheetData = await sheetRes.json();
-        if (!sheetRes.ok) throw new Error(sheetData.error || 'Failed to save Google Sheet URL');
-        setCurrentSheetUrl(sheetData.url);
-      }
-
-      setShowFormModal(false);
-      toast.success('Form & Sheet settings updated successfully.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update settings');
-    } finally {
-      setIsSavingUrl(false);
-    }
-  };
-
-
-  const [selectedPaymentTitle, setSelectedPaymentTitle] = useState<string>('ALL');
 
   // Queries
-  const { data: payments, isLoading, isError: isPaymentsError } = useQuery<Payment[]>({
+  const { data: payments = [], isLoading, refetch } = useQuery<Payment[]>({
     queryKey: ['payments'],
-    queryFn: async () => { 
-      const r = await fetch(`${API}/payments`); 
-      if (!r.ok) throw new Error('Failed to fetch payments'); 
-      return r.json(); 
-    },
-    refetchInterval: 2000,
-    retry: 1,
-  });
-
-  const { data: stats } = useQuery<PaymentStats>({
-    queryKey: ['payment-stats'],
-    queryFn: async () => { 
-      const r = await fetch(`${API}/payments/stats`); 
-      if (!r.ok) throw new Error('Failed to fetch stats'); 
-      return r.json(); 
-    },
-    refetchInterval: 2000,
-    retry: 1,
-  });
-
-  const { data: paymentRequests } = useQuery<any[]>({
-    queryKey: ['payment-requests'],
     queryFn: async () => {
-      const r = await fetch(`${API}/settings/payment-requests`);
-      if (!r.ok) return [];
-      return r.json();
+      const res = await fetch(`${API}/payments`);
+      if (!res.ok) throw new Error('Failed to fetch payments');
+      return res.json();
     },
-    refetchInterval: 3000,
   });
 
-  // Real-time socket listener — auto-refresh when students submit Google Form payments
+  // Socket Listeners
   useEffect(() => {
     const handleDataUpdate = () => {
       queryClient.invalidateQueries({ queryKey: ['payments'] });
-      queryClient.invalidateQueries({ queryKey: ['payment-stats'] });
     };
-
-    const handlePaymentSubmitted = (data: any) => {
-      toast.info(`New Google Form payment submitted by ${data.studentUsn}`, { duration: 4000 });
-      handleDataUpdate();
-    };
-
     socket.on('data_updated', handleDataUpdate);
-    socket.on('PAYMENT_SUBMITTED', handlePaymentSubmitted);
-    socket.on('PAYMENT_STATUS_CHANGED', handleDataUpdate);
+    socket.on('payment_submitted', handleDataUpdate);
+    socket.on('payment_status_changed', handleDataUpdate);
 
     return () => {
       socket.off('data_updated', handleDataUpdate);
-      socket.off('PAYMENT_SUBMITTED', handlePaymentSubmitted);
-      socket.off('PAYMENT_STATUS_CHANGED', handleDataUpdate);
+      socket.off('payment_submitted', handleDataUpdate);
+      socket.off('payment_status_changed', handleDataUpdate);
     };
   }, [queryClient]);
 
   // Mutations
   const approveMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const r = await fetch(`${API}/payments/${id}/approve`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-      if (!r.ok) throw new Error(); return r.json();
+    mutationFn: async ({ id, reviewedBy }: { id: string; reviewedBy?: string }) => {
+      const res = await fetch(`${API}/payments/${id}/approve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewedBy: reviewedBy || 'Admin' }),
+      });
+      if (!res.ok) throw new Error('Failed to approve payment');
+      return res.json();
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['payment-stats'] }); toast.success('Payment approved successfully'); },
-    onError: () => toast.error('Failed to approve payment'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      toast.success('Payment approved successfully');
+    },
+    onError: (err: any) => toast.error(err.message || 'Failed to approve payment'),
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const r = await fetch(`${API}/payments/${id}/reject`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-      if (!r.ok) throw new Error(); return r.json();
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['payment-stats'] }); toast.success('Payment rejected'); },
-    onError: () => toast.error('Failed to reject payment'),
-  });
-
-  const bulkApproveMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const r = await fetch(`${API}/payments/bulk-approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
-      if (!r.ok) throw new Error(); return r.json();
-    },
-    onSuccess: (_, ids) => {
-      queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['payment-stats'] });
-      setSelectedIds(new Set()); toast.success(`${ids.length} payment(s) bulkly approved`);
-    },
-    onError: () => toast.error('Bulk approve failed'),
-  });
-
-  const bulkRejectMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const r = await fetch(`${API}/payments/bulk-reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
-      if (!r.ok) throw new Error(); return r.json();
-    },
-    onSuccess: (_, ids) => {
-      queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['payment-stats'] });
-      setSelectedIds(new Set()); toast.success(`${ids.length} payment(s) rejected`);
-    },
-    onError: () => toast.error('Bulk reject failed'),
-  });
-
-  const reminderMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const r = await fetch(`${API}/payments/${id}/reminder`, { method: 'POST' });
-      if (!r.ok) throw new Error(); return r.json();
-    },
-    onSuccess: (data: any) => { toast.success(data.message || 'Reminder sent'); queryClient.invalidateQueries({ queryKey: ['payments'] }); },
-    onError: () => toast.error('Failed to send reminder'),
-  });
-
-  const seedMutation = useMutation({
-    mutationFn: async () => {
-      const r = await fetch(`${API}/payments/seed`, { method: 'POST' });
-      if (!r.ok) throw new Error(); return r.json();
+    mutationFn: async ({ id, remarks, reviewedBy }: { id: string; remarks?: string; reviewedBy?: string }) => {
+      const res = await fetch(`${API}/payments/${id}/reject`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remarks: remarks || 'Rejected by Admin', reviewedBy: reviewedBy || 'Admin' }),
+      });
+      if (!res.ok) throw new Error('Failed to reject payment');
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payments'] }); queryClient.invalidateQueries({ queryKey: ['payment-stats'] });
-      toast.success('Demo payment data loaded successfully');
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      toast.success('Payment rejected');
     },
-    onError: () => toast.error('Failed to load demo data'),
+    onError: (err: any) => toast.error(err.message || 'Failed to reject payment'),
   });
 
-  // Computed values
-  const filterOptions = useMemo(() => {
-    const data = payments || [];
-    return {
-      hostels: [...new Set(data.map(p => p.hostelName))].filter(Boolean).sort(),
-      blocks: [...new Set(data.map(p => p.block))].filter(Boolean).sort(),
-      floors: [...new Set(data.map(p => p.floor).filter(Boolean) as string[])].sort(),
-      rooms: [...new Set(data.map(p => p.roomNumber))].filter(Boolean).sort(),
-      years: [...new Set(data.map(p => new Date(p.paymentDate).getFullYear()))].sort((a, b) => b - a),
-    };
-  }, [payments]);
-
+  // Filter Payments
   const filteredPayments = useMemo(() => {
-    let data = payments || [];
+    return payments.filter(p => {
+      // Search Query Filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchName = p.studentName?.toLowerCase().includes(q);
+        const matchUsn = p.studentUsn?.toLowerCase().includes(q);
+        const matchUtr = p.utrNumber?.toLowerCase().includes(q);
+        const matchBank = p.transferBank?.toLowerCase().includes(q);
+        const matchHolder = p.accountHolderName?.toLowerCase().includes(q);
+        if (!matchName && !matchUsn && !matchUtr && !matchBank && !matchHolder) return false;
+      }
 
-    // Tab filter
-    if (activeTab === 'incoming') data = data.filter(p => p.status === 'PENDING_REVIEW');
-    else if (activeTab === 'approved') data = data.filter(p => p.status === 'APPROVED');
+      // Status Filter
+      if (filters.status && p.status !== filters.status) return false;
 
-    // Search
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      data = data.filter(p =>
-        p.studentName.toLowerCase().includes(q) ||
-        p.studentUsn.toLowerCase().includes(q) ||
-        p.utrNumber.toLowerCase().includes(q) ||
-        p.roomNumber.toLowerCase().includes(q)
-      );
-    }
+      // Month/Year Filter
+      if (p.paymentDate) {
+        const d = new Date(p.paymentDate);
+        if (filters.month && String(d.getMonth() + 1) !== filters.month) return false;
+        if (filters.year && String(d.getFullYear()) !== filters.year) return false;
+      }
 
-    // Filters
-    if (filters.hostel) data = data.filter(p => p.hostelName === filters.hostel);
-    if (filters.block) data = data.filter(p => p.block === filters.block);
-    if (filters.floor) data = data.filter(p => p.floor === filters.floor);
-    if (filters.room) data = data.filter(p => p.roomNumber === filters.room);
-    if (filters.status) data = data.filter(p => p.status === filters.status);
-    if (filters.month) { const m = parseInt(filters.month); data = data.filter(p => new Date(p.paymentDate).getMonth() + 1 === m); }
-    if (filters.year) { const y = parseInt(filters.year); data = data.filter(p => new Date(p.paymentDate).getFullYear() === y); }
-
-    return data;
-  }, [payments, activeTab, searchQuery, filters]);
-
-  const spreadsheetPayments = useMemo(() => {
-    let data = payments || [];
-    if (selectedPaymentTitle !== 'ALL') {
-      data = data.filter(p => (p.paymentTitle || 'Hostel Fee Payment') === selectedPaymentTitle);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      data = data.filter(p =>
-        p.studentName.toLowerCase().includes(q) ||
-        p.studentUsn.toLowerCase().includes(q) ||
-        p.utrNumber.toLowerCase().includes(q) ||
-        p.roomNumber.toLowerCase().includes(q)
-      );
-    }
-    return data;
-  }, [payments, selectedPaymentTitle, searchQuery]);
-
-  const hasActiveFilters = useMemo(() =>
-    !!(filters.hostel || filters.block || filters.floor || filters.room || filters.status || filters.month || filters.year),
-    [filters]);
-
-  const activeFilterCount = useMemo(() =>
-    [filters.hostel, filters.block, filters.floor, filters.room, filters.status, filters.month, filters.year].filter(Boolean).length,
-    [filters]);
-
-  const tabCounts = useMemo(() => {
-    const all = payments || [];
-    return {
-      incoming: all.filter(p => p.status === 'PENDING_REVIEW').length,
-      approved: all.filter(p => p.status === 'APPROVED').length,
-      all: all.length,
-    };
-  }, [payments]);
-
-  // Clear selection on tab/filter change
-  useEffect(() => { setSelectedIds(new Set()); }, [activeTab, searchQuery, filters]);
-
-  // Handlers
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
+      return true;
     });
-  };
+  }, [payments, searchQuery, filters]);
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredPayments.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredPayments.map(p => p.id)));
+  // CSV Export Handler
+  const handleExportCSV = () => {
+    if (filteredPayments.length === 0) {
+      toast.error('No payment records to export');
+      return;
     }
+
+    const headers = [
+      'Student Name',
+      'USN',
+      'Semester',
+      'Amount (INR)',
+      'UTR Number',
+      'Payment Date',
+      'Transfer Bank',
+      'Account Holder Name',
+      'Relationship to Student',
+      'Account Holder Contact',
+      'Status',
+      'Reviewed By',
+      'Reviewed At',
+      'Screenshot URL'
+    ];
+
+    const rows = filteredPayments.map(p => [
+      `"${p.studentName || ''}"`,
+      `"${p.studentUsn || ''}"`,
+      `"${p.semester || '1st Year'}"`,
+      p.amount || 143000,
+      `"${p.utrNumber || ''}"`,
+      `"${formatDate(p.paymentDate)}"`,
+      `"${p.transferBank || '-'}"`,
+      `"${p.accountHolderName || '-'}"`,
+      `"${p.accountHolderRelation || '-'}"`,
+      `"${p.accountHolderContact || '-'}"`,
+      `"${p.status}"`,
+      `"${p.reviewedBy || '-'}"`,
+      `"${formatDate(p.reviewedAt || '')}"`,
+      `"${p.screenshotUrl || '-'}"`
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `PG_Payments_Verification_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${filteredPayments.length} payment records to CSV`);
   };
 
-  const handleBulkAction = (type: ConfirmAction['type']) => {
-    let ids: string[];
-    let label: string;
-    switch (type) {
-      case 'approve-selected': ids = Array.from(selectedIds); label = `Approve ${ids.length} Selected`; break;
-      case 'reject-selected': ids = Array.from(selectedIds); label = `Reject ${ids.length} Selected`; break;
-      case 'approve-all': ids = filteredPayments.filter(p => p.status === 'PENDING_REVIEW').map(p => p.id); label = `Approve All ${ids.length} Pending`; break;
-      case 'reject-all': ids = filteredPayments.filter(p => p.status === 'PENDING_REVIEW').map(p => p.id); label = `Reject All ${ids.length} Pending`; break;
-      default: return;
-    }
-    if (ids.length === 0) { toast.error('No eligible payments to process'); return; }
-    setConfirmAction({ type, ids, label });
-  };
-
-  const executeConfirmedAction = () => {
-    if (!confirmAction) return;
-    if (confirmAction.type.includes('approve')) bulkApproveMutation.mutate(confirmAction.ids);
-    else bulkRejectMutation.mutate(confirmAction.ids);
-    setConfirmAction(null);
-  };
-
-  const exportCSV = () => {
-    const targetData = activeTab === 'spreadsheet' ? spreadsheetPayments : filteredPayments;
-    const headers = ['Student Name', 'USN', 'Hostel', 'Block', 'Floor', 'Room Number', 'Bank UTR / Ref No', 'Payment Title', 'Amount', 'Payment Date', 'Payment Status', 'Email Status', 'Screenshot Proof'];
-    const rows = targetData.map(p => [p.studentName, p.studentUsn, p.hostelName, p.block, p.floor || '-', p.roomNumber, p.utrNumber, p.paymentTitle || 'Hostel Fee Payment', p.amount ? `₹${p.amount}` : '₹143000', formatDate(p.paymentDate), p.status, p.emailStatus, p.screenshotUrl ? 'Yes' : 'Google Form']);
-    const csv = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `hostel_payments_spreadsheet_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success(`Exported ${targetData.length} records to CSV spreadsheet`);
-  };
-
-  // ─── Loading State ──────────────────────────────────────────
-  if (isLoading && !isPaymentsError) {
-    return (
-      <div className="flex justify-center items-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-      </div>
-    );
-  }
-
-  // ─── Summary Cards Config ──────────────────────────────────
-  const summaryCards = [
-    { title: 'Pending Review', value: stats?.pendingReview ?? 0, icon: Clock, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-amber-50', iconColor: 'text-amber-600', valueCls: 'text-amber-700' },
-    { title: 'Approved Today', value: stats?.approvedToday ?? 0, icon: CheckCircle, gradient: 'from-emerald-500 to-teal-500', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', valueCls: 'text-emerald-700' },
-    { title: 'Rejected', value: stats?.rejected ?? 0, icon: XCircle, gradient: 'from-rose-500 to-pink-500', iconBg: 'bg-rose-50', iconColor: 'text-rose-600', valueCls: 'text-rose-700' },
-    { title: 'This Month', value: stats?.totalThisMonth ?? 0, icon: TrendingUp, gradient: 'from-indigo-500 to-violet-500', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600', valueCls: 'text-indigo-700' },
-  ];
-
-  const blockStats = stats?.blockStats || {};
-
-  // ─── Filter Dropdown Helper ────────────────────────────────
-  const selectCls = "w-full px-3.5 py-2.5 bg-white/80 border border-slate-200/60 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-300 transition-all appearance-none cursor-pointer";
+  const hasActiveFilters = Object.values(filters).some(Boolean) || searchQuery.trim() !== '';
 
   return (
-    <div className="space-y-6 pb-24 text-left">
-      {isPaymentsError && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-2xl text-xs font-semibold flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>Could not connect to the payments server. Please verify the backend is running. Showing empty/offline state.</span>
-        </div>
-      )}
-      {/* ═══ Header ═══ */}
-      <div className="flex justify-between items-start flex-wrap gap-4">
+    <div className="space-y-6 pb-12 font-sans">
+      
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-800">Payment Management</h2>
-          <p className="text-slate-500 font-medium mt-1">Review and manage student payment submissions</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <CreditCard className="w-7 h-7 text-indigo-600" />
+            Payment Management Hub
+          </h1>
+          <p className="text-xs font-semibold text-slate-500 mt-1">
+            Database-managed student PG payment verifications and export records
+          </p>
         </div>
-      </div>
 
-      {/* ═══ Summary Cards ═══ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {summaryCards.map((card, idx) => {
-          const Icon = card.icon;
-          return (
-            <motion.div
-              key={card.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: idx * 0.08, ease: 'easeOut' }}
-            >
-              <div className="relative overflow-hidden bg-white/80 backdrop-blur-md shadow-sm border border-slate-100/60 rounded-[1.5rem] p-6 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 group">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">{card.title}</p>
-                    <h3 className={`text-4xl font-black tracking-tight ${card.valueCls}`}>{card.value}</h3>
-                  </div>
-                  <div className={`p-3.5 rounded-2xl ${card.iconBg} group-hover:scale-110 transition-transform duration-300`}>
-                    <Icon className={`w-6 h-6 ${card.iconColor}`} />
-                  </div>
-                </div>
-                <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${card.gradient}`} />
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* ═══ Search + Filter Bar ═══ */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[280px]">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by name, USN, UTR, or room number..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-10 py-3 bg-white/70 backdrop-blur-sm border border-slate-200/60 rounded-2xl text-sm font-medium text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-300 transition-all"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all duration-200 ${showFilters || hasActiveFilters
-            ? 'bg-indigo-50 text-indigo-600 border border-indigo-200/60 shadow-sm'
-            : 'bg-white/70 text-slate-500 border border-slate-200/60 hover:bg-white hover:text-slate-700'
-            }`}
-        >
-          <Filter className="w-4 h-4" />
-          Filters
-          {hasActiveFilters && (
-            <span className="w-5 h-5 bg-indigo-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{activeFilterCount}</span>
-          )}
-          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-        </button>
-      </div>
-
-      {/* ═══ Collapsible Filter Panel ═══ */}
-      <AnimatePresence>
-        {showFilters && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
-            className="overflow-hidden"
-          >
-            <div className="bg-white/60 backdrop-blur-md rounded-3xl border border-slate-200/50 p-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Hostel</label>
-                  <select value={filters.hostel} onChange={e => setFilters(f => ({ ...f, hostel: e.target.value }))} className={selectCls}>
-                    <option value="">All Hostels</option>
-                    {filterOptions.hostels.map(h => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Block</label>
-                  <select value={filters.block} onChange={e => setFilters(f => ({ ...f, block: e.target.value }))} className={selectCls}>
-                    <option value="">All Blocks</option>
-                    {filterOptions.blocks.map(b => <option key={b} value={b}>Block {b}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Floor</label>
-                  <select value={filters.floor} onChange={e => setFilters(f => ({ ...f, floor: e.target.value }))} className={selectCls}>
-                    <option value="">All Floors</option>
-                    {filterOptions.floors.map(f => <option key={f} value={f}>Floor {f}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Room</label>
-                  <select value={filters.room} onChange={e => setFilters(f => ({ ...f, room: e.target.value }))} className={selectCls}>
-                    <option value="">All Rooms</option>
-                    {filterOptions.rooms.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Payment Status</label>
-                  <select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))} className={selectCls}>
-                    <option value="">All Statuses</option>
-                    <option value="PENDING_REVIEW">Pending Review</option>
-                    <option value="APPROVED">Approved</option>
-                    <option value="REJECTED">Rejected</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Month</label>
-                  <select value={filters.month} onChange={e => setFilters(f => ({ ...f, month: e.target.value }))} className={selectCls}>
-                    <option value="">All Months</option>
-                    {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Year</label>
-                  <select value={filters.year} onChange={e => setFilters(f => ({ ...f, year: e.target.value }))} className={selectCls}>
-                    <option value="">All Years</option>
-                    {filterOptions.years.map(y => <option key={y} value={String(y)}>{y}</option>)}
-                  </select>
-                </div>
-              </div>
-              {hasActiveFilters && (
-                <div className="mt-4 flex justify-end">
-                  <button
-                    onClick={() => setFilters(emptyFilters)}
-                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200/60 transition-all"
-                  >
-                    <X className="w-3.5 h-3.5" /> Clear All Filters
-                  </button>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ═══ Tab Bar ═══ */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {([
-          { key: 'incoming' as const, label: 'Incoming Payments', count: tabCounts.incoming },
-          { key: 'approved' as const, label: 'Approved Payments', count: tabCounts.approved },
-          { key: 'all' as const, label: 'All Payments', count: tabCounts.all },
-          { key: 'spreadsheet' as const, label: 'Google Forms / Spreadsheet View', count: tabCounts.all },
-        ]).map(tab => (
+        <div className="flex items-center gap-2">
           <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-300 ${activeTab === tab.key
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25'
-              : 'bg-white/50 text-slate-500 hover:bg-white hover:text-slate-700 border border-slate-200/40'
-              }`}
+            onClick={() => refetch()}
+            className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-xs cursor-pointer"
+            title="Refresh Table"
           >
-            {tab.label}
-            <span className={`min-w-[22px] h-[22px] flex items-center justify-center rounded-full text-[10px] font-black ${activeTab === tab.key ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500'
-              }`}>{tab.count}</span>
+            <RefreshCw className="w-4 h-4" />
           </button>
-        ))}
 
-        {/* Bulk action buttons (visible only on incoming tab) */}
-        {activeTab === 'incoming' && tabCounts.incoming > 0 && (
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => handleBulkAction('approve-all')}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-2xl text-xs font-bold hover:bg-emerald-100 transition-all"
-            >
-              <CheckCircle className="w-3.5 h-3.5" /> Approve All
-            </button>
-            <button
-              onClick={() => handleBulkAction('reject-all')}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-50 text-rose-700 border border-rose-200/60 rounded-2xl text-xs font-bold hover:bg-rose-100 transition-all"
-            >
-              <XCircle className="w-3.5 h-3.5" /> Reject All
-            </button>
-          </div>
-        )}
+          {/* CSV Download Button */}
+          <button
+            onClick={handleExportCSV}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-md cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Download CSV Data</span>
+          </button>
+        </div>
       </div>
 
-      {/* ═══ Data Table / Spreadsheet View ═══ */}
-      {activeTab === 'spreadsheet' ? (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <div className="bg-white rounded-2xl border border-emerald-300 shadow-lg overflow-hidden font-sans space-y-0">
-
-            {/* Spreadsheet Toolbar Header */}
-            <div className="bg-emerald-700 text-white p-4 flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center font-black text-sm">
-                  📊
-                </div>
-                <div>
-                  <h3 className="text-base font-extrabold tracking-tight">Google Forms & Bank Payment Submissions Sheet</h3>
-                  <p className="text-[11px] text-emerald-100 font-medium">Real-time consolidated spreadsheet of all student form submissions & UTR records</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 flex-wrap">
-                {/* Payment Title Selector Dropdown */}
-                <div className="flex items-center gap-2 bg-emerald-800/80 px-3 py-1.5 rounded-xl border border-emerald-600">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-100 whitespace-nowrap">Payment Title:</label>
-                  <select
-                    value={selectedPaymentTitle}
-                    onChange={(e) => setSelectedPaymentTitle(e.target.value)}
-                    className="px-3 py-1 bg-white text-emerald-950 rounded-lg text-xs font-black shadow-sm outline-none cursor-pointer border-none"
-                  >
-                    <option value="ALL">All Payment Forms / Titles</option>
-                    {paymentRequests?.map((req: any) => (
-                      <option key={req.id} value={req.title}>{req.title}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <span className="text-xs font-bold bg-white/10 px-3 py-1.5 rounded-lg border border-white/20 flex items-center gap-1.5">
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  Total: {spreadsheetPayments.length}
-                </span>
-                <button
-                  onClick={handleSyncGoogleSheet}
-                  disabled={isSyncingSheet}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold shadow-md transition-all disabled:opacity-60"
-                  title="Pull new responses from Google Sheet"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheet ? 'animate-spin' : ''}`} />
-                  <span>{isSyncingSheet ? 'Syncing...' : 'Sync Google Sheet'}</span>
-                </button>
-                <button
-                  onClick={exportCSV}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold shadow-md transition-all"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Sheet (.CSV)</span>
-                </button>
-              </div>
-
-            </div>
-
-            {/* Selected Payment Title Banner & Form Link */}
-            {selectedPaymentTitle !== 'ALL' && (
-              <div className="bg-emerald-50 border-b border-emerald-200 p-4 flex items-center justify-between flex-wrap gap-3">
-                {(() => {
-                  const req = paymentRequests?.find((r: any) => r.title === selectedPaymentTitle);
-                  return (
-                    <>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white px-2 py-0.5 rounded">Active Form View</span>
-                          <h4 className="text-sm font-black text-emerald-950">{selectedPaymentTitle}</h4>
-                        </div>
-                        <p className="text-xs text-emerald-700 font-semibold mt-0.5">
-                          {req?.subtitle || 'Official Student Fee Form'} • Amount: <span className="font-bold font-mono">₹{req?.amount ? Number(req.amount).toLocaleString() : '1,43,000'}</span> • Due: <span className="font-bold">{req?.dueDate || '30 August 2026'}</span>
-                        </p>
-                      </div>
-                      {req?.googleFormUrl && (
-                        <a
-                          href={req.googleFormUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5"
-                        >
-                          <span>Open Google Form</span>
-                          <CreditCard className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Spreadsheet Table Grid */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-emerald-50/80 border-b border-emerald-200 text-[10px] font-black text-emerald-900 uppercase tracking-wider">
-                    <th className="p-3 border-r border-emerald-200 text-center w-12">#</th>
-                    <th className="p-3 border-r border-emerald-200">Timestamp / Date</th>
-                    <th className="p-3 border-r border-emerald-200">Payment Title / Form</th>
-                    <th className="p-3 border-r border-emerald-200">Student Name</th>
-                    <th className="p-3 border-r border-emerald-200">USN</th>
-                    <th className="p-3 border-r border-emerald-200">Hostel & Block</th>
-                    <th className="p-3 border-r border-emerald-200">Floor</th>
-                    <th className="p-3 border-r border-emerald-200">Room No</th>
-                    <th className="p-3 border-r border-emerald-200">Bank UTR / Ref No</th>
-                    <th className="p-3 border-r border-emerald-200 text-right">Amount</th>
-                    <th className="p-3 border-r border-emerald-200 text-center">Payment Proof</th>
-                    <th className="p-3 border-r border-emerald-200 text-center">Email Status</th>
-                    <th className="p-3 border-r border-emerald-200 text-center">Verification Status</th>
-                    <th className="p-3 text-center">Admin Verification Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 text-xs font-medium text-slate-700 bg-white">
-                  {spreadsheetPayments.length === 0 ? (
-                    <tr>
-                      <td colSpan={14} className="p-8 text-center text-slate-400 font-semibold">
-                        No submissions found for the selected payment form title.
-                      </td>
-                    </tr>
-                  ) : (
-                    spreadsheetPayments.map((payment, idx) => (
-                      <tr key={payment.id} className="hover:bg-emerald-50/40 transition-colors">
-                        <td className="p-3 border-r border-slate-200 text-center font-bold text-slate-400 bg-slate-50">{idx + 1}</td>
-                        <td className="p-3 border-r border-slate-200 font-mono text-[11px] text-slate-600">{formatDate(payment.paymentDate)}</td>
-                        <td className="p-3 border-r border-slate-200 font-extrabold text-emerald-800 bg-emerald-50/30">{payment.paymentTitle || 'Hostel Fee Payment'}</td>
-                        <td className="p-3 border-r border-slate-200 font-bold text-slate-800">{payment.studentName}</td>
-                        <td className="p-3 border-r border-slate-200 font-mono font-bold text-slate-700">{payment.studentUsn}</td>
-                        <td className="p-3 border-r border-slate-200">{payment.hostelName} (Block {payment.block})</td>
-                        <td className="p-3 border-r border-slate-200 text-center font-mono">{payment.floor || '-'}</td>
-                        <td className="p-3 border-r border-slate-200 font-bold">{payment.roomNumber}</td>
-                        <td className="p-3 border-r border-slate-200 font-mono font-bold text-indigo-700">{payment.utrNumber}</td>
-                        <td className="p-3 border-r border-slate-200 text-right font-mono font-bold text-slate-900">
-                          ₹{payment.amount ? Number(payment.amount).toLocaleString() : '1,43,000'}
-                        </td>
-                        <td className="p-3 border-r border-slate-200 text-center">
-                          {payment.screenshotUrl ? (
-                            <button
-                              onClick={() => setScreenshotUrl(payment.screenshotUrl!)}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 transition-all inline-flex items-center gap-1"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>View Proof</span>
-                            </button>
-                          ) : (
-                            <span className="text-xs text-slate-400 font-semibold italic">Google Form Record</span>
-                          )}
-                        </td>
-                        <td className="p-3 border-r border-slate-200 text-center">
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${payment.emailStatus === 'SENT' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-500 border-slate-200'
-                            }`}>
-                            <Mail className="w-3 h-3" />
-                            {payment.emailStatus === 'SENT' ? 'Sent' : 'Pending'}
-                          </span>
-                        </td>
-                        <td className="p-3 border-r border-slate-200 text-center">
-                          <StatusBadge status={payment.status} />
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {payment.status === 'PENDING_REVIEW' && (
-                              <>
-                                <button
-                                  onClick={() => approveMutation.mutate(payment.id)}
-                                  disabled={approveMutation.isPending}
-                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow-sm transition-all disabled:opacity-50"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() => rejectMutation.mutate(payment.id)}
-                                  disabled={rejectMutation.isPending}
-                                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold shadow-sm transition-all disabled:opacity-50"
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            )}
-                            {payment.status === 'APPROVED' && (
-                              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                                <CheckCircle className="w-3.5 h-3.5" /> Verified
-                              </span>
-                            )}
-                            {payment.status === 'REJECTED' && (
-                              <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
-                                <XCircle className="w-3.5 h-3.5" /> Rejected
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Sheet Footer */}
-            <div className="bg-emerald-50 px-6 py-3 border-t border-emerald-200 flex items-center justify-between text-xs text-emerald-900 font-bold">
-              <span>Google Forms Responses Spreadsheet View</span>
-              <span>Showing {filteredPayments.length} of {payments?.length ?? 0} Total Form Submissions</span>
-            </div>
-
-          </div>
-        </motion.div>
-      ) : filteredPayments.length > 0 ? (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <div className="bg-white/60 backdrop-blur-md rounded-3xl border border-slate-200/50 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-100/80">
-                    <th className="pl-5 pr-2 py-4 text-left">
-                      <input
-                        type="checkbox"
-                        checked={filteredPayments.length > 0 && selectedIds.size === filteredPayments.length}
-                        onChange={toggleSelectAll}
-                        className="w-4 h-4 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
-                      />
-                    </th>
-                    {['Student Name', 'USN', 'Hostel', 'Block', 'Room', 'UTR Number', 'Payment Date', 'Screenshot', 'Status', 'Actions'].map(h => (
-                      <th key={h} className="px-4 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPayments.map((payment, idx) => {
-                    const isSelected = selectedIds.has(payment.id);
-                    return (
-                      <motion.tr
-                        key={payment.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: idx * 0.02 }}
-                        className={`border-b border-slate-50 transition-colors duration-150 ${isSelected ? 'bg-indigo-50/50' : idx % 2 === 0 ? 'bg-white/30' : 'bg-slate-50/30'
-                          } hover:bg-indigo-50/30`}
-                      >
-                        <td className="pl-5 pr-2 py-3.5">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleSelect(payment.id)}
-                            className="w-4 h-4 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
-                          />
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="text-sm font-bold text-slate-800">{payment.studentName}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="text-sm font-mono font-semibold text-slate-600">{payment.studentUsn}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="text-sm text-slate-500">{payment.hostelName}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 text-sm font-black">{payment.block}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="text-sm font-semibold text-slate-600">{payment.roomNumber}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="text-sm font-mono font-medium text-slate-600">{payment.utrNumber}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="text-sm text-slate-500">{formatDate(payment.paymentDate)}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          {payment.screenshotUrl ? (
-                            <button
-                              onClick={() => setScreenshotUrl(payment.screenshotUrl!)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-indigo-50 text-indigo-600 hover:text-indigo-850 font-bold transition-all text-xs border border-slate-200/50"
-                              title="View Screenshot"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>View Screenshot</span>
-                            </button>
-                          ) : (
-                            <span className="text-xs text-slate-400 font-semibold italic">No File</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <StatusBadge status={payment.status} />
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-1">
-                            {payment.status === 'PENDING_REVIEW' && (
-                              <>
-                                <button
-                                  onClick={() => approveMutation.mutate(payment.id)}
-                                  disabled={approveMutation.isPending}
-                                  className="p-2 rounded-xl hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 transition-all disabled:opacity-50"
-                                  title="Approve"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => rejectMutation.mutate(payment.id)}
-                                  disabled={rejectMutation.isPending}
-                                  className="p-2 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all disabled:opacity-50"
-                                  title="Reject"
-                                >
-                                  <XCircle className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => reminderMutation.mutate(payment.id)}
-                                  disabled={reminderMutation.isPending}
-                                  className="p-2 rounded-xl hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-all disabled:opacity-50"
-                                  title="Send Reminder"
-                                >
-                                  <Bell className="w-4 h-4" />
-                                </button>
-                              </>
-                            )}
-                            {payment.status === 'APPROVED' && (
-                              <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
-                                <CheckCircle className="w-3 h-3" /> Verified
-                              </span>
-                            )}
-                            {payment.status === 'REJECTED' && (
-                              <span className="text-xs font-medium text-rose-500 flex items-center gap-1" title={payment.remarks || ''}>
-                                <XCircle className="w-3 h-3" /> {payment.remarks ? payment.remarks.slice(0, 20) + '…' : 'Rejected'}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </motion.tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {/* Table Footer */}
-            <div className="px-6 py-3.5 border-t border-slate-100/60 flex items-center justify-between bg-white/40">
-              <p className="text-xs font-medium text-slate-500">
-                Showing <span className="font-bold text-slate-700">{filteredPayments.length}</span> of <span className="font-bold text-slate-700">{payments?.length ?? 0}</span> payments
-              </p>
-              {selectedIds.size > 0 && (
-                <p className="text-xs font-bold text-indigo-600">{selectedIds.size} selected</p>
-              )}
-            </div>
-          </div>
-        </motion.div>
-      ) : (
-        /* ═══ Empty State ═══ */
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <div className="bg-white/60 backdrop-blur-md rounded-3xl border border-slate-200/50 p-16 flex flex-col items-center justify-center text-center">
-            <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-6">
-              <Inbox className="w-10 h-10 text-slate-300" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-700 mb-2">
-              {hasActiveFilters || searchQuery ? 'No matching payments' : 'No payments yet'}
-            </h3>
-            <p className="text-sm text-slate-400 max-w-md">
-              {hasActiveFilters || searchQuery
-                ? 'Try adjusting your search or filter criteria to find payments.'
-                : 'Payment data will appear here once students submit their payment details through the Google Form.'}
-            </p>
-            {(hasActiveFilters || searchQuery) && (
-              <button
-                onClick={() => { setFilters(emptyFilters); setSearchQuery(''); }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all mt-6"
-              >
-                <X className="w-4 h-4" /> Clear Search & Filters
+      {/* Filter & Search Bar */}
+      <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          
+          {/* Search Box */}
+          <div className="relative w-full sm:w-96">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search Name, USN, UTR No, Bank..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-        </motion.div>
+
+          {/* Filter Toggles */}
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all cursor-pointer ${
+                showFilters || hasActiveFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-600'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>Filters</span>
+              {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-indigo-600" />}
+            </button>
+
+            {hasActiveFilters && (
+              <button
+                onClick={() => { setFilters(emptyFilters); setSearchQuery(''); }}
+                className="text-xs text-rose-600 font-bold hover:underline px-2"
+              >
+                Reset All
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Expandable Filter Panel */}
+        {showFilters && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div>
+              <label className="block text-[10px] font-extrabold uppercase text-slate-400 mb-1">Status</label>
+              <select
+                value={filters.status}
+                onChange={e => setFilters({ ...filters, status: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-700 outline-none cursor-pointer"
+              >
+                <option value="">All Statuses</option>
+                <option value="PENDING_REVIEW">Pending Verification</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-extrabold uppercase text-slate-400 mb-1">Month</label>
+              <select
+                value={filters.month}
+                onChange={e => setFilters({ ...filters, month: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-700 outline-none cursor-pointer"
+              >
+                <option value="">All Months</option>
+                {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-extrabold uppercase text-slate-400 mb-1">Year</label>
+              <select
+                value={filters.year}
+                onChange={e => setFilters({ ...filters, year: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-700 outline-none cursor-pointer"
+              >
+                <option value="">All Years</option>
+                <option value="2026">2026</option>
+                <option value="2025">2025</option>
+              </select>
+            </div>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Payment Verification Database Table */}
+      <div className="bg-white border border-slate-200 rounded-3xl shadow-card overflow-hidden">
+        
+        {isLoading ? (
+          <div className="p-12 text-center space-y-3">
+            <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
+            <p className="text-xs font-bold text-slate-500">Loading database payment records...</p>
+          </div>
+        ) : filteredPayments.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <th className="p-4">Student & USN</th>
+                  <th className="p-4">Semester</th>
+                  <th className="p-4">Amount</th>
+                  <th className="p-4">Date & UTR No.</th>
+                  <th className="p-4">Bank Transferred From</th>
+                  <th className="p-4">Account Holder Details</th>
+                  <th className="p-4 text-center">Receipt</th>
+                  <th className="p-4 text-center">Status</th>
+                  <th className="p-4 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-semibold">
+                {filteredPayments.map(p => (
+                  <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
+                    
+                    {/* Student & USN */}
+                    <td className="p-4">
+                      <p className="font-extrabold text-slate-900 text-sm">{p.studentName}</p>
+                      <p className="text-[10px] font-mono text-indigo-600 font-bold mt-0.5">{p.studentUsn}</p>
+                    </td>
+
+                    {/* Semester */}
+                    <td className="p-4 font-bold text-slate-800">
+                      {p.semester || '1st Year'}
+                    </td>
+
+                    {/* Amount */}
+                    <td className="p-4 font-mono font-black text-slate-900 text-sm">
+                      ₹{Number(p.amount || 143000).toLocaleString()}
+                    </td>
+
+                    {/* Date & UTR */}
+                    <td className="p-4">
+                      <p className="font-bold text-slate-800 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        {formatDate(p.paymentDate)}
+                      </p>
+                      <p className="text-[10px] font-mono text-slate-500 mt-0.5">UTR: {p.utrNumber}</p>
+                    </td>
+
+                    {/* Bank Transferred From */}
+                    <td className="p-4 font-bold text-slate-800">
+                      {p.transferBank || 'Online Banking'}
+                    </td>
+
+                    {/* Account Holder Details */}
+                    <td className="p-4 space-y-0.5">
+                      <p className="font-extrabold text-slate-900">{p.accountHolderName || '-'}</p>
+                      <p className="text-[10px] text-slate-500 font-bold">
+                        Relation: {p.accountHolderRelation || '-'}
+                      </p>
+                      {p.accountHolderContact && (
+                        <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-slate-400" />
+                          {p.accountHolderContact}
+                        </p>
+                      )}
+                    </td>
+
+                    {/* Receipt Screenshot Modal Trigger */}
+                    <td className="p-4 text-center">
+                      {p.screenshotUrl ? (
+                        <button
+                          onClick={() => setScreenshotUrl(p.screenshotUrl)}
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-1.5 px-3 rounded-lg text-[11px] inline-flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Receipt</span>
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">No Image</span>
+                      )}
+                    </td>
+
+                    {/* Verification Status */}
+                    <td className="p-4 text-center">
+                      <StatusBadge status={p.status} />
+                    </td>
+
+                    {/* Approve / Reject Actions */}
+                    <td className="p-4 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {p.status !== 'APPROVED' && (
+                          <button
+                            onClick={() => approveMutation.mutate({ id: p.id })}
+                            disabled={approveMutation.isPending}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-2.5 rounded-lg text-[10px] transition-all cursor-pointer shadow-xs"
+                            title="Approve Payment"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {p.status !== 'REJECTED' && (
+                          <button
+                            onClick={() => rejectMutation.mutate({ id: p.id })}
+                            disabled={rejectMutation.isPending}
+                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-1.5 px-2.5 rounded-lg text-[10px] transition-all cursor-pointer"
+                            title="Reject Payment"
+                          >
+                            Reject
+                          </button>
+                        )}
+                      </div>
+                    </td>
+
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-12 text-center space-y-3">
+            <CreditCard className="w-10 h-10 text-slate-300 mx-auto" />
+            <h4 className="text-sm font-extrabold text-slate-700">No Payment Verification Records Found</h4>
+            <p className="text-xs text-slate-400">Try adjusting your filters or search terms.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Screenshot Modal */}
+      {screenshotUrl && (
+        <ScreenshotModal url={screenshotUrl} onClose={() => setScreenshotUrl(null)} />
       )}
 
-      {/* ═══ Floating Selection Action Bar ═══ */}
-      <AnimatePresence>
-        {selectedIds.size > 0 && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-6 py-3.5 bg-slate-900 text-white rounded-2xl shadow-2xl shadow-slate-900/30"
-          >
-            <span className="text-sm font-bold">
-              <span className="inline-flex items-center justify-center w-6 h-6 bg-white/20 rounded-lg text-xs font-black mr-2">{selectedIds.size}</span>
-              selected
-            </span>
-            <div className="w-px h-6 bg-white/20" />
-            <button
-              onClick={() => handleBulkAction('approve-selected')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-xs font-bold transition-all"
-            >
-              <CheckCircle className="w-3.5 h-3.5" /> Approve
-            </button>
-            <button
-              onClick={() => handleBulkAction('reject-selected')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-rose-500 hover:bg-rose-400 text-white rounded-xl text-xs font-bold transition-all"
-            >
-              <XCircle className="w-3.5 h-3.5" /> Reject
-            </button>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="p-2 hover:bg-white/10 rounded-xl text-white/60 hover:text-white transition-all"
-              title="Clear Selection"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ═══ Screenshot Modal ═══ */}
-      <AnimatePresence>
-        {screenshotUrl && (
-          <ScreenshotModal url={screenshotUrl} onClose={() => setScreenshotUrl(null)} />
-        )}
-      </AnimatePresence>
-
-      {/* ═══ Google Form & Sheet Link Configuration Modal ═══ */}
-      <AnimatePresence>
-        {showFormModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowFormModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-              className="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-4 p-8 overflow-hidden relative"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
-                    <FileSpreadsheet className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-800">Google Form & Sheet Config</h3>
-                    <p className="text-xs text-slate-500 font-medium">Link the Google Form for fee submissions and Google Sheet for responses</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowFormModal(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                    Google Form URL (Shared with Student Portal)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={formUrlInput}
-                    onChange={e => setFormUrlInput(e.target.value)}
-                    placeholder="Paste Google Form view link..."
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                    Google Sheet (Responses) URL
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={sheetUrlInput}
-                    onChange={e => setSheetUrlInput(e.target.value)}
-                    placeholder="Paste Google Sheet edit/view link..."
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all"
-                  />
-                </div>
-
-                <div className="p-3.5 bg-emerald-50/60 border border-emerald-200/60 rounded-2xl text-xs font-medium text-emerald-800 space-y-1">
-                  <p className="font-bold flex items-center gap-1.5">
-                    <span>💡 Dynamic Sheet Sync Active</span>
-                  </p>
-                  <p className="text-[11px] leading-relaxed text-emerald-700">
-                    Students use the Google Form to pay fees. The Google Sheet Responses link fetches payment info (UTR, name, USN, screenshot) directly into the Admin dashboard.
-                  </p>
-                </div>
-
-                {currentFormUrl && (
-                  <div className="text-[11px] text-slate-500 font-medium truncate">
-                    <span className="font-bold text-slate-700">Form Link:</span>{' '}
-                    <a href={currentFormUrl} target="_blank" rel="noreferrer" className="text-indigo-600 underline font-mono">
-                      {currentFormUrl}
-                    </a>
-                  </div>
-                )}
-
-                {currentSheetUrl && (
-                  <div className="text-[11px] text-slate-500 font-medium truncate">
-                    <span className="font-bold text-slate-700">Sheet Link:</span>{' '}
-                    <a href={currentSheetUrl} target="_blank" rel="noreferrer" className="text-indigo-600 underline font-mono">
-                      {currentSheetUrl}
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 justify-end mt-6 pt-4 border-t border-slate-100">
-                <button
-                  onClick={() => setShowFormModal(false)}
-                  className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveFormUrl}
-                  disabled={isSavingUrl}
-                  className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-2xl shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-60"
-                >
-                  {isSavingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-                  Save & Connect
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ═══ Confirmation Dialog ═══ */}
-      <AnimatePresence>
-        {confirmAction && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-            onClick={() => setConfirmAction(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 p-8"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`p-3 rounded-2xl ${confirmAction.type.includes('approve') ? 'bg-emerald-50' : 'bg-rose-50'}`}>
-                  <AlertTriangle className={`w-6 h-6 ${confirmAction.type.includes('approve') ? 'text-emerald-600' : 'text-rose-600'}`} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800">Confirm Action</h3>
-              </div>
-              <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-                Are you sure you want to <span className="font-bold">{confirmAction.label.toLowerCase()}</span>?
-                This action will affect <span className="font-bold text-slate-800">{confirmAction.ids.length}</span> payment(s) and cannot be easily undone.
-              </p>
-              <div className="flex items-center gap-3 justify-end">
-                <button
-                  onClick={() => setConfirmAction(null)}
-                  className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={executeConfirmedAction}
-                  disabled={bulkApproveMutation.isPending || bulkRejectMutation.isPending}
-                  className={`flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white rounded-2xl transition-all shadow-lg disabled:opacity-60 ${confirmAction.type.includes('approve')
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/25 hover:shadow-emerald-500/40'
-                    : 'bg-gradient-to-r from-rose-500 to-pink-500 shadow-rose-500/25 hover:shadow-rose-500/40'
-                    }`}
-                >
-                  {(bulkApproveMutation.isPending || bulkRejectMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {confirmAction.label}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

@@ -134,25 +134,30 @@ model AllocationHistory {
 }
 
 model Payment {
-  id              String    @id @default(uuid())
-  studentName     String
-  studentUsn      String
-  hostelName      String
-  block           String
-  floor           String?
-  roomNumber      String
-  utrNumber       String    @unique
-  paymentTitle    String?
-  amount          Float?
-  paymentDate     DateTime
-  screenshotUrl   String?
-  status          String    @default("PENDING_REVIEW")
-  emailStatus     String    @default("PENDING")
-  reviewedBy      String?
-  reviewedAt      DateTime?
-  remarks         String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                    String    @id @default(uuid())
+  studentName           String
+  studentUsn            String
+  semester              String?
+  hostelName            String
+  block                 String
+  floor                 String?
+  roomNumber            String
+  utrNumber             String    @unique
+  paymentTitle          String?
+  amount                Float?
+  paymentDate           DateTime
+  transferBank          String?
+  accountHolderName     String?
+  accountHolderRelation String?
+  accountHolderContact  String?
+  screenshotUrl         String?
+  status                String    @default("PENDING_REVIEW")
+  emailStatus           String    @default("PENDING")
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  remarks               String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 }
 
 

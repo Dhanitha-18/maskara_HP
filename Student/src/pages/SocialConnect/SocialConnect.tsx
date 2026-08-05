@@ -73,9 +73,11 @@ export const SocialConnect: React.FC = () => {
     fetch('http://localhost:5000/api/chat/channels')
       .then(res => res.json())
       .then(data => {
-        setChannels(data);
-        if (data.length > 0 && !data.some((c: any) => c.id === activeChannelId)) {
-          setActiveChannelId(data[0].id);
+        if (Array.isArray(data) && data.length > 0) {
+          setChannels(data);
+          if (!data.some((c: any) => c.id === activeChannelId)) {
+            setActiveChannelId(data[0].id);
+          }
         }
       })
       .catch(err => console.error('Failed to load channels', err));
@@ -84,8 +86,10 @@ export const SocialConnect: React.FC = () => {
     fetch('http://localhost:5000/api/applications')
       .then(res => res.json())
       .then(all => {
-        const approved = all.filter((a: any) => a.status === 'APPROVED' || a.status === 'ALLOCATED');
-        setResidents(approved);
+        if (Array.isArray(all)) {
+          const approved = all.filter((a: any) => a.status === 'APPROVED' || a.status === 'ALLOCATED');
+          setResidents(approved);
+        }
       })
       .catch(err => console.error('Failed to load residents', err));
   }, []);
@@ -95,10 +99,14 @@ export const SocialConnect: React.FC = () => {
     fetch(`http://localhost:5000/api/chat/channels/${activeChannelId}/messages`)
       .then(res => res.json())
       .then(data => {
-        setMessages(data.map((m: any) => ({
-          ...m,
-          isSelf: m.usn === student.usn
-        })));
+        if (Array.isArray(data)) {
+          setMessages(data.map((m: any) => ({
+            ...m,
+            isSelf: m.usn === student.usn
+          })));
+        } else {
+          setMessages([]);
+        }
       })
       .catch(err => console.error('Failed to load messages', err));
   }, [activeChannelId, student.usn]);

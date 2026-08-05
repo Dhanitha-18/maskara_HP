@@ -99,17 +99,24 @@ export const AppRouter: React.FC = () => {
 
       {/* Main Website Layout */}
       <Route path="/" element={<MainLayout />}>
-        {/* Always accessible (Overview, Facilities, Mess, Apply) */}
+        {/* Always accessible pages */}
         <Route index element={<Overview />} />
         <Route path="facilities" element={<Facilities />} />
         <Route path="mess" element={<Mess />} />
         <Route path="apply" element={<ApplicationForm />} />
 
-        {/* Require application submission & login */}
+        {/* Circulars / Announcements */}
+        <Route path="circulars" element={<Circulars />} />
+        <Route path="circular" element={<Circulars />} />
+
+        {/* Social Connect / Community Chat (Supports both hyphen and underscore URLs) */}
+        <Route path="social-connect" element={<SocialConnect />} />
+        <Route path="social_connect" element={<SocialConnect />} />
+        <Route path="socialconnect" element={<SocialConnect />} />
+
+        {/* Protected student features */}
         <Route path="payment" element={<RequireApplicationGuard><Payment /></RequireApplicationGuard>} />
-        <Route path="circulars" element={<RequireApplicationGuard><Circulars /></RequireApplicationGuard>} />
         <Route path="complaints" element={<RequireApplicationGuard><Complaints /></RequireApplicationGuard>} />
-        <Route path="social-connect" element={<RequireApplicationGuard><SocialConnect /></RequireApplicationGuard>} />
         <Route path="attendance" element={<RequireApplicationGuard><Attendance /></RequireApplicationGuard>} />
         <Route path="leave-application" element={<RequireApplicationGuard><LeaveApplication /></RequireApplicationGuard>} />
         <Route path="profile" element={<RequireApplicationGuard><Profile /></RequireApplicationGuard>} />

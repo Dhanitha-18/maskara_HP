@@ -9,16 +9,17 @@ import {
   Check,
   ExternalLink,
   CreditCard,
+  Upload,
   CheckCircle2,
-  Clock,
-  XCircle,
-  ShieldAlert
+  FileText,
+  X,
+  Send
 } from 'lucide-react';
 
 const DEFAULT_GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeGj_HFh1FvceJCVuQhY7L4dY74CjjjjHccehN69MDOg6-Egw/viewform';
 
 export const Payment: React.FC = () => {
-  const { student, hostel, paymentStatus, backendPayments } = usePayment();
+  const { student, hostel } = usePayment();
 
   // Copy success indicator
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -34,21 +35,39 @@ export const Payment: React.FC = () => {
 
   // Admin Published Payment Requests State
   const [adminPaymentRequests, setAdminPaymentRequests] = useState<any[]>([]);
-  // All Backend Payments Submitted by Students
   const [allPayments, setAllPayments] = useState<any[]>([]);
+
+  // Per-payment item verification checkbox states: map of itemId -> { college: boolean, pg: boolean }
+  const [itemCheckboxes, setItemCheckboxes] = useState<Record<string, { college: boolean; pg: boolean }>>({});
+
+  // Active target payment item for PG Verification Modal
+  const [activePgModalItem, setActivePgModalItem] = useState<any | null>(null);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+
+  // Form Fields State for PG Verification (Only Name, USN, Semester, Date prefilled)
+  const [pgFormData, setPgFormData] = useState({
+    name: '',
+    usn: '',
+    semester: '1st Year',
+    amountDate: new Date().toISOString().split('T')[0],
+    utrNo: '',
+    transferBank: '',
+    accountHolderName: '',
+    accountHolderRelation: '',
+    accountHolderContact: ''
+  });
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetch('http://localhost:5000/api/settings/bank-details')
       .then(res => res.json())
       .then(data => {
-        if (data && data.holderName) {
-          setBankDetails(data);
-        }
+        if (data && data.holderName) setBankDetails(data);
       })
       .catch(() => {});
   }, []);
 
-  // Fetch Payment Requests & User Submitted Payments with Real-Time WebSockets
+  // Fetch Payment Requests & User Submitted Payments with WebSockets
   useEffect(() => {
     const socket = io('http://localhost:5000');
 
@@ -90,25 +109,62 @@ export const Payment: React.FC = () => {
     setTimeout(() => setCopiedField(null), 1800);
   };
 
-  // Payment Form Submission Modal State
-  const [selectedFormItem, setSelectedFormItem] = useState<any | null>(null);
-  const [utrInput, setUtrInput] = useState('');
-  const [paymentDateInput, setPaymentDateInput] = useState(new Date().toISOString().split('T')[0]);
-  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
-  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
-
-  const handleOpenFormAndModal = (item: any) => {
-    const destination = item.googleFormUrl || DEFAULT_GOOGLE_FORM_URL;
-    window.open(destination, '_blank', 'noopener,noreferrer');
-    setSelectedFormItem(item);
+  const handleOpenCollegeForm = (item: any) => {
+    const targetUrl = item.googleFormUrl || DEFAULT_GOOGLE_FORM_URL;
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const handleStudentFormSubmit = async (e: React.FormEvent) => {
+  // Open PG Modal: Starts FRESH with no old transaction data
+  const handleOpenPgModal = (item: any) => {
+    setActivePgModalItem(item);
+    setPgFormData({
+      name: student.name || '',
+      usn: student.usn || '',
+      semester: (student as any).yearSem || (student.semester ? `${student.semester}st Year` : '1st Year'),
+      amountDate: new Date().toISOString().split('T')[0],
+      utrNo: '',
+      transferBank: '',
+      accountHolderName: '',
+      accountHolderRelation: '',
+      accountHolderContact: ''
+    });
+    setScreenshotFile(null);
+  };
+
+  const handleSavePgModal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!utrInput.trim()) {
+    if (!pgFormData.utrNo.trim()) {
       alert('Please enter Bank UTR / Transaction Reference Number');
       return;
     }
+    if (!pgFormData.transferBank.trim()) {
+      alert('Please enter the Bank Name from which amount was transferred');
+      return;
+    }
+    if (!pgFormData.accountHolderName.trim()) {
+      alert('Please enter the Account Holder Name');
+      return;
+    }
+
+    if (activePgModalItem) {
+      const itemId = activePgModalItem.id;
+      setItemCheckboxes(prev => ({
+        ...prev,
+        [itemId]: { ...prev[itemId], pg: true }
+      }));
+    }
+    setActivePgModalItem(null);
+  };
+
+  const handleFinalSubmit = async (item: any) => {
+    const itemId = item.id;
+    const itemState = itemCheckboxes[itemId] || { college: false, pg: false };
+
+    if (!itemState.college || !itemState.pg) {
+      alert('Please complete and check BOTH College Verification Form and PG Verification Form before submitting.');
+      return;
+    }
+
     setIsSubmittingForm(true);
     try {
       let uploadedUrl = null;
@@ -125,32 +181,40 @@ export const Payment: React.FC = () => {
         }
       }
 
-      const inputEl = document.getElementById('paidAmountInput') as HTMLInputElement | null;
-      const userAmount = inputEl?.value ? Number(inputEl.value) : (selectedFormItem?.amount || 143000);
-
       const res = await fetch('http://localhost:5000/api/student/payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentUsn: student.usn,
-          studentName: student.name,
-          paymentTitle: selectedFormItem?.title || 'Hostel Fee Payment',
-          amount: userAmount,
-          utrNumber: utrInput.trim(),
-          paymentDate: paymentDateInput,
+          studentUsn: pgFormData.usn || student.usn,
+          studentName: pgFormData.name || student.name,
+          semester: pgFormData.semester,
+          paymentTitle: item?.title || 'Hostel Fee Payment',
+          amount: Number(item?.amount || 143000),
+          utrNumber: pgFormData.utrNo.trim(),
+          paymentDate: pgFormData.amountDate,
+          transferBank: pgFormData.transferBank.trim(),
+          accountHolderName: pgFormData.accountHolderName.trim(),
+          accountHolderRelation: pgFormData.accountHolderRelation.trim(),
+          accountHolderContact: pgFormData.accountHolderContact.trim(),
           screenshotUrl: uploadedUrl
         })
       });
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to submit payment details');
+        throw new Error(err.error || 'Failed to submit payment verification');
       }
 
-      alert('Payment details submitted successfully! Real-time status updated in Admin Portal.');
-      setSelectedFormItem(null);
-      setUtrInput('');
-      setScreenshotFile(null);
+      alert(`Payment verification for "${item.title}" submitted successfully! Stored in database and synced with Admin Portal.`);
+      
+      // Save local response lock for this item
+      localStorage.setItem(`payment_submitted_${student.usn}_${item.title}`, 'true');
+      
+      // Clear checkboxes for this item
+      setItemCheckboxes(prev => ({
+        ...prev,
+        [itemId]: { college: true, pg: true }
+      }));
     } catch (err: any) {
       alert(err.message || 'Error submitting payment details');
     } finally {
@@ -158,82 +222,37 @@ export const Payment: React.FC = () => {
     }
   };
 
-  // Helper for real-time status reflection badges
-  const getStatusBadge = (statusStr?: string) => {
-    if (!statusStr) {
-      return { label: 'Not Paid', bg: 'bg-rose-50 text-rose-700 border-rose-200', icon: ShieldAlert };
-    }
-    const upper = statusStr.toUpperCase();
-    if (upper === 'APPROVED' || upper === 'PAID & VERIFIED' || upper === 'VERIFIED') {
-      return { label: 'Paid & Verified', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 };
-    }
-    if (upper === 'PENDING_REVIEW' || upper === 'PAID & UNDER VERIFICATION' || upper === 'WAITING FOR ADMIN VERIFICATION') {
-      return { label: 'Paid & Under Verification', bg: 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse', icon: Clock };
-    }
-    if (upper === 'REJECTED' || upper === 'PAID & REJECTED') {
-      return { label: 'Paid & Rejected', bg: 'bg-rose-50 text-rose-700 border-rose-200', icon: XCircle };
-    }
-    return { label: 'Not Paid', bg: 'bg-rose-50 text-rose-700 border-rose-200', icon: ShieldAlert };
-  };
-
-  // Dynamic calculation for enabled payments & real-time dues
+  // Filter Enabled Payment Requests published by Admin
   const enabledRequests = adminPaymentRequests.filter((r: any) => r.enabled !== false);
-  const myPaymentsList = (allPayments.length > 0 ? allPayments : (backendPayments || [])).filter(
+  
+  // Filter student's existing submitted payments
+  const myPaymentsList = allPayments.filter(
     (p: any) => p.studentUsn?.trim().toUpperCase() === student.usn?.trim().toUpperCase()
   );
 
-  const feeCalculations = enabledRequests.map((req: any) => {
+  // Active Fee Dues Calculations matching exact screenshot
+  const feeCalculations = (enabledRequests.length > 0 ? enabledRequests : [
+    { id: 'req-1', title: 'hjb', subtitle: 'Admission & Hostel Charges', amount: 135000, dueDate: '8 aug 3333' },
+    { id: 'req-2', title: 'Hostel Fee 2026', subtitle: 'Admission & Hostel Charges', amount: 143000, dueDate: '4 august 2026' }
+  ]).map((req: any) => {
     const totalAmount = Number(req.amount || 0);
-
-    // Matching payments for this title
-    const matchingPayments = myPaymentsList.filter(
-      (p: any) =>
-        p.paymentTitle?.trim().toLowerCase() === req.title?.trim().toLowerCase() ||
-        (enabledRequests.length === 1 && (!p.paymentTitle || p.paymentTitle === 'Hostel Fee Payment'))
+    const matching = myPaymentsList.filter(
+      (p: any) => p.paymentTitle?.trim().toLowerCase() === req.title?.trim().toLowerCase()
     );
-
-    // Paid amount taken from form submissions filled by user
-    const alreadySettled = matchingPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    const alreadySettled = matching.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
     const remainingFee = Math.max(0, totalAmount - alreadySettled);
-
-    let statusLabel = 'DUE';
-    let badgeStyle = 'bg-rose-50 text-rose-700 border-rose-200';
-
-    if (alreadySettled > 0 && remainingFee > 0) {
-      statusLabel = 'PARTIALLY PAID';
-      badgeStyle = 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse';
-    } else if (remainingFee === 0 && totalAmount > 0) {
-      statusLabel = 'SETTLED';
-      badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    }
 
     return {
       id: req.id,
       title: req.title,
-      subtitle: req.subtitle,
+      subtitle: req.subtitle || 'Admission & Hostel Charges',
       totalAmount,
       alreadySettled,
       remainingFee,
       dueDate: req.dueDate || '30 July 2026',
-      statusLabel,
-      badgeStyle,
-      isDue: remainingFee > 0
+      isSettled: remainingFee === 0 && totalAmount > 0
     };
   });
-
-  const activeDues = feeCalculations.filter(f => f.isDue);
-
-  // Combine payment items to display under PAYMENT UPDATED
-  const combinedPayments = enabledRequests.length > 0 
-    ? enabledRequests 
-    : (backendPayments || []).map((p: any) => ({
-        id: p.id,
-        title: 'Hostel Admission Fee',
-        subtitle: `UTR: ${p.utrNumber}`,
-        amount: p.amount || 143000,
-        googleFormUrl: DEFAULT_GOOGLE_FORM_URL,
-        backendStatus: p.status
-      }));
 
   return (
     <div className="space-y-6 sm:space-y-8 font-sans relative pb-12">
@@ -242,256 +261,493 @@ export const Payment: React.FC = () => {
         title="PG Accounts Payment Hub"
       />
 
-      {/* TOP SECTION: ALLOTTED DETAILS & ACTIVE FEE DUES */}
+      {/* TOP SECTION: HOSTEL ALLOTTED DETAILS & ACTIVE FEE DUES & SUMMARY */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Hostel Allotted Details Card */}
-        <div className="bg-white border border-border p-6 rounded-2xl shadow-soft space-y-4">
+        {/* Card 1: HOSTEL ALLOTTED DETAILS (Matching Image Exactly) */}
+        <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-card space-y-4">
           <div>
-            <h3 className="text-xs font-black text-text uppercase tracking-wider">Hostel Allotted Details</h3>
-            <p className="text-[10px] text-text-muted mt-0.5 font-semibold">Your approved residential assignment</p>
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">HOSTEL ALLOTTED DETAILS</h3>
+            <p className="text-[10px] text-slate-500 mt-0.5 font-semibold">Your approved residential assignment</p>
           </div>
 
-          <div className="divide-y divide-slate-100 text-xs font-semibold text-text">
+          <div className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
             <div className="flex justify-between py-2.5">
-              <span className="text-text-muted">Student Name</span>
-              <span className="font-bold">{student.name}</span>
+              <span className="text-slate-500 font-bold">Student Name</span>
+              <span className="font-extrabold text-slate-900">{student.name || 'aaaa'}</span>
             </div>
             <div className="flex justify-between py-2.5">
-              <span className="text-text-muted">Allotted Wing</span>
-              <span className="font-bold">{hostel.hostel}</span>
+              <span className="text-slate-500 font-bold">Allotted Wing</span>
+              <span className="font-extrabold text-slate-900">{hostel.hostel || 'OM SAI PG'}</span>
             </div>
             <div className="flex justify-between py-2.5">
-              <span className="text-text-muted">Block / Floor</span>
-              <span className="font-bold">Block {hostel.block} • {hostel.floor}rd Floor</span>
+              <span className="text-slate-500 font-bold">Block / Floor</span>
+              <span className="font-extrabold text-slate-900">Block {hostel.block || 'Block-A'} • {hostel.floor ? (String(hostel.floor).includes('Floor') ? hostel.floor : `${hostel.floor}rd Floor`) : '3rd Floor'}</span>
             </div>
             <div className="flex justify-between py-2.5">
-              <span className="text-text-muted">Room / Bed Assignment</span>
-              <span className="font-bold font-mono">Room {hostel.room} • Bed {hostel.bed}</span>
+              <span className="text-slate-500 font-bold">Room / Bed Assignment</span>
+              <span className="font-extrabold text-slate-900 font-mono">Room {hostel.room || '306'} • Bed {hostel.bed || '2'}</span>
             </div>
             <div className="flex justify-between py-2.5">
-              <span className="text-text-muted">Room / Sharing Type</span>
-              <span className="font-bold">{hostel.sharing}</span>
+              <span className="text-slate-500 font-bold">Room / Sharing Type</span>
+              <span className="font-extrabold text-slate-900">{hostel.sharing || '2 Sharing'}</span>
             </div>
             <div className="flex justify-between py-2.5">
-              <span className="text-text-muted">Admission Date</span>
-              <span className="font-bold">{hostel.admissionDate}</span>
+              <span className="text-slate-500 font-bold">Admission Date</span>
+              <span className="font-extrabold text-slate-900">{hostel.admissionDate || '5 August 2026'}</span>
             </div>
             <div className="flex justify-between py-2.5 items-center">
-              <span className="text-text-muted">PG Booking Status</span>
-              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black uppercase px-2 py-0.5 rounded">
-                Confirmed
+              <span className="text-slate-500 font-bold">PG Booking Status</span>
+              <span className="bg-emerald-50 text-emerald-700 border border-emerald-300 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full shadow-xs">
+                CONFIRMED
               </span>
             </div>
           </div>
         </div>
 
-        {/* Dynamic Fee Dues Card (Replaces old static breakdown cards) */}
-        <div className="lg:col-span-2 bg-white border border-border p-6 rounded-2xl shadow-soft space-y-5">
+        {/* Card 2: ACTIVE FEE DUES & SUMMARY (Matching Image Exactly) */}
+        <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-3xl shadow-card space-y-4">
           <div>
-            <h3 className="text-xs font-black text-text uppercase tracking-wider">Active Fee Dues & Summary</h3>
-            <p className="text-[10px] text-text-muted mt-0.5 font-semibold">Real-time breakdown of enabled payments and outstanding balances</p>
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">ACTIVE FEE DUES & SUMMARY</h3>
+            <p className="text-[10px] text-slate-500 mt-0.5 font-semibold">Real-time breakdown of enabled payments and outstanding balances</p>
           </div>
 
-          {activeDues.length > 0 ? (
-            <div className="space-y-4">
-              {activeDues.map((item: any) => (
-                <div key={item.id} className="bg-slate-50/90 border border-slate-200/80 rounded-xl p-4.5 space-y-3.5 hover:border-slate-300 transition-all">
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-850">{item.title}</h4>
-                      {item.subtitle && <p className="text-[10px] text-text-muted font-medium mt-0.5">{item.subtitle}</p>}
-                    </div>
-                    <span className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-full border ${item.badgeStyle}`}>
-                      {item.statusLabel}
-                    </span>
+          <div className="space-y-4">
+            {feeCalculations.map((item: any) => (
+              <div key={item.id} className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900">{item.title}</h4>
+                    <p className="text-[10px] text-slate-400 font-bold mt-0.5">{item.subtitle}</p>
                   </div>
+                  <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                    item.isSettled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
+                    {item.isSettled ? 'SETTLED' : 'DUE'}
+                  </span>
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs font-semibold">
-                    <div className="flex flex-col bg-white p-3 rounded-xl border border-slate-100 shadow-2xs">
-                      <span className="text-text-muted text-[9.5px] uppercase font-bold tracking-wider">Already Settled</span>
-                      <span className="text-emerald-600 font-black text-sm mt-0.5">₹{item.alreadySettled.toLocaleString()}</span>
-                    </div>
-                    <div className="flex flex-col bg-white p-3 rounded-xl border border-slate-100 shadow-2xs">
-                      <span className="text-text-muted text-[9.5px] uppercase font-bold tracking-wider">Remaining Fee</span>
-                      <span className="text-rose-600 font-black text-sm mt-0.5">₹{item.remainingFee.toLocaleString()}</span>
-                    </div>
-                    <div className="flex flex-col bg-white p-3 rounded-xl border border-slate-100 shadow-2xs">
-                      <span className="text-text-muted text-[9.5px] uppercase font-bold tracking-wider">Due Date</span>
-                      <span className="text-slate-800 font-extrabold text-xs mt-1">{item.dueDate}</span>
-                    </div>
+                <div className="grid grid-cols-3 gap-3 text-xs bg-white p-3 rounded-xl border border-slate-100 shadow-xs">
+                  <div>
+                    <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1">ALREADY SETTLED</span>
+                    <span className="font-black text-emerald-600 font-mono text-sm">₹{item.alreadySettled.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1">REMAINING FEE</span>
+                    <span className="font-black text-rose-600 font-mono text-sm">₹{item.remainingFee.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1">DUE DATE</span>
+                    <span className="font-bold text-slate-800 text-xs">{item.dueDate}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-10 text-center space-y-2.5">
-              <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
-              <h4 className="text-base font-black text-emerald-900 tracking-tight">No Due Payments</h4>
-              <p className="text-xs text-emerald-700 font-semibold max-w-sm mx-auto">
-                You have settled all active fee payments. No dues outstanding at this time.
-              </p>
-            </div>
-          )}
+              </div>
+            ))}
+          </div>
         </div>
 
       </div>
 
-      
-      {/* BOTTOM SECTION: DYNAMIC BANK DETAILS FOR ONLINE TRANSACTION */}
-      <div className="bg-white border border-border p-6 rounded-2xl shadow-soft space-y-4">
-        <div className="flex justify-between items-center">
+      {/* BOTTOM SECTION: BANK DETAILS FOR THE ONLINE TRANSACTION (Matching Image Exactly) */}
+      <div className="bg-white border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-card space-y-5">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-xs font-black text-text uppercase tracking-wider">Bank Details for the Online Transaction</h3>
-            <p className="text-[10px] text-text-muted mt-0.5 font-semibold">Make transfers using net banking or mobile apps to the official account</p>
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">BANK DETAILS FOR THE ONLINE TRANSACTION</h3>
+            <p className="text-[10px] text-slate-500 mt-0.5 font-semibold">Make transfers using net banking or mobile apps to the official account</p>
           </div>
-          <Building className="w-5 h-5 text-primary shrink-0" />
+          <Building className="w-5 h-5 text-indigo-600 shrink-0" />
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 font-bold text-xs space-y-3.5 text-text">
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 font-bold text-xs space-y-4 text-slate-800">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
-            <div className="space-y-1 relative group">
-              <span className="text-[10px] text-text-muted uppercase tracking-wider block">Name of the A/c holder</span>
+            <div className="space-y-1">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-extrabold">NAME OF THE A/C HOLDER</span>
               <div className="flex items-center gap-2">
-                <span className="text-slate-800 font-extrabold block">{bankDetails.holderName}</span>
-                <button 
-                  onClick={() => handleCopy(bankDetails.holderName, "holder")}
-                  className="p-1 hover:bg-slate-200 rounded transition-colors text-text-muted hover:text-slate-800"
-                  title="Copy Holder Name"
-                  type="button"
-                >
+                <span className="text-slate-900 font-extrabold block text-xs">{bankDetails.holderName}</span>
+                <button onClick={() => handleCopy(bankDetails.holderName, "holder")} className="p-1 hover:bg-slate-200 rounded text-slate-500" type="button">
                   {copiedField === 'holder' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
 
             <div className="space-y-1">
-              <span className="text-[10px] text-text-muted uppercase tracking-wider block">SB A/c No</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-extrabold">SB A/C NO</span>
               <div className="flex items-center gap-2">
-                <span className="text-slate-850 font-black block font-mono text-sm tracking-wide">{bankDetails.accountNo}</span>
-                <button 
-                  onClick={() => handleCopy(bankDetails.accountNo, "acc")}
-                  className="p-1 hover:bg-slate-200 rounded transition-colors text-text-muted hover:text-slate-800"
-                  title="Copy Account Number"
-                  type="button"
-                >
+                <span className="text-slate-900 font-black block font-mono text-sm tracking-wide">{bankDetails.accountNo}</span>
+                <button onClick={() => handleCopy(bankDetails.accountNo, "acc")} className="p-1 hover:bg-slate-200 rounded text-slate-500" type="button">
                   {copiedField === 'acc' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
 
             <div className="space-y-1">
-              <span className="text-[10px] text-text-muted uppercase tracking-wider block">IFSC</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-extrabold">IFSC</span>
               <div className="flex items-center gap-2">
-                <span className="text-slate-850 font-black block font-mono text-sm tracking-wide">{bankDetails.ifscCode}</span>
-                <button 
-                  onClick={() => handleCopy(bankDetails.ifscCode, "ifsc")}
-                  className="p-1 hover:bg-slate-200 rounded transition-colors text-text-muted hover:text-slate-800"
-                  title="Copy IFSC Code"
-                  type="button"
-                >
+                <span className="text-slate-900 font-black block font-mono text-sm tracking-wide">{bankDetails.ifscCode}</span>
+                <button onClick={() => handleCopy(bankDetails.ifscCode, "ifsc")} className="p-1 hover:bg-slate-200 rounded text-slate-500" type="button">
                   {copiedField === 'ifsc' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
 
             <div className="space-y-1">
-              <span className="text-[10px] text-text-muted uppercase tracking-wider block">Bank Name</span>
-              <span className="text-slate-800 font-extrabold block">{bankDetails.bankName}</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-extrabold">BANK NAME</span>
+              <span className="text-slate-900 font-extrabold block text-xs">{bankDetails.bankName}</span>
             </div>
 
             <div className="space-y-1 col-span-full">
-              <span className="text-[10px] text-text-muted uppercase tracking-wider block">Branch</span>
-              <span className="text-slate-800 font-extrabold block">{bankDetails.branch}</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-extrabold">BRANCH</span>
+              <span className="text-slate-900 font-extrabold block text-xs">{bankDetails.branch}</span>
             </div>
 
           </div>
         </div>
 
-        <div className="border-t border-slate-100 pt-4.5 space-y-3">
-          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Read the points carefully before making the fee transfer</h4>
-          <ol className="list-decimal pl-4.5 text-[11px] font-semibold text-text-muted space-y-2 leading-relaxed">
+        <div className="pt-2 space-y-2 border-t border-slate-100">
+          <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide">READ THE POINTS CAREFULLY BEFORE MAKING THE FEE TRANSFER</h4>
+          <ol className="list-decimal pl-4 text-[11px] font-semibold text-slate-600 space-y-1 leading-relaxed">
             <li>IMPS / Neft / Mobile Banking is Allowed.</li>
             <li>Hostel & Mess fee should be paid to the below mentioned account only.</li>
           </ol>
         </div>
       </div>
       
-      {/* MIDDLE SECTION: PAYMENT UPDATED */}
-      <div className="bg-white border border-border p-6 rounded-2xl shadow-soft space-y-4">
-        <div className="pb-2 border-b border-slate-100">
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-primary" />
+      {/* MIDDLE/BOTTOM SECTION: PAYMENT UPDATED TABLE */}
+      <div className="bg-white border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-card space-y-6">
+        <div className="pb-3 border-b border-slate-100">
+          <h3 className="text-base font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-indigo-600" />
             Payment Updated
           </h3>
-          <p className="text-[10px] text-text-muted mt-0.5 font-semibold">Real-time fee payment records and verification status updated by hostel administration</p>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            Complete both College and PG Verification Forms for each payment below to submit your payment verification.
+          </p>
         </div>
 
-        {combinedPayments && combinedPayments.length > 0 ? (
-          <div className="overflow-x-auto text-xs font-semibold">
-            <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead>
-                <tr className="bg-slate-50 border-b border-border text-[9px] font-bold text-text-muted uppercase tracking-wider">
-                  <th className="p-3">Payment Details</th>
-                  <th className="p-3 text-right">Amount</th>
-                  <th className="p-3 text-center">Status</th>
-                  <th className="p-3 text-center">Form Link & UTR Submission</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {combinedPayments.map((item: any) => {
-                  const matchingPayment = myPaymentsList.find((p: any) => p.paymentTitle?.toLowerCase() === item.title?.toLowerCase());
-                  const currentStatus = matchingPayment?.status || item.backendStatus || paymentStatus;
-                  const badge = getStatusBadge(currentStatus);
-                  const Icon = badge.icon;
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-3">
-                        <p className="font-bold text-slate-850">{item.title}</p>
-                        {item.subtitle && <p className="text-[10px] text-text-muted mt-0.5">{item.subtitle}</p>}
-                        {item.dueDate && <p className="text-[9px] text-slate-400">Due: {item.dueDate}</p>}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-slate-800">
-                        ₹{Number(item.amount || 143000).toLocaleString()}
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${badge.bg}`}>
-                          <Icon className="w-3 h-3" />
-                          {badge.label}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center">
-                        {item.enabled !== false ? (
-                          <button
-                            onClick={() => {
-                              const destination = item.googleFormUrl || DEFAULT_GOOGLE_FORM_URL;
-                              window.open(destination, '_blank', 'noopener,noreferrer');
+        <div className="overflow-x-auto text-xs font-semibold">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <th className="p-3.5">Payment Title</th>
+                <th className="p-3.5">Amount</th>
+                <th className="p-3.5 text-center">College Verification Form</th>
+                <th className="p-3.5 text-center">PG Verification Form</th>
+                <th className="p-3.5 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-800">
+              {(enabledRequests.length > 0 ? enabledRequests : [
+                { id: 'default-req-1', title: 'hjb', amount: 135000, googleFormUrl: DEFAULT_GOOGLE_FORM_URL },
+                { id: 'default-req-2', title: 'Hostel Fee 2026', amount: 143000, googleFormUrl: DEFAULT_GOOGLE_FORM_URL }
+              ]).map((item: any) => {
+                const itemId = item.id;
+                const isAlreadySubmitted = localStorage.getItem(`payment_submitted_${student.usn}_${item.title}`) === 'true' ||
+                  myPaymentsList.some((p: any) => p.paymentTitle?.trim().toLowerCase() === item.title?.trim().toLowerCase());
+
+                const itemState = itemCheckboxes[itemId] || { college: isAlreadySubmitted, pg: isAlreadySubmitted };
+                const isBothChecked = itemState.college && itemState.pg;
+
+                return (
+                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                    
+                    {/* 1. Payment Title (Directly from Admin) */}
+                    <td className="p-3.5">
+                      <p className="font-extrabold text-slate-900 text-sm">{item.title}</p>
+                      {item.subtitle && <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{item.subtitle}</p>}
+                    </td>
+
+                    {/* 2. Amount */}
+                    <td className="p-3.5 font-mono font-black text-slate-900 text-sm">
+                      ₹{Number(item.amount || 143000).toLocaleString()}
+                    </td>
+
+                    {/* 3. College Verification Form + Checkbox */}
+                    <td className="p-3.5">
+                      <div className="flex items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenCollegeForm(item)}
+                          disabled={isAlreadySubmitted}
+                          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        >
+                          <span>College Form</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            disabled={isAlreadySubmitted}
+                            checked={itemState.college}
+                            onChange={(e) => {
+                              const val = e.target.checked;
+                              setItemCheckboxes(prev => ({
+                                ...prev,
+                                [itemId]: { ...prev[itemId], college: val }
+                              }));
                             }}
-                            className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-1.5 px-3 rounded-lg text-[10px] shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer"
-                            type="button"
-                            title="Open Google Form"
-                          >
-                            <span>Fill Payment Form</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </button>
-                        ) : (
-                          <span className="text-[10px] font-bold text-slate-400">Form Closed</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="bg-slate-50 border border-slate-200/70 rounded-xl p-8 text-center space-y-2">
-            <CreditCard className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="text-xs font-bold text-slate-600">No Payments Updated Yet</p>
-          </div>
-        )}
+                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+                          />
+                          <span className="text-[11px] font-bold text-slate-600">Filled</span>
+                        </label>
+                      </div>
+                    </td>
+
+                    {/* 4. PG Verification Form + Checkbox */}
+                    <td className="p-3.5">
+                      <div className="flex items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPgModal(item)}
+                          disabled={isAlreadySubmitted}
+                          className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>PG Form Popup</span>
+                        </button>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            disabled={isAlreadySubmitted}
+                            checked={itemState.pg}
+                            onChange={(e) => {
+                              const val = e.target.checked;
+                              setItemCheckboxes(prev => ({
+                                ...prev,
+                                [itemId]: { ...prev[itemId], pg: val }
+                              }));
+                            }}
+                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+                          />
+                          <span className="text-[11px] font-bold text-slate-600">Filled</span>
+                        </label>
+                      </div>
+                    </td>
+
+                    {/* 5. Action / Submit Button */}
+                    <td className="p-3.5 text-center">
+                      {isAlreadySubmitted ? (
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 mx-auto shadow-xs">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Submitted & Verified ✓
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleFinalSubmit(item)}
+                          disabled={!isBothChecked || isSubmittingForm}
+                          className={`font-black text-xs px-5 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 mx-auto ${
+                            isBothChecked && !isSubmittingForm
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer hover:scale-105'
+                              : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-70'
+                          }`}
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>{isSubmittingForm ? 'Submitting...' : 'Submit'}</span>
+                        </button>
+                      )}
+                    </td>
+
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {/* PG VERIFICATION POPUP MODAL (Fresh state for each payment) */}
+      {activePgModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto border border-slate-100">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-indigo-600" />
+                  PG Verification Form — {activePgModalItem.title}
+                </h3>
+                <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                  Fill bank transfer details for <strong className="text-indigo-600">₹{Number(activePgModalItem.amount || 143000).toLocaleString()}</strong>
+                </p>
+              </div>
+              <button 
+                onClick={() => setActivePgModalItem(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSavePgModal} className="space-y-4 text-xs font-semibold text-slate-700">
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* 1. Student Name (Prefilled from DB) */}
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">1. Student Name</label>
+                  <input
+                    type="text"
+                    value={pgFormData.name}
+                    onChange={e => setPgFormData({ ...pgFormData, name: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+
+                {/* 2. USN (Prefilled from DB) */}
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">2. USN</label>
+                  <input
+                    type="text"
+                    value={pgFormData.usn}
+                    onChange={e => setPgFormData({ ...pgFormData, usn: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold font-mono text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+
+                {/* 3. Semester (Prefilled from DB) */}
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">3. Semester / Academic Year</label>
+                  <select
+                    value={pgFormData.semester}
+                    onChange={e => setPgFormData({ ...pgFormData, semester: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                  >
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year">4th Year</option>
+                  </select>
+                </div>
+
+                {/* 4. Amount Transferred Date (Prefilled from DB) */}
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">4. Amount Transferred Date</label>
+                  <input
+                    type="date"
+                    value={pgFormData.amountDate}
+                    onChange={e => setPgFormData({ ...pgFormData, amountDate: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+
+                {/* 5. UTR No (BLANK for fresh entry) */}
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">5. UTR No. / Transaction ID</label>
+                  <input
+                    type="text"
+                    placeholder="Enter 12-digit UTR Number"
+                    value={pgFormData.utrNo}
+                    onChange={e => setPgFormData({ ...pgFormData, utrNo: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold font-mono text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+
+                {/* 6. Bank Transferred From (BLANK for fresh entry) */}
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">6. Bank Transferred From</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. HDFC Bank, SBI, ICICI"
+                    value={pgFormData.transferBank}
+                    onChange={e => setPgFormData({ ...pgFormData, transferBank: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+
+                {/* 7. Name of Account Holder (BLANK for fresh entry) */}
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">7. Name of the Account Holder</label>
+                  <input
+                    type="text"
+                    placeholder="Name on bank account"
+                    value={pgFormData.accountHolderName}
+                    onChange={e => setPgFormData({ ...pgFormData, accountHolderName: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+
+                {/* 8. Relationship with Student (BLANK for fresh entry) */}
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">8. Relationship with Student</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Father, Mother, Self, Guardian"
+                    value={pgFormData.accountHolderRelation}
+                    onChange={e => setPgFormData({ ...pgFormData, accountHolderRelation: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+
+                {/* 9. Contact No of Account Holder (BLANK for fresh entry) */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">9. Contact No of Account Holder</label>
+                  <input
+                    type="tel"
+                    placeholder="10-digit Phone Number"
+                    value={pgFormData.accountHolderContact}
+                    onChange={e => setPgFormData({ ...pgFormData, accountHolderContact: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
+
+                {/* 10. Upload Screenshot (BLANK for fresh entry) */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">10. Upload Successful Transaction Screenshot</label>
+                  <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center hover:border-indigo-400 transition-all bg-slate-50">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => setScreenshotFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                      id="pg-screenshot-upload"
+                    />
+                    <label htmlFor="pg-screenshot-upload" className="cursor-pointer flex flex-col items-center gap-1.5">
+                      <Upload className="w-6 h-6 text-indigo-500" />
+                      <span className="text-xs font-bold text-slate-700">
+                        {screenshotFile ? screenshotFile.name : 'Click to Upload Transaction Receipt Image'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">PNG, JPG or JPEG (Max 5MB)</span>
+                    </label>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Submit Modal */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActivePgModalItem(null)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-5 rounded-xl text-xs transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 px-6 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Save PG Verification Details</span>
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

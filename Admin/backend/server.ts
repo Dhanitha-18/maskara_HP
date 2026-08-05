@@ -2195,10 +2195,10 @@ app.get('/api/attendance', async (req, res) => {
       });
     }
 
-    const recordMap = new Map(records.map((r: any) => [r.studentUsn, r]));
+    const recordMap = new Map<string, any>(records.map((r: any) => [r.studentUsn, r]));
 
     const result = studentList.map(s => {
-      const existing = recordMap.get(s.studentUsn);
+      const existing: any = recordMap.get(s.studentUsn);
       return {
         id: existing?.id || `TEMP-${s.studentUsn}`,
         studentUsn: s.studentUsn,
@@ -2678,7 +2678,24 @@ app.get('/api/student/status/:usn', async (req, res) => {
 // Student submits payment info (after filling Google Form + bank transfer)
 app.post('/api/student/payment', async (req, res) => {
   try {
-    const { studentUsn, studentName, hostelName, block, floor, roomNumber, utrNumber, paymentDate, screenshotUrl, paymentTitle, amount } = req.body;
+    const { 
+      studentUsn, 
+      studentName, 
+      semester,
+      hostelName, 
+      block, 
+      floor, 
+      roomNumber, 
+      utrNumber, 
+      paymentDate, 
+      transferBank,
+      accountHolderName,
+      accountHolderRelation,
+      accountHolderContact,
+      screenshotUrl, 
+      paymentTitle, 
+      amount 
+    } = req.body;
 
     if (!studentUsn || !utrNumber) {
       return res.status(400).json({ error: 'USN and UTR Number are required' });
@@ -2705,6 +2722,7 @@ app.post('/api/student/payment', async (req, res) => {
 
     // Use real data from DB if available, fallback to what frontend sent
     const realName = application?.studentName || studentName || 'Student';
+    const realSem = semester || application?.yearSem || application?.semester || '1st Year';
     let realHostel = hostelName || 'OM SAI PG';
     let realBlock = block ? String(block) : '-';
     let realFloor = floor ? String(floor) : '-';
@@ -2719,20 +2737,25 @@ app.post('/api/student/payment', async (req, res) => {
     }
 
     // Upsert payment to handle re-submission or duplicate UTR gracefully
-    const existing = await prisma.payment.findUnique({ where: { utrNumber } });
+    const existing = await (prisma as any).payment.findUnique({ where: { utrNumber } });
 
     let payment;
     if (existing) {
-      payment = await prisma.payment.update({
+      payment = await (prisma as any).payment.update({
         where: { utrNumber },
         data: {
           studentName: realName,
           studentUsn,
+          semester: realSem,
           hostelName: realHostel,
           block: realBlock,
           floor: realFloor,
           roomNumber: realRoom,
           paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+          transferBank: transferBank || existing.transferBank || null,
+          accountHolderName: accountHolderName || existing.accountHolderName || null,
+          accountHolderRelation: accountHolderRelation || existing.accountHolderRelation || null,
+          accountHolderContact: accountHolderContact || existing.accountHolderContact || null,
           screenshotUrl: screenshotUrl || existing.screenshotUrl || null,
           paymentTitle: paymentTitle || existing.paymentTitle || 'Hostel Fee Payment',
           amount: amount ? Number(amount) : (existing.amount || 143000),
@@ -2740,16 +2763,21 @@ app.post('/api/student/payment', async (req, res) => {
         }
       });
     } else {
-      payment = await prisma.payment.create({
+      payment = await (prisma as any).payment.create({
         data: {
           studentName: realName,
           studentUsn,
+          semester: realSem,
           hostelName: realHostel,
           block: realBlock,
           floor: realFloor,
           roomNumber: realRoom,
           utrNumber,
           paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+          transferBank: transferBank || null,
+          accountHolderName: accountHolderName || null,
+          accountHolderRelation: accountHolderRelation || null,
+          accountHolderContact: accountHolderContact || null,
           screenshotUrl: screenshotUrl || null,
           paymentTitle: paymentTitle || 'Hostel Fee Payment',
           amount: amount ? Number(amount) : 143000,
@@ -2952,7 +2980,7 @@ async function getServiceAccountToken(clientEmail: string, privateKey: string): 
     throw new Error(`Failed to obtain Google access token: ${res.statusText}`);
   }
   
-  const data = await res.json();
+  const data: any = await res.json();
   return data.access_token;
 }
 
@@ -2961,14 +2989,14 @@ async function fetchPrivateSheetData(spreadsheetId: string, apiKey: string): Pro
   if (!metaRes.ok) {
     throw new Error(`Failed to fetch spreadsheet metadata: ${metaRes.statusText}`);
   }
-  const meta = await metaRes.json();
+  const meta: any = await metaRes.json();
   const firstSheetTitle = meta.sheets?.[0]?.properties?.title || 'Sheet1';
   
   const valRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(firstSheetTitle)}!A:Z?key=${apiKey}`);
   if (!valRes.ok) {
     throw new Error(`Failed to fetch spreadsheet values: ${valRes.statusText}`);
   }
-  const data = await valRes.json();
+  const data: any = await valRes.json();
   return data.values || null;
 }
 
@@ -2979,7 +3007,7 @@ async function fetchSheetDataWithToken(spreadsheetId: string, accessToken: strin
   if (!metaRes.ok) {
     throw new Error(`Failed to fetch spreadsheet metadata: ${metaRes.statusText}`);
   }
-  const meta = await metaRes.json();
+  const meta: any = await metaRes.json();
   const firstSheetTitle = meta.sheets?.[0]?.properties?.title || 'Sheet1';
   
   const valRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(firstSheetTitle)}!A:Z`, {
@@ -2988,7 +3016,7 @@ async function fetchSheetDataWithToken(spreadsheetId: string, accessToken: strin
   if (!valRes.ok) {
     throw new Error(`Failed to fetch spreadsheet values: ${valRes.statusText}`);
   }
-  const data = await valRes.json();
+  const data: any = await valRes.json();
   return data.values || null;
 }
 
