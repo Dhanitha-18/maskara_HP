@@ -286,14 +286,14 @@ export const Overview: React.FC = () => {
         </p>
       </section>
 
-      {/* 3. APPLY SECTION */}
+      {/* 3. APPLICATION OVERVIEW & STATUS SECTION */}
       {applicationState !== 'not_applied' ? (
-        <section className="bg-white border border-indigo-100 p-6 sm:p-8 rounded-2xl shadow-soft relative overflow-hidden group">
+        <section className="bg-white border border-indigo-100 p-6 sm:p-8 rounded-2xl shadow-soft relative overflow-hidden group space-y-5">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-            <div className="space-y-5 w-full md:w-auto flex-1">
+            <div className="space-y-4 w-full md:w-auto flex-1">
               <h3 className="text-base font-black text-indigo-900 uppercase tracking-wider flex items-center gap-2 border-b border-indigo-50 pb-3">
                 <Receipt className="w-5 h-5 text-indigo-500" />
-                Your Application Overview
+                Your Application Overview & Status
               </h3>
               
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 text-sm">
@@ -318,19 +318,68 @@ export const Overview: React.FC = () => {
 
             <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
               {applicationState === 'applied' && (
-                <span className="bg-amber-50 text-amber-700 border border-amber-200 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 animate-pulse shadow-sm">
-                  <span className="w-2.5 h-2.5 bg-amber-500 rounded-full" />
-                  Application Under Review
+                <div className="space-y-1 text-right">
+                  <span className="bg-amber-50 text-amber-700 border border-amber-200 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm inline-flex">
+                    <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping" />
+                    Application Under Review
+                  </span>
+                </div>
+              )}
+              {applicationState === 'room_allotted' && (
+                <span className="bg-blue-50 text-blue-700 border border-blue-200 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm">
+                  <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                  Hostel Room Allotted
                 </span>
               )}
               {applicationState === 'paid' && (
                 <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm">
-                  <CheckCircle2 className="w-5 h-5" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                   Fully Confirmed Resident
                 </span>
               )}
             </div>
           </div>
+
+          {/* Under Review Explanation Message */}
+          {applicationState === 'applied' && (
+            <div className="bg-amber-50/70 border border-amber-200/80 p-4 rounded-xl text-xs text-amber-900 font-semibold space-y-1">
+              <p className="font-bold flex items-center gap-2 text-amber-800">
+                <span>📋 Application Submitted — Pending Hostel Allocation</span>
+              </p>
+              <p className="text-slate-600 leading-relaxed">
+                Your application has been received and is currently under verification by the hostel warden. Once your room and bed allocation is completed by administration, all portal features (Payments, Complaints, Social Connect, Circulars, Attendance) will unlock automatically.
+              </p>
+            </div>
+          )}
+
+          {/* Room Allocation Info Grid if Allotted or Paid */}
+          {(applicationState === 'room_allotted' || applicationState === 'paid') && hostel?.room && (
+            <div className="bg-blue-50/60 border border-blue-100 p-4 rounded-xl space-y-2 text-xs">
+              <span className="text-[10px] font-black uppercase tracking-wider text-blue-800 block">🏠 Allocated Room Details</span>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 font-bold text-slate-800">
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-normal">Hostel</span>
+                  {hostel.hostel}
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-normal">Block</span>
+                  {hostel.block}
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-normal">Floor</span>
+                  Floor {hostel.floor}
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-normal">Room No</span>
+                  Room {hostel.room}
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-normal">Bed No</span>
+                  Bed {hostel.bed}
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       ) : (
         <section className="bg-white border border-border p-6 sm:p-8 rounded-2xl shadow-soft flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-card transition-all">

@@ -78,21 +78,29 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ isOpen, onClose }) => 
       {/* Nav List */}
       <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
         {navItems.map(item => {
+          const isPublic = PUBLIC_PATHS.includes(item.path);
+          const isLocked = !isPublic && (!isLoggedIn || !isAllocationCompleted);
+
           return (
             <NavLink
               key={item.name}
               to={item.path}
               onClick={onClose}
               className={({ isActive }) => `
-                flex items-center gap-3.5 px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all duration-150 group
+                flex items-center justify-between px-4 py-3 rounded-lg text-xs font-semibold tracking-wide transition-all duration-150 group
                 ${isActive 
                   ? 'bg-primary text-white shadow-md shadow-primary/20 scale-[1.02]' 
                   : 'hover:bg-slate-800 hover:text-white text-slate-400'
                 }
               `}
             >
-              <item.icon className="w-4.5 h-4.5 shrink-0 transition-transform group-hover:scale-110" />
-              <span>{item.name}</span>
+              <div className="flex items-center gap-3.5">
+                <item.icon className="w-4.5 h-4.5 shrink-0 transition-transform group-hover:scale-110" />
+                <span>{item.name}</span>
+              </div>
+              {isLocked && (
+                <Lock className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-400 shrink-0" />
+              )}
             </NavLink>
           );
         })}

@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { apiRequest } from '../services/api';
+import { apiRequest, API_BASE_URL } from '../services/api';
+import { io as socketIo } from 'socket.io-client';
 import type {
   Student,
   HostelInfo,
@@ -78,9 +79,16 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [notifications, setNotifications] = useState<NotificationItem[]>(mockNotifications);
   const [receipts, setReceipts] = useState<ReceiptItem[]>(mockReceipts);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
-  const [applicationState, setApplicationState] = useState<'not_applied' | 'applied' | 'room_allotted' | 'paid'>('not_applied');
+  const [applicationState, setApplicationState] = useState<'not_applied' | 'applied' | 'room_allotted' | 'paid'>(() => {
+    // Restore cached state so tabs don't flash "locked" on page load
+    const cached = localStorage.getItem('cached_application_state');
+    if (cached === 'applied' || cached === 'room_allotted' || cached === 'paid') return cached;
+    return 'not_applied';
+  });
   const [backendPayments, setBackendPayments] = useState<any[]>([]);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+  const isRefreshing = useRef(false);
+  const hasLoadedOnce = useRef(false);
 
   // Sync auth credentials to student state instantly on login/mount
   useEffect(() => {
@@ -93,22 +101,33 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [studentName, studentUsn]);
 
+  // Cache applicationState to localStorage whenever it changes
+  useEffect(() => {
+    if (applicationState !== 'not_applied') {
+      localStorage.setItem('cached_application_state', applicationState);
+    }
+  }, [applicationState]);
+
   // ──────────────────────────────────────────────
   // FETCH REAL STATUS FROM BACKEND
   // ──────────────────────────────────────────────
   const refreshStatus = useCallback(async () => {
     if (!studentUsn || !isLoggedIn) return;
+    // Prevent concurrent refresh calls
+    if (isRefreshing.current) return;
+    isRefreshing.current = true;
 
-    setIsLoadingStatus(true);
+    // Only show loading spinner on first load
+    if (!hasLoadedOnce.current) setIsLoadingStatus(true);
     try {
       const data = await apiRequest(`/api/student/status/${studentUsn}`);
 
       if (!data.found || data.error === 'No account exists' || data.applicationState === 'rejected') {
         if (data.error === 'No account exists' || data.applicationState === 'rejected') {
+          localStorage.removeItem('cached_application_state');
           logout();
         }
         setApplicationState('not_applied');
-        setIsLoadingStatus(false);
         return;
       }
 
@@ -191,47 +210,75 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setBackendPayments([]);
       }
 
-      // Fetch notices from backend and update notifications list
-      const noticesRes = await fetch('http://localhost:5000/api/notices');
-      if (noticesRes.ok) {
-        const noticesData = await noticesRes.json();
-        const noticesList = noticesData.notices || [];
-        const readIds = JSON.parse(localStorage.getItem('read_notifications') || '[]');
-        
-        const mappedNotifs: NotificationItem[] = noticesList.map((notice: any) => {
-          const createdDate = new Date(notice.createdAt);
-          const dateStr = notice.date || createdDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-          const timeStr = createdDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      // Fetch notices from backend (only on first load, not every poll)
+      if (!hasLoadedOnce.current) {
+        try {
+          const noticesData = await apiRequest('/api/notices');
+          const noticesList = noticesData.notices || [];
+          const readIds = JSON.parse(localStorage.getItem('read_notifications') || '[]');
           
-          return {
-            id: notice.id,
-            title: notice.title,
-            description: notice.desc,
-            date: dateStr,
-            time: timeStr,
-            category: notice.category?.toLowerCase() || 'general',
-            read: readIds.includes(notice.id)
-          };
-        });
-        
-        setNotifications(mappedNotifs);
+          const mappedNotifs: NotificationItem[] = noticesList.map((notice: any) => {
+            const createdDate = new Date(notice.createdAt);
+            const dateStr = notice.date || createdDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+            const timeStr = createdDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            
+            return {
+              id: notice.id,
+              title: notice.title,
+              description: notice.desc,
+              date: dateStr,
+              time: timeStr,
+              category: notice.category?.toLowerCase() || 'general',
+              read: readIds.includes(notice.id)
+            };
+          });
+          
+          setNotifications(mappedNotifs);
+        } catch {
+          // Notices fetch failure is non-critical
+        }
       }
 
     } catch (error) {
       console.error('Failed to fetch student status:', error);
     } finally {
+      hasLoadedOnce.current = true;
+      isRefreshing.current = false;
       setIsLoadingStatus(false);
     }
   }, [studentUsn, isLoggedIn, setStudentName]);
 
-  // Fetch status on login and poll every 3 seconds for real-time updates
+  // Fetch status on login; poll every 30s for background sync (not 3s)
   useEffect(() => {
     if (!studentUsn || !isLoggedIn) return;
 
     refreshStatus();
-    const interval = setInterval(refreshStatus, 3000);
+    const interval = setInterval(refreshStatus, 30000);
     return () => clearInterval(interval);
   }, [studentUsn, isLoggedIn, refreshStatus]);
+
+  // Listen for real-time socket events so changes reflect instantly
+  useEffect(() => {
+    if (!studentUsn || !isLoggedIn) return;
+
+    const socket = socketIo(API_BASE_URL);
+
+    const handleDataUpdated = () => { refreshStatus(); };
+    const handleAccountDeleted = (data: any) => {
+      if (data?.usns?.includes(studentUsn)) {
+        localStorage.removeItem('cached_application_state');
+        logout();
+      }
+    };
+
+    socket.on('data_updated', handleDataUpdated);
+    socket.on('student_account_deleted', handleAccountDeleted);
+    return () => {
+      socket.off('data_updated', handleDataUpdated);
+      socket.off('student_account_deleted', handleAccountDeleted);
+      socket.disconnect();
+    };
+  }, [studentUsn, isLoggedIn, refreshStatus, logout]);
 
   // ──────────────────────────────────────────────
   // EXISTING FUNCTIONS (kept for compatibility)

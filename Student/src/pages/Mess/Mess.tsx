@@ -69,9 +69,8 @@ export const Mess: React.FC = () => {
     };
     
     fetchMessMenu();
-    const interval = setInterval(fetchMessMenu, 5000); // Poll every 5s
-    return () => { active = false; clearInterval(interval); };
-  }, [loading]);
+    return () => { active = false; };
+  }, []);
   // Interactive Guest Pass State
   const [showGuestPassModal, setShowGuestPassModal] = useState(false);
   const [showMyPassesModal, setShowMyPassesModal] = useState(false);

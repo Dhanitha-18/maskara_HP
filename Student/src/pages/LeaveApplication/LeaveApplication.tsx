@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { usePayment } from '../../context/PaymentContext';
+import { useAuth } from '../../context/AuthContext';
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { LEAVE_HERO_IMAGE } from '../../assets/heroBanners';
 import { 
@@ -7,6 +8,7 @@ import {
   FileText, Upload, Trash2, ArrowLeft, ArrowRight, QrCode, X, 
   Sparkles, Bell
 } from 'lucide-react';
+import { io } from 'socket.io-client';
 
 export interface LeaveRequest {
   id: string;
@@ -318,6 +320,31 @@ export const LeaveApplication: React.FC = () => {
       currentTimelineStep: 1 // Submitted
     };
 
+    // Send to backend database
+    fetch('http://localhost:5000/api/leaves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentName: nameToUse,
+        usn: usnToUse,
+        roomNo: student?.allocatedRoom || '',
+        block: student?.allocatedBlock || '',
+        leaveType,
+        fromDate,
+        toDate,
+        totalDays: Math.max(1, calculatedDays),
+        destination,
+        reason,
+        emergencyContact,
+        parentName,
+        relationship,
+        parentPhone,
+        parentEmail,
+        parentAddress,
+        status: 'Pending'
+      })
+    }).then(() => fetchBackendLeaves()).catch(() => {});
+
     const updatedLeaves = [newLeave, ...leaves];
     setLeaves(updatedLeaves);
     setSubmittedLeaveId(newId);
@@ -490,58 +517,6 @@ export const LeaveApplication: React.FC = () => {
       {/* ========================================================================= */}
       {activeMainTab === 'leave' && (
         <div className="space-y-8">
-
-          {/* Leave Dashboard Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="bg-white border border-border p-3.5 rounded-2xl shadow-soft space-y-1">
-              <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider block">Total Requests</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-black text-slate-900">{leaveStats.total}</span>
-                <FileText className="w-4 h-4 text-slate-400" />
-              </div>
-            </div>
-
-            <div className="bg-white border border-border p-3.5 rounded-2xl shadow-soft space-y-1 border-l-4 border-l-emerald-500">
-              <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider block">Approved</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-black text-emerald-600">{leaveStats.approved}</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              </div>
-            </div>
-
-            <div className="bg-white border border-border p-3.5 rounded-2xl shadow-soft space-y-1 border-l-4 border-l-amber-500">
-              <span className="text-[9px] font-bold text-amber-800 uppercase tracking-wider block">Pending Review</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-black text-amber-600">{leaveStats.pending}</span>
-                <Clock className="w-4 h-4 text-amber-500" />
-              </div>
-            </div>
-
-            <div className="bg-white border border-border p-3.5 rounded-2xl shadow-soft space-y-1 border-l-4 border-l-red-500">
-              <span className="text-[9px] font-bold text-red-800 uppercase tracking-wider block">Rejected</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-black text-red-600">{leaveStats.rejected}</span>
-                <AlertCircle className="w-4 h-4 text-red-500" />
-              </div>
-            </div>
-
-            <div className="bg-white border border-border p-3.5 rounded-2xl shadow-soft space-y-1">
-              <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider block">Cancelled</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-black text-slate-500">{leaveStats.cancelled}</span>
-                <X className="w-4 h-4 text-slate-400" />
-              </div>
-            </div>
-
-            <div className="bg-white border border-border p-3.5 rounded-2xl shadow-soft space-y-1 bg-gradient-to-br from-blue-50/50 to-indigo-50/30">
-              <span className="text-[9px] font-bold text-primary uppercase tracking-wider block">Upcoming Outpass</span>
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-black text-primary">{leaveStats.upcoming}</span>
-                <Sparkles className="w-4 h-4 text-primary" />
-              </div>
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
             {/* Left 2 Columns: Multi-Step Leave Wizard */}
@@ -1119,16 +1094,15 @@ export const LeaveApplication: React.FC = () => {
             </h3>
 
             {/* Stage Stepper */}
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-2">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2">
               {[
                 'Application Submitted',
                 'Warden Approval',
                 'Asset Verification',
                 'Room Inspection',
-                'Refund Processing',
                 'Completed'
               ].map((stage, idx) => {
-                const stages = ['Application Submitted', 'Warden Approval', 'Asset Verification', 'Room Inspection', 'Refund Processing', 'Completed'];
+                const stages = ['Application Submitted', 'Warden Approval', 'Asset Verification', 'Room Inspection', 'Completed'];
                 const currentIdx = stages.indexOf(vacateData.currentStage);
                 const isPassed = idx <= currentIdx;
                 const isCurrent = idx === currentIdx;
@@ -1152,30 +1126,7 @@ export const LeaveApplication: React.FC = () => {
             </div>
           </div>
 
-          {/* Refund Tracker Summary Card */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="bg-white border border-border p-4 rounded-2xl shadow-soft space-y-1">
-              <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider block">Security Deposit</span>
-              <h4 className="text-xl font-black text-slate-900">₹{vacateData.depositAmount.toLocaleString()}</h4>
-            </div>
-
-            <div className="bg-white border border-border p-4 rounded-2xl shadow-soft space-y-1 border-l-4 border-l-amber-500">
-              <span className="text-[9px] font-bold text-amber-800 uppercase tracking-wider block">Room Inspection Status</span>
-              <h4 className="text-sm font-black text-amber-600 mt-1">{vacateData.inspectionStatus}</h4>
-            </div>
-
-            <div className="bg-white border border-border p-4 rounded-2xl shadow-soft space-y-1 border-l-4 border-l-blue-500">
-              <span className="text-[9px] font-bold text-blue-800 uppercase tracking-wider block">Refund Settlement</span>
-              <h4 className="text-sm font-black text-blue-600 mt-1">{vacateData.refundStatus}</h4>
-            </div>
-
-            <div className="bg-white border border-border p-4 rounded-2xl shadow-soft space-y-1 bg-gradient-to-br from-emerald-50 to-white">
-              <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider block">Expected Refund Date</span>
-              <h4 className="text-sm font-black text-emerald-700 mt-1">{vacateData.expectedRefundDate}</h4>
-            </div>
-          </div>
-
-          {/* Vacating Form & Refund Routing */}
+          {/* Vacating Form */}
           <div className="bg-white border border-border p-6 sm:p-8 rounded-2xl shadow-soft space-y-6">
             <form onSubmit={handleVacateSubmit} className="space-y-6 text-xs font-semibold text-slate-800">
               
@@ -1202,67 +1153,6 @@ export const LeaveApplication: React.FC = () => {
                       value={vacateData.reason}
                       onChange={e => setVacateData({ ...vacateData, reason: e.target.value })}
                       className="w-full border border-border rounded-xl p-2.5 text-xs font-bold outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Security Deposit Bank Account Routing */}
-              <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4">
-                <span className="text-[10px] font-black text-slate-900 uppercase tracking-wider block border-b border-slate-200 pb-1">
-                  2. Refund Bank Account Details (NEFT / RTGS Transfer)
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-text-muted uppercase">Account Holder Name *</label>
-                    <input 
-                      type="text"
-                      value={vacateData.accountHolder}
-                      onChange={e => setVacateData({ ...vacateData, accountHolder: e.target.value })}
-                      className="w-full border border-border rounded-xl p-2.5 text-xs font-bold outline-none bg-white"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-text-muted uppercase">Bank Name *</label>
-                    <input 
-                      type="text"
-                      value={vacateData.bankName}
-                      onChange={e => setVacateData({ ...vacateData, bankName: e.target.value })}
-                      className="w-full border border-border rounded-xl p-2.5 text-xs font-bold outline-none bg-white"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-text-muted uppercase">IFSC Code *</label>
-                    <input 
-                      type="text"
-                      value={vacateData.ifscCode}
-                      onChange={e => setVacateData({ ...vacateData, ifscCode: e.target.value })}
-                      className="w-full border border-border rounded-xl p-2.5 text-xs font-mono font-bold outline-none bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-text-muted uppercase">Bank Account Number *</label>
-                    <input 
-                      type="text"
-                      value={vacateData.accountNumber}
-                      onChange={e => setVacateData({ ...vacateData, accountNumber: e.target.value })}
-                      className="w-full border border-border rounded-xl p-2.5 text-xs font-mono font-bold outline-none bg-white"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-text-muted uppercase">UPI ID (Optional)</label>
-                    <input 
-                      type="text"
-                      value={vacateData.upiId || ''}
-                      onChange={e => setVacateData({ ...vacateData, upiId: e.target.value })}
-                      className="w-full border border-border rounded-xl p-2.5 text-xs font-mono font-bold outline-none bg-white"
                     />
                   </div>
                 </div>

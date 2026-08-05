@@ -55,6 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('student_usn');
     localStorage.removeItem('student_name');
     localStorage.removeItem('student_phone');
+    localStorage.removeItem('cached_application_state');
   };
 
   const updateStudentName = (name: string) => {

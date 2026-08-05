@@ -300,3 +300,35 @@ model StudentAccount {
   @@index([phoneNumber])
   @@index([studentName])
 }
+
+model AdminAccount {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  name          String
+  role          String   @default("SUB_ADMIN") // CHIEF, SUB_ADMIN
+  title         String   @default("Warden / Administrator")
+  allowedTabs   String   @db.Text // JSON string array of allowed tab paths, e.g. ["/applications", "/database"]
+  allowedBlocks String   @db.Text // JSON string array of allowed block names, e.g. ["ALL"] or ["Block A", "Block B"]
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+}
+
+model AttendanceRecord {
+  id          String   @id @default(uuid())
+  studentUsn  String
+  studentName String
+  block       String
+  date        String   // YYYY-MM-DD
+  status      String   // PRESENT, ABSENT
+  remarks     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([studentUsn, date])
+  @@index([date])
+  @@index([block])
+}

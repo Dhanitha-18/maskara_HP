@@ -269,6 +269,24 @@ app.post('/api/applications', async (req, res) => {
 
 console.log("Saved successfully:", application);
 
+// Auto-create login account for the student
+await (prisma as any).studentAccount.upsert({
+  where: { usn: application.usn },
+  update: {
+    studentName: application.studentName,
+    phoneNumber: application.phoneNumber,
+    applicationId: application.id,
+    status: 'ACTIVE'
+  },
+  create: {
+    studentName: application.studentName,
+    phoneNumber: application.phoneNumber,
+    usn: application.usn,
+    applicationId: application.id,
+    status: 'ACTIVE'
+  }
+}).catch((e: any) => console.error('StudentAccount upsert error:', e));
+
 io.emit('data_updated');
 io.emit('APPLICATION_UPDATED', application);
 
@@ -392,6 +410,7 @@ app.post('/api/applications/batch-status', async (req, res) => {
           ]
         }
       }).catch(() => {});
+      io.emit('student_account_deleted', { usns });
     }
 
     io.emit('data_updated');
@@ -452,49 +471,116 @@ app.post('/api/allocate', async (req, res) => {
   try {
     const { applicationId, bedId, adminName } = req.body;
 
-    // Use transaction to prevent double booking with atomic check-and-set
+    if (!applicationId || !bedId) {
+      return res.status(400).json({ error: 'applicationId and bedId are required' });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Atomic Check and Set for Bed to prevent double booking race condition
-      const updatedBedCount = await tx.bed.updateMany({
-        where: { id: bedId, status: 'AVAILABLE' },
+      // 1. Find the application record by ID or USN
+      const appRecord = await tx.application.findFirst({
+        where: {
+          OR: [
+            { id: applicationId },
+            { usn: applicationId }
+          ]
+        }
+      });
+
+      if (!appRecord) {
+        throw new Error('Application record not found.');
+      }
+
+      if (appRecord.status === 'REJECTED') {
+        throw new Error('Cannot allocate bed for a rejected application.');
+      }
+
+      // 2. Find the target bed
+      const targetBed = await tx.bed.findUnique({
+        where: { id: bedId }
+      });
+
+      if (!targetBed) {
+        throw new Error('Target bed not found.');
+      }
+
+      if (targetBed.status === 'OCCUPIED' || targetBed.status === 'MAINTENANCE') {
+        // Check if it's already allocated to THIS student
+        const existingAlloc = await tx.allocation.findFirst({
+          where: { bedId, applicationId: appRecord.id, status: 'ACTIVE' }
+        });
+        if (!existingAlloc) {
+          throw new Error('This bed is already occupied or unavailable.');
+        }
+      }
+
+      // 3. If student already has an active allocation elsewhere, free that previous bed
+      const previousAllocations = await tx.allocation.findMany({
+        where: { applicationId: appRecord.id, status: 'ACTIVE' }
+      });
+
+      for (const prevAlloc of previousAllocations) {
+        if (prevAlloc.bedId !== bedId) {
+          await tx.allocation.update({
+            where: { id: prevAlloc.id },
+            data: { status: 'TRANSFERRED' }
+          });
+          await tx.bed.update({
+            where: { id: prevAlloc.bedId },
+            data: { status: 'AVAILABLE' }
+          });
+        }
+      }
+
+      // 4. Update target bed to OCCUPIED
+      await tx.bed.update({
+        where: { id: bedId },
         data: { status: 'OCCUPIED' }
       });
 
-      if (updatedBedCount.count === 0) {
-        throw new Error('This bed was already allocated by another administrator or is not available.');
-      }
-
-      // 2. Atomic Check and Set for Application
-      const updatedAppCount = await tx.application.updateMany({
-        where: { id: applicationId, status: { in: ['PENDING', 'APPROVED'] } },
+      // 5. Update Application status to ALLOCATED
+      await tx.application.update({
+        where: { id: appRecord.id },
         data: { status: 'ALLOCATED' }
       });
 
-      if (updatedAppCount.count === 0) {
-        throw new Error('This student is already allocated or does not exist.');
-      }
+      // 6. Remove any existing allocation record for this bed to avoid unique constraint error
+      await tx.allocation.deleteMany({
+        where: { bedId }
+      }).catch(() => {});
 
-      // 4. Create Allocation
+      // 7. Create new active allocation
       const allocation = await tx.allocation.create({
         data: {
-          applicationId,
+          applicationId: appRecord.id,
           bedId,
           status: 'ACTIVE'
         }
       });
 
-      // 5. Fetch updated Application for emails
-      const application = await tx.application.findUnique({ where: { id: applicationId } });
-      if (!application) throw new Error('Application not found');
+      // 8. Auto-create/sync StudentAccount login credentials when allocated
+      await (tx as any).studentAccount.upsert({
+        where: { usn: appRecord.usn },
+        update: {
+          studentName: appRecord.studentName,
+          phoneNumber: appRecord.phoneNumber,
+          applicationId: appRecord.id,
+          status: 'ACTIVE'
+        },
+        create: {
+          studentName: appRecord.studentName,
+          phoneNumber: appRecord.phoneNumber,
+          usn: appRecord.usn,
+          applicationId: appRecord.id,
+          status: 'ACTIVE'
+        }
+      }).catch(() => {});
 
       return allocation;
-    });
+    }, { timeout: 30000, maxWait: 10000 });
 
     // Emit granular events
     io.emit('BED_ALLOCATED', { bedId, applicationId });
     io.emit('APPLICATION_UPDATED', { applicationId, status: 'ALLOCATED' });
-    
-    // Also emit old data_updated just in case some components still rely on it while we transition
     io.emit('data_updated');
 
     const emailMode = await getEmailMode();
@@ -502,9 +588,10 @@ app.post('/api/allocate', async (req, res) => {
       sendWorkflowEmail(applicationId, 'ALLOCATION', 'Automatic').catch(err => console.error("Auto allocate email error:", err));
     }
 
-    res.json(result);
+    res.json({ success: true, allocation: result });
   } catch (error: any) {
-    res.status(400).json({ error: error.message || 'Failed to allocate' });
+    console.error('Allocation error:', error);
+    res.status(400).json({ error: error.message || 'Failed to allocate bed' });
   }
 });
 
@@ -1681,6 +1768,647 @@ async function syncStudentAccounts() {
 }
 syncStudentAccounts();
 
+// Helper to seed default Chief Admin if no admins exist
+async function seedDefaultChiefAdmin() {
+  try {
+    const count = await (prisma as any).adminAccount.count().catch(() => 0);
+    if (count === 0) {
+      const allTabs = [
+        '/',
+        '/applications',
+        '/database',
+        '/blocks',
+        '/occupancy',
+        '/communication',
+        '/payments',
+        '/student-controls',
+        '/settings',
+        '/admin-management'
+      ];
+      await (prisma as any).adminAccount.create({
+        data: {
+          email: 'admin@omsai.com',
+          password: 'omsai@2026',
+          name: 'Sindhu Sharma',
+          role: 'CHIEF',
+          title: 'Chief Warden & Administrator',
+          allowedTabs: JSON.stringify(allTabs),
+          allowedBlocks: JSON.stringify(['ALL']),
+          status: 'ACTIVE'
+        }
+      }).catch(() => {});
+      console.log('Seeded default Chief Admin account (admin@omsai.com)');
+    }
+  } catch (err) {
+    console.error('Error seeding default chief admin:', err);
+  }
+}
+seedDefaultChiefAdmin();
+
+// Admin Login API
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+    const inputId = (email || username || '').trim();
+    const cleanPassword = (password || '').trim();
+
+    if (!inputId || !cleanPassword) {
+      return res.status(400).json({ error: 'Username/Email and Password are required.' });
+    }
+
+    // Seed chief admin if table empty
+    await seedDefaultChiefAdmin();
+
+    // Query admin account by email or username
+    const admins = await (prisma as any).adminAccount.findMany({
+      where: { status: 'ACTIVE' }
+    });
+
+    let admin = admins.find((a: any) =>
+      (a.email.toLowerCase() === inputId.toLowerCase() || inputId.toLowerCase() === 'admin') &&
+      a.password === cleanPassword
+    );
+
+    // Fallback for default admin credentials if DB table was empty or not matched
+    if (!admin && (inputId.toLowerCase() === 'admin' || inputId.toLowerCase() === 'admin@omsai.com') && cleanPassword === 'omsai@2026') {
+      admin = {
+        id: 'default-chief',
+        email: 'admin@omsai.com',
+        name: 'Sindhu Sharma',
+        role: 'CHIEF',
+        title: 'Chief Warden & Administrator',
+        allowedTabs: JSON.stringify([
+          '/',
+          '/applications',
+          '/database',
+          '/blocks',
+          '/occupancy',
+          '/communication',
+          '/payments',
+          '/student-controls',
+          '/settings',
+          '/admin-management'
+        ]),
+        allowedBlocks: JSON.stringify(['ALL'])
+      };
+    }
+
+    if (!admin) {
+      return res.status(401).json({ success: false, error: 'Invalid username/email or password.' });
+    }
+
+    let parsedTabs = [];
+    try {
+      parsedTabs = typeof admin.allowedTabs === 'string' ? JSON.parse(admin.allowedTabs) : admin.allowedTabs;
+    } catch {
+      parsedTabs = ['/', '/applications', '/database', '/blocks', '/occupancy', '/communication', '/payments', '/student-controls', '/settings'];
+    }
+
+    let parsedBlocks = ['ALL'];
+    try {
+      parsedBlocks = typeof admin.allowedBlocks === 'string' ? JSON.parse(admin.allowedBlocks) : (admin.allowedBlocks || ['ALL']);
+    } catch {
+      parsedBlocks = ['ALL'];
+    }
+
+    return res.json({
+      success: true,
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        role: admin.role,
+        title: admin.title,
+        allowedTabs: parsedTabs,
+        allowedBlocks: parsedBlocks
+      }
+    });
+  } catch (err: any) {
+    console.error('Admin login error:', err);
+    res.status(500).json({ error: err.message || 'Server error during admin login' });
+  }
+});
+
+// List all admin accounts (Chief Admin view)
+app.get('/api/admin/accounts', async (req, res) => {
+  try {
+    const accounts = await (prisma as any).adminAccount.findMany({
+      orderBy: { createdAt: 'desc' }
+    }).catch(() => []);
+
+    const formatted = accounts.map((acc: any) => {
+      let tabs = [];
+      try {
+        tabs = typeof acc.allowedTabs === 'string' ? JSON.parse(acc.allowedTabs) : acc.allowedTabs;
+      } catch {
+        tabs = [];
+      }
+      let blocks = ['ALL'];
+      try {
+        blocks = typeof acc.allowedBlocks === 'string' ? JSON.parse(acc.allowedBlocks) : (acc.allowedBlocks || ['ALL']);
+      } catch {
+        blocks = ['ALL'];
+      }
+      return {
+        id: acc.id,
+        email: acc.email,
+        name: acc.name,
+        role: acc.role,
+        title: acc.title,
+        status: acc.status,
+        allowedTabs: tabs,
+        allowedBlocks: blocks,
+        createdAt: acc.createdAt
+      };
+    });
+
+    res.json({ success: true, accounts: formatted });
+  } catch (err: any) {
+    console.error('Fetch admin accounts error:', err);
+    res.status(500).json({ error: 'Failed to fetch admin accounts' });
+  }
+});
+
+// Create new admin account (Chief Admin action)
+app.post('/api/admin/accounts', async (req, res) => {
+  try {
+    const { email, password, name, title, allowedTabs, allowedBlocks, role } = req.body;
+
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, Password, and Name are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await (prisma as any).adminAccount.findFirst({
+      where: { email: cleanEmail }
+    }).catch(() => null);
+
+    if (existing) {
+      return res.status(400).json({ error: 'An admin with this email address already exists.' });
+    }
+
+    const tabsArray = Array.isArray(allowedTabs) ? allowedTabs : [];
+    const blocksArray = Array.isArray(allowedBlocks) ? allowedBlocks : ['ALL'];
+
+    const newAdmin = await (prisma as any).adminAccount.create({
+      data: {
+        email: cleanEmail,
+        password: password.trim(),
+        name: name.trim(),
+        title: (title || 'Assistant Warden / Administrator').trim(),
+        role: role || 'SUB_ADMIN',
+        allowedTabs: JSON.stringify(tabsArray),
+        allowedBlocks: JSON.stringify(blocksArray),
+        status: 'ACTIVE'
+      }
+    });
+
+    io.emit('data_updated');
+
+    res.status(201).json({
+      success: true,
+      admin: {
+        id: newAdmin.id,
+        email: newAdmin.email,
+        name: newAdmin.name,
+        role: newAdmin.role,
+        title: newAdmin.title,
+        allowedTabs: tabsArray,
+        allowedBlocks: blocksArray
+      }
+    });
+  } catch (err: any) {
+    console.error('Create admin account error:', err);
+    res.status(500).json({ error: err.message || 'Failed to create admin account' });
+  }
+});
+
+// Update admin account (allowedTabs, allowedBlocks, password, name, etc.)
+app.put('/api/admin/accounts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, password, name, title, allowedTabs, allowedBlocks, status } = req.body;
+
+    const updateData: any = {};
+    if (email) updateData.email = email.trim().toLowerCase();
+    if (password) updateData.password = password.trim();
+    if (name) updateData.name = name.trim();
+    if (title) updateData.title = title.trim();
+    if (status) updateData.status = status;
+    if (allowedTabs !== undefined) {
+      updateData.allowedTabs = JSON.stringify(Array.isArray(allowedTabs) ? allowedTabs : []);
+    }
+    if (allowedBlocks !== undefined) {
+      updateData.allowedBlocks = JSON.stringify(Array.isArray(allowedBlocks) ? allowedBlocks : ['ALL']);
+    }
+
+    const updated = await (prisma as any).adminAccount.update({
+      where: { id },
+      data: updateData
+    });
+
+    io.emit('data_updated');
+
+    res.json({ success: true, admin: updated });
+  } catch (err: any) {
+    console.error('Update admin account error:', err);
+    res.status(500).json({ error: 'Failed to update admin account' });
+  }
+});
+
+// ==================== ATTENDANCE ENDPOINTS ====================
+
+// Get attendance records for a specific date and optional block
+app.get('/api/attendance', async (req, res) => {
+  try {
+    const { date, block } = req.query;
+    const targetDate = String(date || new Date().toISOString().split('T')[0]);
+
+    // Execute database queries concurrently in parallel with lean field selection
+    const [allocations, applications, records] = await Promise.all([
+      prisma.allocation.findMany({
+        select: {
+          applicationId: true,
+          bed: {
+            select: {
+              room: {
+                select: {
+                  roomNo: true,
+                  block: { select: { name: true } }
+                }
+              }
+            }
+          }
+        }
+      }).catch(() => []),
+
+      prisma.application.findMany({
+        where: { status: { not: 'REJECTED' } },
+        select: {
+          id: true,
+          usn: true,
+          studentName: true,
+          phoneNumber: true,
+          gender: true,
+          hostelPref: true
+        }
+      }).catch(() => []),
+
+      (prisma as any).attendanceRecord.findMany({
+        where: { date: targetDate }
+      }).catch(() => [])
+    ]);
+
+    const allocMap = new Map(allocations.map((a: any) => [a.applicationId, a]));
+
+    let studentList = applications.map((app: any) => {
+      const alloc = allocMap.get(app.id);
+      const blockName = alloc?.bed?.room?.block?.name || app.hostelPref || 'General Block';
+      const roomNo = alloc?.bed?.room?.roomNo || 'Unassigned';
+
+      return {
+        studentUsn: app.usn,
+        studentName: app.studentName,
+        phoneNumber: app.phoneNumber,
+        gender: app.gender,
+        block: blockName,
+        roomNo: roomNo
+      };
+    });
+
+    // Flexible Block Filtering
+    if (block && String(block).toUpperCase() !== 'ALL') {
+      const reqBlock = String(block).toLowerCase().replace(/[^a-z0-9]/g, '');
+      studentList = studentList.filter(s => {
+        const b = String(s.block).toLowerCase().replace(/[^a-z0-9]/g, '');
+        return b.includes(reqBlock) || reqBlock.includes(b);
+      });
+    }
+
+    const recordMap = new Map(records.map((r: any) => [r.studentUsn, r]));
+
+    const result = studentList.map(s => {
+      const existing = recordMap.get(s.studentUsn);
+      return {
+        id: existing?.id || `TEMP-${s.studentUsn}`,
+        studentUsn: s.studentUsn,
+        studentName: s.studentName,
+        phoneNumber: s.phoneNumber,
+        gender: s.gender,
+        block: s.block,
+        roomNo: s.roomNo,
+        date: targetDate,
+        status: existing ? existing.status : 'PRESENT',
+        remarks: existing?.remarks || null
+      };
+    });
+
+    res.json({ success: true, date: targetDate, attendance: result });
+  } catch (err: any) {
+    console.error('Fetch attendance error:', err);
+    res.status(500).json({ error: 'Failed to fetch attendance records' });
+  }
+});
+
+// Bulk set attendance for an entire block or submit batch records for a date
+app.post('/api/attendance/bulk', async (req, res) => {
+  try {
+    const { date, block, status, records } = req.body;
+    const targetDate = String(date || new Date().toISOString().split('T')[0]);
+
+    if (Array.isArray(records)) {
+      const validRecords = records.filter((r: any) => r && (r.studentUsn || r.usn));
+      const ops = validRecords.map((item: any) => {
+        const usn = String(item.studentUsn || item.usn).trim().toUpperCase();
+        const sName = String(item.studentName || 'Student').trim();
+        const sBlock = String(item.block || 'Hostel').trim();
+        const sStatus = String(item.status || 'PRESENT').toUpperCase();
+
+        return (prisma as any).attendanceRecord.upsert({
+          where: {
+            studentUsn_date: {
+              studentUsn: usn,
+              date: targetDate
+            }
+          },
+          update: {
+            status: sStatus,
+            studentName: sName,
+            block: sBlock,
+            remarks: item.remarks || null
+          },
+          create: {
+            studentUsn: usn,
+            studentName: sName,
+            block: sBlock,
+            date: targetDate,
+            status: sStatus,
+            remarks: item.remarks || null
+          }
+        }).catch((err: any) => console.error(`Upsert error for ${usn}:`, err));
+      });
+
+      await Promise.all(ops);
+
+      io.emit('ATTENDANCE_UPDATED', { date: targetDate });
+      io.emit('data_updated');
+
+      return res.json({ success: true, count: validRecords.length, date: targetDate });
+    }
+
+    const targetStatus = String(status || 'PRESENT').toUpperCase();
+
+    if (!['PRESENT', 'ABSENT'].includes(targetStatus)) {
+      return res.status(400).json({ error: 'Status must be PRESENT or ABSENT' });
+    }
+
+    const [allocations, applications] = await Promise.all([
+      prisma.allocation.findMany({
+        select: {
+          applicationId: true,
+          bed: {
+            select: {
+              room: {
+                select: {
+                  block: { select: { name: true } }
+                }
+              }
+            }
+          }
+        }
+      }).catch(() => []),
+
+      prisma.application.findMany({
+        where: { status: { not: 'REJECTED' } },
+        select: { id: true, usn: true, studentName: true, hostelPref: true }
+      }).catch(() => [])
+    ]);
+
+    const allocMap = new Map(allocations.map((a: any) => [a.applicationId, a]));
+
+    let targetStudents = applications.map((app: any) => {
+      const alloc = allocMap.get(app.id);
+      const blockName = alloc?.bed?.room?.block?.name || app.hostelPref || 'General Block';
+      return {
+        usn: app.usn,
+        studentName: app.studentName,
+        block: blockName
+      };
+    });
+
+    if (block && String(block).toUpperCase() !== 'ALL') {
+      const reqBlock = String(block).toLowerCase().replace(/[^a-z0-9]/g, '');
+      targetStudents = targetStudents.filter(s => {
+        const b = String(s.block).toLowerCase().replace(/[^a-z0-9]/g, '');
+        return b.includes(reqBlock) || reqBlock.includes(b);
+      });
+    }
+
+    // Run all upserts concurrently in parallel for ultra-fast bulk marking
+    const ops = targetStudents.map(student =>
+      (prisma as any).attendanceRecord.upsert({
+        where: {
+          studentUsn_date: {
+            studentUsn: student.usn,
+            date: targetDate
+          }
+        },
+        update: {
+          status: targetStatus,
+          studentName: student.studentName,
+          block: student.block
+        },
+        create: {
+          studentUsn: student.usn,
+          studentName: student.studentName,
+          block: student.block,
+          date: targetDate,
+          status: targetStatus
+        }
+      }).catch(() => {})
+    );
+
+    await Promise.all(ops);
+
+    io.emit('ATTENDANCE_UPDATED', { date: targetDate, block, status: targetStatus });
+    io.emit('data_updated');
+
+    res.json({ success: true, count: targetStudents.length, status: targetStatus });
+  } catch (err: any) {
+    console.error('Bulk attendance error:', err);
+    res.status(500).json({ error: 'Failed to update bulk attendance' });
+  }
+});
+
+// Submit/save attendance batch for a date and block
+app.post('/api/attendance/submit', async (req, res) => {
+  try {
+    const { date, records } = req.body;
+    const targetDate = String(date || new Date().toISOString().split('T')[0]);
+
+    if (!Array.isArray(records)) {
+      return res.status(400).json({ error: 'Records array is required' });
+    }
+
+    const validRecords = records.filter((r: any) => r && (r.studentUsn || r.usn));
+
+    const ops = validRecords.map((item: any) => {
+      const usn = String(item.studentUsn || item.usn).trim().toUpperCase();
+      const sName = String(item.studentName || 'Student').trim();
+      const sBlock = String(item.block || 'Hostel').trim();
+      const sStatus = String(item.status || 'PRESENT').toUpperCase();
+
+      return (prisma as any).attendanceRecord.upsert({
+        where: {
+          studentUsn_date: {
+            studentUsn: usn,
+            date: targetDate
+          }
+        },
+        update: {
+          status: sStatus,
+          studentName: sName,
+          block: sBlock,
+          remarks: item.remarks || null
+        },
+        create: {
+          studentUsn: usn,
+          studentName: sName,
+          block: sBlock,
+          date: targetDate,
+          status: sStatus,
+          remarks: item.remarks || null
+        }
+      }).catch((err: any) => console.error(`Error saving record for USN ${usn}:`, err));
+    });
+
+    await Promise.all(ops);
+
+    io.emit('ATTENDANCE_UPDATED', { date: targetDate });
+    io.emit('data_updated');
+
+    res.json({ success: true, count: validRecords.length, date: targetDate });
+  } catch (err: any) {
+    console.error('Submit attendance error:', err);
+    res.status(500).json({ error: 'Failed to submit attendance' });
+  }
+});
+
+// Single student attendance toggle/update
+app.post('/api/attendance/individual', async (req, res) => {
+  try {
+    const { studentUsn, studentName, block, date, status, remarks } = req.body;
+    const targetDate = String(date || new Date().toISOString().split('T')[0]);
+    const targetStatus = String(status || 'PRESENT').toUpperCase();
+
+    if (!studentUsn) {
+      return res.status(400).json({ error: 'studentUsn is required' });
+    }
+
+    const updated = await (prisma as any).attendanceRecord.upsert({
+      where: {
+        studentUsn_date: {
+          studentUsn: studentUsn.trim().toUpperCase(),
+          date: targetDate
+        }
+      },
+      update: {
+        status: targetStatus,
+        studentName: studentName || undefined,
+        block: block || undefined,
+        remarks: remarks || undefined
+      },
+      create: {
+        studentUsn: studentUsn.trim().toUpperCase(),
+        studentName: studentName || 'Student',
+        block: block || 'General',
+        date: targetDate,
+        status: targetStatus,
+        remarks: remarks || null
+      }
+    });
+
+    io.emit('ATTENDANCE_UPDATED', { studentUsn, date: targetDate, status: targetStatus });
+    io.emit('data_updated');
+
+    res.json({ success: true, attendance: updated });
+  } catch (err: any) {
+    console.error('Individual attendance error:', err);
+    res.status(500).json({ error: 'Failed to update attendance' });
+  }
+});
+
+// Get attendance history for a single student (used by student portal)
+app.get('/api/attendance/student/:usn', async (req, res) => {
+  try {
+    const { usn } = req.params;
+
+    const records = await (prisma as any).attendanceRecord.findMany({
+      where: { studentUsn: usn.trim().toUpperCase() },
+      orderBy: { date: 'desc' }
+    }).catch(() => []);
+
+    res.json({ success: true, history: records });
+  } catch (err: any) {
+    console.error('Student attendance history error:', err);
+    res.status(500).json({ error: 'Failed to fetch student attendance history' });
+  }
+});
+
+// Update admin account (allowedTabs, password, name, etc.)
+app.put('/api/admin/accounts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, password, name, title, allowedTabs, status } = req.body;
+
+    const updateData: any = {};
+    if (email) updateData.email = email.trim().toLowerCase();
+    if (password) updateData.password = password.trim();
+    if (name) updateData.name = name.trim();
+    if (title) updateData.title = title.trim();
+    if (status) updateData.status = status;
+    if (allowedTabs !== undefined) {
+      updateData.allowedTabs = JSON.stringify(Array.isArray(allowedTabs) ? allowedTabs : []);
+    }
+
+    const updated = await (prisma as any).adminAccount.update({
+      where: { id },
+      data: updateData
+    });
+
+    io.emit('data_updated');
+
+    res.json({ success: true, admin: updated });
+  } catch (err: any) {
+    console.error('Update admin account error:', err);
+    res.status(500).json({ error: 'Failed to update admin account' });
+  }
+});
+
+// Delete admin account
+app.delete('/api/admin/accounts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const target = await (prisma as any).adminAccount.findUnique({ where: { id } }).catch(() => null);
+    if (target && target.role === 'CHIEF') {
+      const chiefCount = await (prisma as any).adminAccount.count({ where: { role: 'CHIEF' } }).catch(() => 1);
+      if (chiefCount <= 1) {
+        return res.status(400).json({ error: 'Cannot delete the primary Chief Admin account.' });
+      }
+    }
+
+    await (prisma as any).adminAccount.delete({ where: { id } });
+
+    io.emit('data_updated');
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Delete admin account error:', err);
+    res.status(500).json({ error: 'Failed to delete admin account' });
+  }
+});
+
 // Student Login API using Exact Name & Phone Number
 app.post('/api/student/login', async (req, res) => {
   try {
@@ -1693,22 +2421,15 @@ app.post('/api/student/login', async (req, res) => {
     const cleanName = String(studentName).trim();
     const cleanPhone = String(phoneNumber).trim();
 
-    // Sync student accounts first to catch recent status changes
-    await syncStudentAccounts();
-
     // 1. Query active accounts from StudentAccount DB table
-    const accounts = await (prisma as any).studentAccount.findMany({
+    const account = await (prisma as any).studentAccount.findFirst({
       where: {
+        phoneNumber: cleanPhone,
         status: 'ACTIVE'
       }
     });
 
-    const account = accounts.find((a: any) => 
-      a.phoneNumber.trim() === cleanPhone &&
-      a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
-    );
-
-    if (!account) {
+    if (!account || account.studentName.trim().toLowerCase() !== cleanName.toLowerCase()) {
       return res.status(404).json({
         success: false,
         error: 'No account exists'
@@ -2822,29 +3543,44 @@ app.post('/api/chat/channels/:channelId/messages', async (req, res) => {
 // Leave Applications
 app.get('/api/leaves', async (req, res) => {
   try {
-    const leaves = await prisma.leaveApplication.findMany();
+    const leaves = await (prisma as any).leaveApplication.findMany({
+      orderBy: { appliedAt: 'desc' }
+    });
     res.json(leaves);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch leave applications' });
   }
 });
+
 app.post('/api/leaves', async (req, res) => {
   try {
     const data = { ...req.body };
-    if (data.fromDate) data.fromDate = new Date(data.fromDate);
-    if (data.toDate) data.toDate = new Date(data.toDate);
-    const leave = await prisma.leaveApplication.create({ data });
+    if (data.fromDate && typeof data.fromDate === 'string' && data.fromDate.includes('-')) {
+      data.fromDate = new Date(data.fromDate);
+    }
+    if (data.toDate && typeof data.toDate === 'string' && data.toDate.includes('-')) {
+      data.toDate = new Date(data.toDate);
+    }
+    const leave = await (prisma as any).leaveApplication.create({ data });
+    io.emit('LEAVE_CREATED', leave);
+    io.emit('data_updated');
     res.json(leave);
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Submit leave error:', error);
     res.status(500).json({ error: 'Failed to submit leave application' });
   }
 });
+
 app.put('/api/leaves/:id/status', async (req, res) => {
   try {
-    const leave = await prisma.leaveApplication.update({
-      where: { id: req.params.id },
-      data: { status: req.body.status }
+    const { id } = req.params;
+    const { status } = req.body;
+    const leave = await (prisma as any).leaveApplication.update({
+      where: { id },
+      data: { status }
     });
+    io.emit('LEAVE_UPDATED', leave);
+    io.emit('data_updated');
     res.json(leave);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update leave application' });

@@ -40,7 +40,10 @@ const displayVal = (val: any) => {
   return val;
 };
 
+import { useAuthStore } from '../store/useAuthStore';
+
 export default function StudentDatabase() {
+  const { role, allowedBlocks } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [genderFilter, setGenderFilter] = useState('ALL');
@@ -129,6 +132,14 @@ export default function StudentDatabase() {
         if (filterGen === 'FEMALE' && appGender !== 'FEMALE' && appGender !== 'GIRLS') return false;
       }
 
+      // Apply Block Jurisdiction Restriction
+      if (role !== 'CHIEF' && allowedBlocks && !allowedBlocks.includes('ALL')) {
+        const studentBlock = app.allocations?.[0]?.bed?.room?.block?.name || app.blockName;
+        if (!studentBlock || !allowedBlocks.includes(studentBlock)) {
+          return false;
+        }
+      }
+
       // Apply Block Filter
       if (blockFilter !== 'ALL') {
         const blockName = app.allocations?.[0]?.bed?.room?.block?.name || app.blockName;
@@ -137,7 +148,7 @@ export default function StudentDatabase() {
 
       return true;
     });
-  }, [enrichedApplications, searchQuery, statusFilter, genderFilter, blockFilter]);  const handleExportExcel = () => {
+  }, [enrichedApplications, searchQuery, statusFilter, genderFilter, blockFilter, role, allowedBlocks]);  const handleExportExcel = () => {
     if (!filteredApplications || filteredApplications.length === 0) return;
     
     const headers = [

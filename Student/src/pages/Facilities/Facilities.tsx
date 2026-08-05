@@ -118,8 +118,7 @@ export const Facilities: React.FC = () => {
         .catch(() => {});
     };
     fetchFacilities();
-    const interval = setInterval(fetchFacilities, 5000); // Check every 5 seconds
-    return () => { active = false; clearInterval(interval); };
+    return () => { active = false; };
   }, []);
 
   return (

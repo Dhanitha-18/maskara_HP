@@ -75,15 +75,12 @@ export const Payment: React.FC = () => {
     socket.on('payment_status_changed', loadData);
     socket.on('payment_request_updated', loadData);
 
-    const interval = setInterval(loadData, 3000);
-
     return () => {
       socket.off('data_updated', loadData);
       socket.off('payment_submitted', loadData);
       socket.off('payment_status_changed', loadData);
       socket.off('payment_request_updated', loadData);
       socket.disconnect();
-      clearInterval(interval);
     };
   }, []);
 

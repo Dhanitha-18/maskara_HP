@@ -51,6 +51,10 @@ socket.on('data_updated', () => {
   queryClient.invalidateQueries();
 });
 
+import AdminManagement from './pages/AdminManagement';
+import AttendanceManagement from './pages/AttendanceManagement';
+import { ShieldCheck, UserCheck } from 'lucide-react';
+
 function PresenceList() {
   const { onlineAdmins } = usePresence();
   
@@ -76,20 +80,28 @@ function PresenceList() {
 function Sidebar() {
   const location = useLocation();
   const path = location.pathname;
-  const { role, name, title, toggleRole } = useAuthStore();
+  const { role, name, title, allowedTabs, logout } = useAuthStore();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const allNavItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['CHIEF', 'OVERFLOW'] },
-    { name: 'Applications Queue', path: '/applications', icon: ClipboardList, roles: ['CHIEF', 'OVERFLOW'] },
-    { name: 'Student Database', path: '/database', icon: Database, roles: ['CHIEF', 'OVERFLOW'] },
-    { name: 'Block Overview', path: '/blocks', icon: Building, roles: ['CHIEF', 'OVERFLOW'] },
-    { name: 'Live Occupancy', path: '/occupancy', icon: Users, roles: ['CHIEF', 'OVERFLOW'] },
-    { name: 'Communication Center', path: '/communication', icon: Mail, roles: ['CHIEF', 'OVERFLOW'] },
-    { name: 'Payments', path: '/payments', icon: CreditCard, roles: ['CHIEF', 'OVERFLOW'] },
-    { name: 'Student Controls', path: '/student-controls', icon: Monitor, roles: ['CHIEF', 'OVERFLOW'] },
+    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Applications Queue', path: '/applications', icon: ClipboardList },
+    { name: 'Student Database', path: '/database', icon: Database },
+    { name: 'Block Overview', path: '/blocks', icon: Building },
+    { name: 'Live Occupancy', path: '/occupancy', icon: Users },
+    { name: 'Daily Attendance', path: '/attendance', icon: UserCheck },
+    { name: 'Communication Center', path: '/communication', icon: Mail },
+    { name: 'Payments', path: '/payments', icon: CreditCard },
+    { name: 'Student Controls', path: '/student-controls', icon: Monitor },
+    { name: 'Admin Management', path: '/admin-management', icon: ShieldCheck, chiefOnly: true },
+    { name: 'Settings', path: '/settings', icon: SettingsPage ? Monitor : Building }
   ];
-  const navItems = allNavItems.filter(item => item.roles.includes(role));
+
+  const navItems = allNavItems.filter(item => {
+    if (role === 'CHIEF') return true;
+    if (item.chiefOnly) return false;
+    return allowedTabs && allowedTabs.includes(item.path);
+  });
 
   return (
     <aside className={`${isCollapsed ? 'w-[96px]' : 'w-[280px]'} m-4 mr-0 rounded-[2rem] bg-white/60 backdrop-blur-3xl border border-white/60 shadow-[10px_10px_40px_-10px_rgba(0,0,0,0.05),-1px_-1px_2px_rgba(255,255,255,0.5)] hidden md:flex flex-col h-[calc(100vh-2rem)] sticky top-4 transition-all duration-300 z-20 overflow-visible relative shrink-0`}>
@@ -150,7 +162,7 @@ function Sidebar() {
          <div 
            onClick={() => {
              if (confirm('Are you sure you want to logout?')) {
-               localStorage.removeItem('admin_authenticated');
+               logout();
                window.location.reload();
              }
            }}
@@ -176,13 +188,19 @@ function Sidebar() {
   );
 }
 
-function RouteGuard({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) {
-  const { role } = useAuthStore();
-  if (!allowedRoles.includes(role)) {
-    return <Navigate to={role === 'CHIEF' ? '/' : '/transferred'} replace />;
+function RouteGuard({ children, path }: { children: React.ReactNode, path: string }) {
+  const { role, allowedTabs } = useAuthStore();
+  if (role === 'CHIEF') return <>{children}</>;
+  
+  if (allowedTabs && allowedTabs.includes(path)) {
+    return <>{children}</>;
   }
-  return <>{children}</>;
+
+  // Redirect to first allowed tab
+  const firstAllowed = (allowedTabs && allowedTabs.length > 0) ? allowedTabs[0] : '/';
+  return <Navigate to={firstAllowed} replace />;
 }
+
 function AnimatedRoutes() {
   const location = useLocation();
   return (
@@ -196,16 +214,18 @@ function AnimatedRoutes() {
         className="w-full h-full"
       >
         <Routes location={location}>
-          <Route path="/" element={<RouteGuard allowedRoles={['CHIEF']}><DashboardStats /></RouteGuard>} />
-          <Route path="/applications" element={<RouteGuard allowedRoles={['CHIEF']}><ApplicationsQueue /></RouteGuard>} />
-          <Route path="/database" element={<RouteGuard allowedRoles={['CHIEF', 'OVERFLOW']}><StudentDatabase /></RouteGuard>} />
-          <Route path="/blocks" element={<RouteGuard allowedRoles={['CHIEF', 'OVERFLOW']}><BlockOverview /></RouteGuard>} />
-          <Route path="/occupancy" element={<RouteGuard allowedRoles={['CHIEF', 'OVERFLOW']}><RoomOccupancy /></RouteGuard>} />
-          <Route path="/communication" element={<RouteGuard allowedRoles={['CHIEF', 'OVERFLOW']}><CommunicationCenter /></RouteGuard>} />
-          <Route path="/payments" element={<RouteGuard allowedRoles={['CHIEF']}><PaymentDashboard /></RouteGuard>} />
-          <Route path="/student-controls" element={<RouteGuard allowedRoles={['CHIEF']}><StudentControlsIndex /></RouteGuard>} />
-          <Route path="/settings" element={<RouteGuard allowedRoles={['CHIEF', 'OVERFLOW']}><SettingsPage /></RouteGuard>} />
-          <Route path="*" element={<RouteGuard allowedRoles={[]}>{null}</RouteGuard>} />
+          <Route path="/" element={<RouteGuard path="/"><DashboardStats /></RouteGuard>} />
+          <Route path="/applications" element={<RouteGuard path="/applications"><ApplicationsQueue /></RouteGuard>} />
+          <Route path="/database" element={<RouteGuard path="/database"><StudentDatabase /></RouteGuard>} />
+          <Route path="/blocks" element={<RouteGuard path="/blocks"><BlockOverview /></RouteGuard>} />
+          <Route path="/occupancy" element={<RouteGuard path="/occupancy"><RoomOccupancy /></RouteGuard>} />
+          <Route path="/attendance" element={<RouteGuard path="/attendance"><AttendanceManagement /></RouteGuard>} />
+          <Route path="/communication" element={<RouteGuard path="/communication"><CommunicationCenter /></RouteGuard>} />
+          <Route path="/payments" element={<RouteGuard path="/payments"><PaymentDashboard /></RouteGuard>} />
+          <Route path="/student-controls" element={<RouteGuard path="/student-controls"><StudentControlsIndex /></RouteGuard>} />
+          <Route path="/admin-management" element={<RouteGuard path="/admin-management"><AdminManagement /></RouteGuard>} />
+          <Route path="/settings" element={<RouteGuard path="/settings"><SettingsPage /></RouteGuard>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </motion.div>
     </AnimatePresence>

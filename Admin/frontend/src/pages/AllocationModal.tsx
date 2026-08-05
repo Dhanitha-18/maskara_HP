@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +17,7 @@ interface AllocationModalProps {
 }
 
 export default function AllocationModal({ isOpen, onClose, applicationId, gender, studentName }: AllocationModalProps) {
+  const queryClient = useQueryClient();
   const adminName = useAuthStore((state) => state.name) || 'Super Admin';
   const [blockId, setBlockId] = useState<string>('');
   const [floor, setFloor] = useState<string>('');
@@ -41,13 +42,18 @@ export default function AllocationModal({ isOpen, onClose, applicationId, gender
         body: JSON.stringify({ applicationId, bedId, adminName })
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Allocation failed');
       }
       return res.json();
     },
     onSuccess: () => {
       toast.success(`Successfully allocated bed for ${studentName}!`);
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
+      queryClient.invalidateQueries({ queryKey: ['applications_all'] });
+      queryClient.invalidateQueries({ queryKey: ['blocks'] });
+      queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      queryClient.invalidateQueries({ queryKey: ['allocations'] });
       handleResetModal();
     },
     onError: (error: any) => {
@@ -146,7 +152,7 @@ export default function AllocationModal({ isOpen, onClose, applicationId, gender
                   <SelectValue placeholder="Select a block" />
                 </SelectTrigger>
                 <SelectContent>
-                  {blocks.filter((b: any) => b.gender === gender).map((b: any) => (
+                  {blocks.filter((b: any) => !b.gender || String(b.gender).toUpperCase() === String(gender).toUpperCase()).map((b: any) => (
                     <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                   ))}
                 </SelectContent>

@@ -7,7 +7,10 @@ import AddFloorModal from './AddFloorModal';
 import AddRoomModal from './AddRoomModal';
 import { toast } from 'sonner';
 
+import { useAuthStore } from '../store/useAuthStore';
+
 export default function BlockOverview() {
+  const { role, allowedBlocks } = useAuthStore();
   const [selectedBlock, setSelectedBlock] = useState<any | null>(null);
   const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -15,15 +18,18 @@ export default function BlockOverview() {
   const [isAddRoomOpen, setIsAddRoomOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: blocks, isLoading } = useQuery({
+  const { data: rawBlocks, isLoading } = useQuery({
     queryKey: ['blocks-overview'],
     queryFn: async () => {
       const res = await fetch('http://localhost:5000/api/blocks');
       if (!res.ok) throw new Error('Failed to fetch blocks');
       return res.json();
-    },
-    refetchInterval: 3000
+    }
   });
+
+  const blocks = (rawBlocks || []).filter((b: any) => 
+    role === 'CHIEF' || !allowedBlocks || allowedBlocks.includes('ALL') || allowedBlocks.includes(b.name)
+  );
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {

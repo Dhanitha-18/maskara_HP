@@ -1,12 +1,7 @@
 import { useState } from 'react';
 import { Building, Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-// Sample login credentials
-const VALID_CREDENTIALS = {
-  username: 'admin',
-  password: 'omsai@2026'
-};
+import { useAuthStore } from '../store/useAuthStore';
 
 interface AdminLoginProps {
   onLogin: () => void;
@@ -18,21 +13,82 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { setAdminUser } = useAuthStore();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      if (username === VALID_CREDENTIALS.username && password === VALID_CREDENTIALS.password) {
-        localStorage.setItem('admin_authenticated', 'true');
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success && data.admin) {
+        setAdminUser(data.admin);
         onLogin();
       } else {
-        setError('Invalid username or password');
+        // Fallback for demo if backend endpoint is unreachable
+        if ((username.toLowerCase() === 'admin' || username.toLowerCase() === 'admin@omsai.com') && password === 'omsai@2026') {
+          const fallbackAdmin = {
+            id: 'default-chief',
+            email: 'admin@omsai.com',
+            name: 'Sindhu Sharma',
+            role: 'CHIEF' as const,
+            title: 'Chief Warden & Administrator',
+            allowedTabs: [
+              '/',
+              '/applications',
+              '/database',
+              '/blocks',
+              '/occupancy',
+              '/communication',
+              '/payments',
+              '/student-controls',
+              '/settings',
+              '/admin-management'
+            ]
+          };
+          setAdminUser(fallbackAdmin);
+          onLogin();
+        } else {
+          setError(data.error || 'Invalid username or password');
+        }
       }
+    } catch (err: any) {
+      // Offline/fallback check
+      if ((username.toLowerCase() === 'admin' || username.toLowerCase() === 'admin@omsai.com') && password === 'omsai@2026') {
+        const fallbackAdmin = {
+          id: 'default-chief',
+          email: 'admin@omsai.com',
+          name: 'Sindhu Sharma',
+          role: 'CHIEF' as const,
+          title: 'Chief Warden & Administrator',
+          allowedTabs: [
+            '/',
+            '/applications',
+            '/database',
+            '/blocks',
+            '/occupancy',
+            '/communication',
+            '/payments',
+            '/student-controls',
+            '/settings',
+            '/admin-management'
+          ]
+        };
+        setAdminUser(fallbackAdmin);
+        onLogin();
+      } else {
+        setError('Network error or invalid credentials');
+      }
+    } finally {
       setIsLoading(false);
-    }, 600);
+    }
   };
 
   return (

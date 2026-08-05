@@ -6,17 +6,23 @@ import ReallocationModal from './ReallocationModal';
 import AllocatedStudentsTable from './AllocatedStudentsTable';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
+import { useAuthStore } from '../store/useAuthStore';
+
 export default function RoomOccupancy() {
+  const { role, allowedBlocks } = useAuthStore();
   const [viewMode, setViewMode] = useState<'VISUAL' | 'LIST'>('VISUAL');
-  const { data: blocks = [], isLoading } = useQuery({
+  const { data: rawBlocks = [], isLoading } = useQuery({
     queryKey: ['occupancy'],
     queryFn: async () => {
       const res = await fetch('http://localhost:5000/api/occupancy');
       if (!res.ok) throw new Error('Failed to fetch occupancy data');
       return res.json();
-    },
-    refetchInterval: 5000
+    }
   });
+
+  const blocks = (rawBlocks || []).filter((b: any) => 
+    role === 'CHIEF' || !allowedBlocks || allowedBlocks.includes('ALL') || allowedBlocks.includes(b.name)
+  );
 
   // Filter States
   const [hostelType, setHostelType] = useState('ALL');
