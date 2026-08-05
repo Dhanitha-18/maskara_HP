@@ -53,7 +53,7 @@ export default function AdminManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch('/api/blocks')
+    fetch('http://localhost:5000/api/blocks')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -67,7 +67,7 @@ export default function AdminManagement() {
   const fetchAdmins = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/admin/accounts');
+      const res = await fetch('http://localhost:5000/api/admin/accounts');
       const data = await res.json();
       if (res.ok && data.accounts) {
         setAdmins(data.accounts);
@@ -156,7 +156,7 @@ export default function AdminManagement() {
     try {
       if (editingAdmin) {
         // UPDATE
-        const res = await fetch(`/api/admin/accounts/${editingAdmin.id}`, {
+        const res = await fetch(`http://localhost:5000/api/admin/accounts/${editingAdmin.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -180,7 +180,7 @@ export default function AdminManagement() {
         }
       } else {
         // CREATE
-        const res = await fetch('/api/admin/accounts', {
+        const res = await fetch('http://localhost:5000/api/admin/accounts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -220,7 +220,7 @@ export default function AdminManagement() {
     }
 
     try {
-      const res = await fetch(`/api/admin/accounts/${admin.id}`, { method: 'DELETE' });
+      const res = await fetch(`http://localhost:5000/api/admin/accounts/${admin.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (res.ok) {
         toast.success(`Deleted admin account "${admin.name}"`);
