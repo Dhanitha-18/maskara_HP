@@ -20,7 +20,7 @@ export default function RoomOccupancy() {
     }
   });
 
-  const blocks = (rawBlocks || []).filter((b: any) => 
+  const blocks = (Array.isArray(rawBlocks) ? rawBlocks : rawBlocks?.blocks || []).filter((b: any) => 
     role === 'CHIEF' || !allowedBlocks || allowedBlocks.includes('ALL') || allowedBlocks.includes(b.name)
   );
 

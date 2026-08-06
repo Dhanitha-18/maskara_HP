@@ -7,6 +7,7 @@ import {
   Sparkles, HelpCircle, Eye, Trash2
 } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { API_BASE_URL } from '../../services/api';
 
 interface ChatMessage {
   id: string;
@@ -43,7 +44,10 @@ export const SocialConnect: React.FC = () => {
   const [inputText, setInputText] = useState('');
   
   // Channels and messages state
-  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([
+    { id: 'general', name: 'general', iconName: 'MessageSquare', desc: 'General hostel discussion and announcements' },
+    { id: 'marketplace', name: 'marketplace', iconName: 'ShoppingBag', desc: 'Buy and sell items within the hostel community' }
+  ]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pinnedMessages, setPinnedMessages] = useState<Record<string, string>>({
     general: 'Notice: Keep hostel lounge noise low after 10:00 PM. Clean up common tables after meals.',
@@ -79,7 +83,7 @@ export const SocialConnect: React.FC = () => {
   // Fetch Channels on Mount or Student Block change
   useEffect(() => {
     const blockParam = studentBlock ? `?block=${encodeURIComponent(studentBlock)}` : '';
-    fetch(`http://localhost:5000/api/chat/channels${blockParam}`)
+    fetch(`${API_BASE_URL}/api/chat/channels${blockParam}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
@@ -100,7 +104,7 @@ export const SocialConnect: React.FC = () => {
       .catch(err => console.error('Failed to load channels', err));
 
     // Fetch Resident list from applications (filtered strictly by student block)
-    fetch('http://localhost:5000/api/applications')
+    fetch(`${API_BASE_URL}/api/applications`)
       .then(res => res.json())
       .then(all => {
         if (Array.isArray(all)) {
@@ -146,7 +150,7 @@ export const SocialConnect: React.FC = () => {
 
   // Fetch messages when active channel changes
   useEffect(() => {
-    fetch(`http://localhost:5000/api/chat/channels/${activeChannelId}/messages`)
+    fetch(`${API_BASE_URL}/api/chat/channels/${activeChannelId}/messages`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -163,7 +167,7 @@ export const SocialConnect: React.FC = () => {
 
   // Socket.IO Listener Setup
   useEffect(() => {
-    socketRef.current = io('http://localhost:5000');
+    socketRef.current = io(API_BASE_URL);
 
     socketRef.current.on('chat_message_received', (data: { channelId: string; message: any }) => {
       if (data.channelId === activeChannelId) {
@@ -226,7 +230,7 @@ export const SocialConnect: React.FC = () => {
     setInputText('');
 
     try {
-      await fetch(`http://localhost:5000/api/chat/channels/${activeChannelId}/messages`, {
+      await fetch(`${API_BASE_URL}/api/chat/channels/${activeChannelId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -264,7 +268,7 @@ export const SocialConnect: React.FC = () => {
     setShowMarketplaceModal(false);
 
     try {
-      await fetch('http://localhost:5000/api/chat/channels/marketplace/messages', {
+      await fetch(`${API_BASE_URL}/api/chat/channels/marketplace/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -291,7 +295,7 @@ export const SocialConnect: React.FC = () => {
     setInterestOfferMessage('Hey! Is this item still available? I would like to buy it.');
 
     try {
-      await fetch('http://localhost:5000/api/chat/channels/marketplace/messages', {
+      await fetch(`${API_BASE_URL}/api/chat/channels/marketplace/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

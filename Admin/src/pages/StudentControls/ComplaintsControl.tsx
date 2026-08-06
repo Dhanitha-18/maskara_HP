@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   AlertTriangle, CheckCircle2, Clock, MessageSquare, Search, Filter, 
-  Send, User, Phone, Building, RefreshCw, X, ShieldAlert, Sparkles, ChevronRight, Check
+  Send, User, Phone, Building, RefreshCw, X, ShieldAlert, Sparkles, ChevronRight, Check, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { socket } from '../../lib/socket';

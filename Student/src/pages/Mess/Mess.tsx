@@ -42,7 +42,7 @@ export const Mess: React.FC = () => {
   const [activeDay, setActiveDay] = useState<string>('Monday');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table' | 'nutrition'>('cards');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cmsData, setCmsData] = useState<any>(null);
 
@@ -51,39 +51,34 @@ export const Mess: React.FC = () => {
     const fetchMessMenu = () => {
       apiRequest('/api/settings/mess-menu', { cache: 'no-store' })
         .then(res => {
-          if (active) {
-            if (res.success && res.menu) {
-              setCmsData(res.menu);
-            } else if (loading) {
-              setError('Invalid data format received from server');
+          if (active && res) {
+            const data = res.menu || (res.Monday ? res : null);
+            if (data) {
+              setCmsData(data);
             }
-            if (loading) setLoading(false);
           }
         })
         .catch(err => {
-          if (active && loading) {
-            console.error(err);
-            setError('Failed to load mess menu data');
-            setLoading(false);
-          }
+          console.warn('Using default mess menu layout:', err);
         });
     };
 
     fetchMessMenu();
 
-    const socket = io('http://localhost:5000');
+    const socketUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const socket = io(socketUrl);
     socket.on('MESS_MENU_UPDATED', (updatedMenu: any) => {
       if (active && updatedMenu) {
         setCmsData(updatedMenu);
       }
     });
-    socket.on('data_updated', () => fetchMessMenu());
 
     return () => {
       active = false;
       socket.disconnect();
     };
   }, []);
+
   // Interactive Guest Pass State
   const [showGuestPassModal, setShowGuestPassModal] = useState(false);
   const [showMyPassesModal, setShowMyPassesModal] = useState(false);

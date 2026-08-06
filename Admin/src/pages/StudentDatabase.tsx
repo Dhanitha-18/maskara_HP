@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import { API_BASE_URL } from '../lib/api';
+import { useAuthStore } from '../store/useAuthStore';
 
 const getPhotoUrl = (raw?: string | any) => {
   let url = typeof raw === 'string' ? raw : (raw?.passportPhoto || raw?.photoUrl || raw?.photo || raw?.passport_photo || raw?.image || '');
