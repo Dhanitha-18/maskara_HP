@@ -6,6 +6,7 @@ import {
   Coffee, Sun, Clock, Moon, Star, Sandwich, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../lib/api';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const MEALS = ['Breakfast', 'Lunch', 'Snacks', 'Dinner'];
@@ -50,24 +51,35 @@ export default function MessMenuControl() {
   const { data: serverData, isLoading } = useQuery({
     queryKey: ['mess-menu'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/settings/mess-menu', { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to fetch menu');
-      const data = await res.json();
-      return data.menu;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/settings/mess-menu`, { cache: 'no-store' });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data?.menu || data || null;
+      } catch (e) {
+        return null;
+      }
     }
   });
 
-  // Load data into local state — set exactly what the server returns, no auto-filling
+  // Load data into local state with default fallbacks
   useEffect(() => {
-    if (serverData) {
-      setCmsData(serverData);
-    }
+    const defaultStructure = {
+      Monday: { Breakfast: { name: 'Idli Vada & Sambar', time: '8:00 AM - 9:30 AM' }, Lunch: { name: 'South Indian Thali', time: '1:00 PM - 2:30 PM' }, Snacks: { name: 'Tea & Samosa', time: '5:00 PM - 6:00 PM' }, Dinner: { name: 'Roti, Dal & Rice', time: '8:00 PM - 9:30 PM' } },
+      Tuesday: { Breakfast: { name: 'Puri Bhaji', time: '8:00 AM - 9:30 AM' }, Lunch: { name: 'Veg Biryani & Raita', time: '1:00 PM - 2:30 PM' }, Snacks: { name: 'Coffee & Biscuits', time: '5:00 PM - 6:00 PM' }, Dinner: { name: 'Chapati, Paneer Curry & Rice', time: '8:00 PM - 9:30 PM' } },
+      Wednesday: { Breakfast: { name: 'Dosa & Chutney', time: '8:00 AM - 9:30 AM' }, Lunch: { name: 'Roti, Mixed Veg & Rice', time: '1:00 PM - 2:30 PM' }, Snacks: { name: 'Tea & Pakoda', time: '5:00 PM - 6:00 PM' }, Dinner: { name: 'Egg Curry / Special Veg & Rice', time: '8:00 PM - 9:30 PM' } },
+      Thursday: { Breakfast: { name: 'Poha & Jalebi', time: '8:00 AM - 9:30 AM' }, Lunch: { name: 'Rajma Chawal', time: '1:00 PM - 2:30 PM' }, Snacks: { name: 'Tea & Bun Maska', time: '5:00 PM - 6:00 PM' }, Dinner: { name: 'Roti, Aloo Gobi & Rice', time: '8:00 PM - 9:30 PM' } },
+      Friday: { Breakfast: { name: 'Uttapam & Sambhar', time: '8:00 AM - 9:30 AM' }, Lunch: { name: 'Veg Pulao & Kadhi', time: '1:00 PM - 2:30 PM' }, Snacks: { name: 'Coffee & Puff', time: '5:00 PM - 6:00 PM' }, Dinner: { name: 'Naan, Paneer Butter Masala', time: '8:00 PM - 9:30 PM' } },
+      Saturday: { Breakfast: { name: 'Aloo Paratha & Curd', time: '8:00 AM - 9:30 AM' }, Lunch: { name: 'Chole Bhature', time: '1:00 PM - 2:30 PM' }, Snacks: { name: 'Tea & Bhel', time: '5:00 PM - 6:00 PM' }, Dinner: { name: 'Roti, Dal Makhani & Rice', time: '8:00 PM - 9:30 PM' } },
+      Sunday: { Breakfast: { name: 'Masala Dosa', time: '8:00 AM - 9:30 AM' }, Lunch: { name: 'Special Feast / Veg Thali', time: '1:00 PM - 2:30 PM' }, Snacks: { name: 'Tea & Sweet', time: '5:00 PM - 6:00 PM' }, Dinner: { name: 'Special Dinner & Sweet Dish', time: '8:00 PM - 9:30 PM' } }
+    };
+    setCmsData(serverData || defaultStructure);
   }, [serverData]);
 
   const mutation = useMutation({
     mutationFn: async (updatedCMS: any) => {
-      const res = await fetch('http://localhost:5000/api/settings/mess-menu', {
-        method: 'PUT',
+      const res = await fetch(`${API_BASE_URL}/api/settings/mess-menu`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ menu: updatedCMS })
       });
@@ -304,7 +316,7 @@ export default function MessMenuControl() {
     return <div className="p-12 flex justify-center"><Loader2 className="w-10 h-10 animate-spin text-indigo-600" /></div>;
   }
 
-  const weeklyMenu = cmsData.menu || {};
+  const weeklyMenu = cmsData?.menu || cmsData || {};
   const dayMenu = weeklyMenu[activeDay] || {};
 
   return (
