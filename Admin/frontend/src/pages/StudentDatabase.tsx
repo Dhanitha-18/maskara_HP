@@ -60,7 +60,9 @@ const formatSubmissionDate = (dateStr: string | null | undefined) => {
 };
 
 const displayVal = (val: any) => {
-  if (val === undefined || val === null || String(val).trim() === '' || val === '-' || val === 'Not Available' || val === 'N/A') return '-';
+  if (val === undefined || val === null) return '-';
+  const str = String(val).trim();
+  if (str === '' || str === '-' || str === 'Not Available' || str === 'N/A' || str.startsWith('APP-') || str.startsWith('STD-')) return '-';
   return val;
 };
 
@@ -183,7 +185,7 @@ const handleDownloadPDF = async (app: any) => {
   doc.save(`${safeName}_Information_${formattedAppId}.pdf`);
 };
 
-import { useAuthStore } from '../store/useAuthStore';
+import { socket } from '../lib/socket';
 
 export default function StudentDatabase() {
   const queryClient = useQueryClient();
@@ -199,10 +201,11 @@ export default function StudentDatabase() {
 
   // Real-time socket sync for reallocation and profile updates
   useEffect(() => {
-    const socket = io('http://localhost:5000');
     const handleUpdate = () => {
       queryClient.invalidateQueries({ queryKey: ['applications_all'] });
       queryClient.invalidateQueries({ queryKey: ['payments_all'] });
+      queryClient.refetchQueries({ queryKey: ['applications_all'] });
+      queryClient.refetchQueries({ queryKey: ['payments_all'] });
     };
     socket.on('data_updated', handleUpdate);
     socket.on('BED_ALLOCATED', handleUpdate);
@@ -214,7 +217,6 @@ export default function StudentDatabase() {
       socket.off('BED_ALLOCATED', handleUpdate);
       socket.off('APPLICATION_UPDATED', handleUpdate);
       socket.off('STUDENT_UPDATED', handleUpdate);
-      socket.disconnect();
     };
   }, [queryClient]);
 

@@ -60,7 +60,7 @@ model Application {
   bmsitId              String?
   collegeEmail         String?
   year                 String?
-  passportPhoto        String?
+  passportPhoto        String?      @db.LongText
   allocations          Allocation[]
   documents            Document[]
 }
@@ -69,7 +69,7 @@ model Document {
   id            String      @id @default(uuid())
   applicationId String
   name          String
-  url           String
+  url           String      @db.LongText
   application   Application @relation(fields: [applicationId], references: [id])
 
   @@index([applicationId], map: "Document_applicationId_fkey")
@@ -79,7 +79,7 @@ model Block {
   id       String  @id @default(uuid())
   name     String
   gender   String
-  imageUrl String?
+  imageUrl String? @db.LongText
   rooms    Room[]
 }
 
@@ -151,7 +151,7 @@ model Payment {
   roomNumber            String
   utrNumber             String    @unique
   paymentDate           DateTime
-  screenshotUrl         String?
+  screenshotUrl         String?   @db.LongText
   status                String    @default("PENDING_REVIEW")
   emailStatus           String    @default("PENDING")
   reviewedBy            String?

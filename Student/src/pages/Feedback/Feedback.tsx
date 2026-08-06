@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { io } from 'socket.io-client';
+import { socket } from '../../lib/socket';
 import { usePayment } from '../../context/PaymentContext';
 import { useAuth } from '../../context/AuthContext';
 import { HeroBanner } from '../../components/layout/HeroBanner';
@@ -97,8 +97,7 @@ export const Feedback: React.FC = () => {
 
     fetchConfig();
 
-    const socket = io('http://localhost:5000');
-    socket.on('feedback_config_updated', (cfg: any) => {
+    const handleConfigUpdated = (cfg: any) => {
       if (cfg) {
         setFormConfig({
           googleFormUrl: cfg.googleFormUrl || '',
@@ -107,7 +106,9 @@ export const Feedback: React.FC = () => {
       } else {
         fetchConfig();
       }
-    });
+    };
+
+    socket.on('feedback_config_updated', handleConfigUpdated);
     socket.on('data_updated', fetchConfig);
 
     // Check if student already responded in localStorage
@@ -117,9 +118,8 @@ export const Feedback: React.FC = () => {
     }
 
     return () => {
-      socket.off('feedback_config_updated');
-      socket.off('data_updated');
-      socket.disconnect();
+      socket.off('feedback_config_updated', handleConfigUpdated);
+      socket.off('data_updated', fetchConfig);
     };
   }, [studentUsn]);
 

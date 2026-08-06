@@ -79,7 +79,16 @@ function StatusBadge({ status }: { status: string }) {
 // ─── ScreenshotModal ──────────────────────────────────────────
 function ScreenshotModal({ url, onClose }: { url: string; onClose: () => void }) {
   const [zoom, setZoom] = useState(1);
-  const fullUrl = url.startsWith('http') ? url : `${API.replace('/api', '')}${url}`;
+  const [hasError, setHasError] = useState(false);
+
+  const getFullUrl = (rawUrl: string) => {
+    if (!rawUrl) return '';
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
+    if (rawUrl.startsWith('/')) return `http://localhost:5000${rawUrl}`;
+    return `http://localhost:5000/${rawUrl}`;
+  };
+
+  const fullUrl = getFullUrl(url);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -111,18 +120,32 @@ function ScreenshotModal({ url, onClose }: { url: string; onClose: () => void })
             <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500" title="Zoom In"><ZoomIn className="w-4 h-4" /></button>
             <button onClick={() => setZoom(1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500" title="Reset Zoom"><RotateCcw className="w-4 h-4" /></button>
             <div className="w-px h-6 bg-slate-200 mx-1" />
-            <button onClick={handleDownload} className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600" title="Download"><Download className="w-4 h-4" /></button>
+            <button onClick={handleDownload} className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600" title="Open in New Tab / Download"><Download className="w-4 h-4" /></button>
             <button onClick={onClose} className="p-2 rounded-xl hover:bg-rose-50 text-rose-500" title="Close"><X className="w-4 h-4" /></button>
           </div>
         </div>
-        <div className="overflow-auto max-h-[70vh] p-6 flex items-center justify-center bg-slate-50/50">
-          <img
-            src={fullUrl}
-            alt="Payment Screenshot"
-            style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', transition: 'transform 0.2s ease' }}
-            className="max-w-full rounded-xl shadow-md"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
+        <div className="overflow-auto max-h-[70vh] p-6 flex items-center justify-center bg-slate-50/50 min-h-[300px]">
+          {hasError ? (
+            <div className="text-center p-8 bg-white border border-dashed border-rose-200 rounded-2xl max-w-sm space-y-3">
+              <AlertTriangle className="w-10 h-10 text-rose-500 mx-auto" />
+              <p className="text-sm font-bold text-slate-800">Unable to load image inline</p>
+              <p className="text-xs text-slate-500">Click below to view the receipt screenshot file directly in a new tab.</p>
+              <button
+                onClick={handleDownload}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+              >
+                Open Image in New Tab
+              </button>
+            </div>
+          ) : (
+            <img
+              src={fullUrl}
+              alt="Payment Screenshot"
+              style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', transition: 'transform 0.2s ease' }}
+              className="max-w-full rounded-xl shadow-md object-contain"
+              onError={() => setHasError(true)}
+            />
+          )}
         </div>
       </motion.div>
     </motion.div>

@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { 
   Check, X, Calendar, User, Phone, MapPin, FileText, Clock, AlertCircle, CheckCircle2, XCircle, Search, Filter, ShieldCheck
 } from 'lucide-react';
-import { io } from 'socket.io-client';
+import { socket } from '../../lib/socket';
 import { useAuthStore } from '../../store/useAuthStore';
 
 export default function LeaveControl() {
@@ -23,7 +23,6 @@ export default function LeaveControl() {
 
   // Real-time WebSockets
   useEffect(() => {
-    const socket = io('http://localhost:5000');
     const handleUpdate = () => {
       queryClient.invalidateQueries({ queryKey: ['leaves'] });
     };
@@ -35,7 +34,6 @@ export default function LeaveControl() {
       socket.off('LEAVE_CREATED', handleUpdate);
       socket.off('LEAVE_UPDATED', handleUpdate);
       socket.off('data_updated', handleUpdate);
-      socket.disconnect();
     };
   }, [queryClient]);
 
@@ -222,6 +220,7 @@ export default function LeaveControl() {
               <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
                 {filteredLeaves.map((leave: any) => {
                   const statusUpper = String(leave.status || 'Pending').toUpperCase();
+                  const isVacating = leave.leaveType === 'Permanent Hostel Vacating' || (leave.leaveType || '').includes('Vacat') || (leave.leaveType || '').includes('Exit');
 
                   return (
                     <tr key={leave.id} className="hover:bg-slate-50/70 transition-colors">

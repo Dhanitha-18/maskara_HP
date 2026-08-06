@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { apiRequest, API_BASE_URL } from '../services/api';
-import { io as socketIo } from 'socket.io-client';
+import { socket } from '../lib/socket';
 import type {
   Student,
   HostelInfo,
@@ -261,8 +261,6 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     if (!studentUsn || !isLoggedIn) return;
 
-    const socket = socketIo(API_BASE_URL);
-
     const handleDataUpdated = () => { refreshStatus(); };
     const handleAccountDeleted = (data: any) => {
       if (data?.usns?.includes(studentUsn)) {
@@ -283,7 +281,6 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       socket.off('APPLICATION_UPDATED', handleDataUpdated);
       socket.off('STUDENT_UPDATED', handleDataUpdated);
       socket.off('student_account_deleted', handleAccountDeleted);
-      socket.disconnect();
     };
   }, [studentUsn, isLoggedIn, refreshStatus, logout]);
 

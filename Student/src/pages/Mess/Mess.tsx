@@ -331,7 +331,11 @@ export const Mess: React.FC = () => {
                 >
                   <div className="w-full sm:w-48 h-48 shrink-0 overflow-hidden relative group bg-slate-100">
                     {activeData.img ? (
-                      <img src={activeData.img} alt={key} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img 
+                        src={activeData.img.startsWith('http') || activeData.img.startsWith('data:') ? activeData.img : `http://localhost:5000${activeData.img.startsWith('/') ? '' : '/'}${activeData.img}`} 
+                        alt={key} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                      />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400 group-hover:scale-105 transition-transform duration-500">
                         <MealIcon className="w-12 h-12 stroke-[1.5]" />

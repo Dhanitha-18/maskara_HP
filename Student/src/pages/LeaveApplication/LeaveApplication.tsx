@@ -8,7 +8,7 @@ import {
   ArrowLeft, ArrowRight, X, 
   Sparkles, Bell
 } from 'lucide-react';
-import { io } from 'socket.io-client';
+import { socket } from '../../lib/socket';
 
 export interface LeaveRequest {
   id: string;
@@ -60,6 +60,22 @@ const INITIAL_VACATING: VacateRequest = {
   dateSubmitted: ''
 };
 
+const formatLeaveDisplayDate = (dateStr?: string | null) => {
+  if (!dateStr) return '';
+  const clean = String(dateStr).split('T')[0];
+  const parts = clean.split('-');
+  if (parts.length === 3) {
+    const year = parts[0];
+    const monthIndex = parseInt(parts[1], 10) - 1;
+    const day = parts[2];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (months[monthIndex]) {
+      return `${day} ${months[monthIndex]} ${year}`;
+    }
+  }
+  return clean;
+};
+
 export const LeaveApplication: React.FC = () => {
   const { student } = usePayment();
   const { studentUsn, studentName } = useAuth();
@@ -67,15 +83,28 @@ export const LeaveApplication: React.FC = () => {
 
   // Persistent Leave Records state loaded from backend / localStorage
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [leaveSubTab, setLeaveSubTab] = useState<'NEW' | 'HISTORY'>('NEW');
 
-  // Fetch leaves from backend & connect WebSockets for 0 latency real-time updates
+  // Fetch leaves for logged-in student & connect WebSockets for real-time updates
   const fetchBackendLeaves = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/leaves');
+      const currentUsn = (studentUsn || student?.usn || '').trim().toUpperCase();
+      const url = currentUsn 
+        ? `http://localhost:5000/api/leaves?studentUsn=${encodeURIComponent(currentUsn)}`
+        : 'http://localhost:5000/api/leaves';
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          setLeaves(data);
+          if (currentUsn) {
+            const myLeaves = data.filter((item: any) => {
+              const u = String(item.studentUsn || item.usn || '').trim().toUpperCase();
+              return u === currentUsn;
+            });
+            setLeaves(myLeaves);
+          } else {
+            setLeaves(data);
+          }
         }
       }
     } catch {}
@@ -83,16 +112,18 @@ export const LeaveApplication: React.FC = () => {
 
   useEffect(() => {
     fetchBackendLeaves();
-    const socket = io('http://localhost:5000');
 
-    socket.on('LEAVE_CREATED', () => fetchBackendLeaves());
-    socket.on('LEAVE_UPDATED', () => fetchBackendLeaves());
-    socket.on('data_updated', () => fetchBackendLeaves());
+    const handleUpdate = () => fetchBackendLeaves();
+    socket.on('LEAVE_CREATED', handleUpdate);
+    socket.on('LEAVE_UPDATED', handleUpdate);
+    socket.on('data_updated', handleUpdate);
 
     return () => {
-      socket.disconnect();
+      socket.off('LEAVE_CREATED', handleUpdate);
+      socket.off('LEAVE_UPDATED', handleUpdate);
+      socket.off('data_updated', handleUpdate);
     };
-  }, []);
+  }, [studentUsn, student?.usn]);
 
   const [wizardStep, setWizardStep] = useState<number>(1);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
@@ -326,10 +357,6 @@ export const LeaveApplication: React.FC = () => {
       alert('Please select your Intended Vacating Date.');
       return;
     }
-    if (!vacateData.reason.trim()) {
-      alert('Please specify the reason for vacating the hostel.');
-      return;
-    }
 
     setIsSubmitting(true);
     const nameToUse = studentName || student?.name || 'Student';
@@ -339,6 +366,8 @@ export const LeaveApplication: React.FC = () => {
     if (!finalSignature && signatureMode === 'draw' && canvasRef.current) {
       finalSignature = canvasRef.current.toDataURL();
     }
+
+    const vacateReason = (vacateData.reason || '').trim() || 'Permanent Hostel Vacating';
 
     try {
       const res = await fetch('http://localhost:5000/api/leaves', {
@@ -353,12 +382,12 @@ export const LeaveApplication: React.FC = () => {
           fromDate: vacateData.vacatingDate,
           toDate: vacateData.vacatingDate,
           totalDays: 0,
-          reason: vacateData.reason.trim(),
-          bankName: (vacateData.bankName || '').trim() || null,
-          accountHolder: (vacateData.accountHolder || '').trim() || nameToUse,
-          accountNumber: (vacateData.accountNumber || '').trim() || null,
-          ifscCode: (vacateData.ifscCode || '').trim() || null,
-          depositAmount: Number(vacateData.depositAmount || 15000),
+          reason: vacateReason,
+          bankName: null,
+          accountHolder: nameToUse,
+          accountNumber: null,
+          ifscCode: null,
+          depositAmount: 15000,
           signatureDataUrl: finalSignature || '',
           status: 'Pending'
         })
@@ -366,7 +395,9 @@ export const LeaveApplication: React.FC = () => {
 
       if (res.ok) {
         triggerToast('Permanent Hostel Vacating Application submitted successfully! Admin notified in real-time.');
+        setVacateData(INITIAL_VACATING);
         await fetchBackendLeaves();
+        setLeaveSubTab('HISTORY');
       } else {
         alert('Failed to submit vacating application. Please try again.');
       }
@@ -425,8 +456,42 @@ export const LeaveApplication: React.FC = () => {
       {/* TAB 1: LEAVE & OUTPASS SYSTEM                                             */}
       {/* ========================================================================= */}
       {activeMainTab === 'leave' && (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="space-y-6">
+
+          {/* Sub-Tabs: Apply New Leave Request vs. Submitted History */}
+          <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl w-fit border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setLeaveSubTab('NEW')}
+              className={`px-5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                leaveSubTab === 'NEW'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Apply New Leave Request
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setLeaveSubTab('HISTORY')}
+              className={`px-5 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
+                leaveSubTab === 'HISTORY'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>📜 Submitted Application History</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                leaveSubTab === 'HISTORY' ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
+              }`}>
+                {leaves.length}
+              </span>
+            </button>
+          </div>
+
+          {leaveSubTab === 'NEW' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
             {/* Left 2 Columns: Multi-Step Leave Application */}
             <div className="lg:col-span-2 space-y-6">
@@ -837,10 +902,9 @@ export const LeaveApplication: React.FC = () => {
               </div>
 
             </div>
-
           </div>
-
-          {/* SUBMITTED LEAVE APPLICATIONS HISTORY */}
+          ) : (
+          /* SUBMITTED LEAVE APPLICATIONS HISTORY */
           <div className="bg-white border border-border p-6 sm:p-8 rounded-2xl shadow-soft space-y-6">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4">
               <div>
@@ -848,14 +912,28 @@ export const LeaveApplication: React.FC = () => {
                   Submitted Leave Applications History
                 </h3>
                 <p className="text-[11px] text-text-muted font-semibold mt-0.5">
-                  Track Warden approval status of your leave requests.
+                  Track Warden approval status of your submitted leave requests.
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setLeaveSubTab('NEW')}
+                className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+              >
+                + Submit New Leave Request
+              </button>
             </div>
 
             {leaves.length === 0 ? (
-              <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-3">
                 <p className="text-xs font-bold text-slate-500">No leave applications submitted yet.</p>
+                <button
+                  type="button"
+                  onClick={() => setLeaveSubTab('NEW')}
+                  className="bg-primary text-white text-xs font-bold px-4 py-2 rounded-xl"
+                >
+                  Apply New Leave
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -866,10 +944,7 @@ export const LeaveApplication: React.FC = () => {
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <span className="text-[10px] font-mono font-bold text-text-muted block">
-                          {leave.id} • Applied: {leave.appliedDate || 'Recent'}
-                        </span>
-                        <h4 className="text-xs sm:text-sm font-black text-slate-900 mt-1">{leave.leaveType}</h4>
+                        <h4 className="text-xs sm:text-sm font-black text-slate-900">{leave.leaveType}</h4>
                       </div>
 
                       <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-md border ${
@@ -884,7 +959,7 @@ export const LeaveApplication: React.FC = () => {
 
                     <div className="bg-slate-50 p-3 rounded-xl space-y-1.5 text-xs font-semibold text-slate-800">
                       <div>
-                        <span>{leave.fromDate} to {leave.toDate} ({leave.totalDays} Day(s))</span>
+                        <span>{formatLeaveDisplayDate(leave.fromDate)} to {formatLeaveDisplayDate(leave.toDate)} ({leave.totalDays} Day(s))</span>
                       </div>
                       {leave.destination && (
                         <p className="text-text-muted text-[11px] font-medium leading-relaxed">
@@ -914,6 +989,7 @@ export const LeaveApplication: React.FC = () => {
               </div>
             )}
           </div>
+          )}
 
         </div>
       )}
@@ -1070,9 +1146,6 @@ export const LeaveApplication: React.FC = () => {
               ✓
             </div>
             <h3 className="text-lg font-black text-slate-900">Leave Application Submitted!</h3>
-            <p className="text-xs text-slate-600 font-semibold leading-relaxed">
-              Your leave request <strong className="text-slate-900 font-mono">{submittedLeaveId}</strong> has been transmitted in real-time to the Hostel Warden for review.
-            </p>
             <button
               onClick={() => setShowSuccessModal(false)}
               className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-md"

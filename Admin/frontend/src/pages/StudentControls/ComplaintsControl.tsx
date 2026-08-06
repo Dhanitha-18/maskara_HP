@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  FileText, Clock, CheckCircle, ShieldAlert, 
-  Loader2, Edit3, Save, X, PhoneCall, Tag, Search, Trash2
+  AlertTriangle, CheckCircle2, Clock, MessageSquare, Search, Filter, 
+  Send, User, Phone, Building, RefreshCw, X, ShieldAlert, Sparkles, ChevronRight, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { io } from 'socket.io-client';
+import { socket } from '../../lib/socket';
 import { useAuthStore } from '../../store/useAuthStore';
 
 interface ComplaintItem {
@@ -71,33 +71,32 @@ export default function ComplaintsControl() {
 
   // Sockets for real-time synchronization
   useEffect(() => {
-    const socket = io('http://localhost:5000');
-
-    socket.on('complaint_created', (newCmp: ComplaintItem) => {
+    const handleCreated = (newCmp: ComplaintItem) => {
       setComplaints(prev => {
         if (prev.some(c => c.id === newCmp.id)) return prev;
         return [newCmp, ...prev];
       });
       toast.info(`New complaint submitted: ${newCmp.subject}`);
-    });
+    };
 
-    socket.on('complaint_updated', (updatedCmp: ComplaintItem) => {
+    const handleUpdated = (updatedCmp: ComplaintItem) => {
       setComplaints(prev => prev.map(c => c.id === updatedCmp.id ? updatedCmp : c));
-      setSelectedComplaint(prev => {
-        if (prev && prev.id === updatedCmp.id) {
-          return updatedCmp;
-        }
-        return prev;
-      });
-    });
+      setSelectedComplaint(prev => (prev && prev.id === updatedCmp.id ? updatedCmp : prev));
+    };
 
-    socket.on('complaint_deleted', (deletedId: string) => {
+    const handleDeleted = (deletedId: string) => {
       setComplaints(prev => prev.filter(c => c.id !== deletedId));
       setSelectedComplaint(prev => (prev && prev.id === deletedId ? null : prev));
-    });
+    };
+
+    socket.on('complaint_created', handleCreated);
+    socket.on('complaint_updated', handleUpdated);
+    socket.on('complaint_deleted', handleDeleted);
 
     return () => {
-      socket.disconnect();
+      socket.off('complaint_created', handleCreated);
+      socket.off('complaint_updated', handleUpdated);
+      socket.off('complaint_deleted', handleDeleted);
     };
   }, []);
 

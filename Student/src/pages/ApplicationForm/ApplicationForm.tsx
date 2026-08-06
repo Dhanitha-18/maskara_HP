@@ -233,7 +233,8 @@ export const ApplicationForm: React.FC = () => {
     setIsSubmitting(true);
 
     const finalCourse = program && branch ? `${program} - ${branch}` : course || branch;
-    const finalUsn = usn || bmsitId || studentUsn || `APP-${Date.now()}`;
+    const userEnteredUsn = (usn || bmsitId || '').trim();
+    const finalUsn = userEnteredUsn ? userEnteredUsn.toUpperCase() : '-';
 
     try {
       let uploadedPhotoUrl = "";
@@ -249,7 +250,13 @@ export const ApplicationForm: React.FC = () => {
             const uploadResJson = await uploadResponse.json();
             uploadedPhotoUrl = uploadResJson.imageUrl;
           } else {
-            console.error("Failed to upload photo file");
+            const uploadErrData = await uploadResponse.json().catch(() => ({}));
+            const errMsg = uploadErrData.error || "Upload image less than or equal to 1MB";
+            setFormErrors(errMsg);
+            setIsSubmitting(false);
+            submittingRef.current = false;
+            alert(errMsg);
+            return;
           }
         } catch (uploadErr) {
           console.error("Error uploading photo:", uploadErr);
@@ -629,13 +636,22 @@ export const ApplicationForm: React.FC = () => {
                 <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
                   Upload Student Photo (Passport Size) <span className="text-danger">*</span>
                 </span>
-                <p className="text-[9px] text-danger font-bold mt-0.5">Mandatory — application cannot be submitted without a photo</p>
+                <p className="text-[10px] text-amber-700 font-extrabold mt-0.5">Upload image less than or equal to 1MB (Max size: 1 MB)</p>
                 <input 
                   type="file" 
                   id="photo-upload" 
                   accept="image/*" 
                   onChange={e => {
                     const file = e.target.files?.[0] || null;
+                    if (file && file.size > 1 * 1024 * 1024) {
+                      setPhotoFile(null);
+                      setPhotoName('');
+                      e.target.value = '';
+                      setFormErrors("Upload image less than or equal to 1MB");
+                      alert("Upload image less than or equal to 1MB");
+                      return;
+                    }
+                    setFormErrors(null);
                     setPhotoFile(file);
                     setPhotoName(file ? file.name : '');
                   }}
@@ -650,7 +666,7 @@ export const ApplicationForm: React.FC = () => {
                 {photoFile ? (
                   <span className="text-[10px] text-success font-bold mt-1">✓ {photoName} selected</span>
                 ) : (
-                  <span className="text-[10px] text-danger/70 font-bold mt-1">⚠ No photo selected</span>
+                  <span className="text-[10px] text-danger/70 font-bold mt-1">⚠ No photo selected (Max 1MB)</span>
                 )}
               </div>
 

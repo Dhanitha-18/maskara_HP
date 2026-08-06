@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePayment } from '../../context/PaymentContext';
-import { io } from 'socket.io-client';
+import { socket } from '../../lib/socket';
 
 interface StudentAttendanceRecord {
   id: string;
@@ -52,14 +52,12 @@ export const Attendance: React.FC = () => {
 
   // Real-time updates via Socket.IO
   useEffect(() => {
-    const socket = io('http://localhost:5000');
     const handleUpdate = () => { fetchAttendanceHistory(); };
     socket.on('ATTENDANCE_UPDATED', handleUpdate);
     socket.on('data_updated', handleUpdate);
     return () => {
       socket.off('ATTENDANCE_UPDATED', handleUpdate);
       socket.off('data_updated', handleUpdate);
-      socket.disconnect();
     };
   }, [usnToUse]);
 

@@ -1,4 +1,5 @@
 import fs from 'fs';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,7 +19,7 @@ try {
   });
   cloudinarySDK = v2;
 } catch (err) {
-  console.warn('Notice: Cloudinary SDK optional module load exception, using native HTTP uploader.');
+  console.warn('Notice: Using signed native HTTP uploader for Cloudinary.');
 }
 
 /**
@@ -54,7 +55,7 @@ export const uploadImageToCloudinary = async (
       }
     }
 
-    // Direct HTTP API upload fallback
+    // Direct Signed HTTP API upload fallback
     const buffer = file.buffer || (file.path ? fs.readFileSync(file.path) : null);
     if (file.path && fs.existsSync(file.path)) {
       try { fs.unlinkSync(file.path); } catch {}
@@ -64,10 +65,16 @@ export const uploadImageToCloudinary = async (
       const mimeType = file.mimetype || 'image/jpeg';
       const base64Data = `data:${mimeType};base64,${buffer.toString('base64')}`;
       
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const stringToSign = `folder=${folder}&timestamp=${timestamp}${API_SECRET}`;
+      const signature = crypto.createHash('sha1').update(stringToSign).digest('hex');
+
       const formData = new FormData();
       formData.append('file', base64Data);
-      formData.append('upload_preset', 'unsigned_preset');
+      formData.append('api_key', API_KEY);
+      formData.append('timestamp', timestamp);
       formData.append('folder', folder);
+      formData.append('signature', signature);
 
       const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
         method: 'POST',
@@ -79,9 +86,12 @@ export const uploadImageToCloudinary = async (
         if (json.secure_url) {
           return { imageUrl: json.secure_url, publicId: json.public_id };
         }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        console.error('Cloudinary Signed Upload HTTP Error:', errJson);
       }
 
-      // If unsigned upload fails, return base64 Data URI directly
+      // If network fails, return base64 Data URI directly
       return { imageUrl: base64Data };
     }
 

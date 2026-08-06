@@ -232,7 +232,11 @@ export default function BlockOverview() {
                 >
                   <div className="h-48 relative overflow-hidden bg-slate-100 group/image">
                     <div className={`absolute inset-0 bg-gradient-to-t ${isGirls ? 'from-pink-900/90 via-pink-900/30' : 'from-blue-900/90 via-blue-900/30'} to-transparent z-10 transition-opacity pointer-events-none`}></div>
-                    <img src={block.imageUrl ? `http://localhost:5000${block.imageUrl}` : "/bg.png"} className="w-full h-full object-cover pointer-events-none" alt="Hostel Building" />
+                    <img 
+                      src={block.imageUrl ? (block.imageUrl.startsWith('http') || block.imageUrl.startsWith('data:') ? block.imageUrl : `http://localhost:5000${block.imageUrl.startsWith('/') ? '' : '/'}${block.imageUrl}`) : "/bg.png"} 
+                      className="w-full h-full object-cover pointer-events-none" 
+                      alt="Hostel Building" 
+                    />
 
                     <div className="absolute inset-0 flex flex-col justify-end p-6 z-20 text-white pointer-events-none">
                       <div className="absolute top-4 right-4 z-30 pointer-events-auto flex gap-2">
@@ -249,6 +253,12 @@ export default function BlockOverview() {
                             onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (file) {
+                                if (file.size > 1 * 1024 * 1024) {
+                                  e.target.value = '';
+                                  toast.error("Upload image less than or equal to 1MB");
+                                  alert("Upload image less than or equal to 1MB");
+                                  return;
+                                }
                                 updateBlockPhotoMutation.mutate({ blockId: block.id, file });
                               }
                             }}

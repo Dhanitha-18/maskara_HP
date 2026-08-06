@@ -96,6 +96,14 @@ export default function FacilitiesControl() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > 1 * 1024 * 1024) {
+      e.target.value = '';
+      toast.error("Upload image less than or equal to 1MB");
+      alert("Upload image less than or equal to 1MB");
+      return;
+    }
+
     const uploadData = new FormData();
     uploadData.append('photo', file);
     try {
@@ -105,7 +113,7 @@ export default function FacilitiesControl() {
       });
       const data = await res.json();
       if (res.ok) {
-        setFormData(prev => ({ ...prev, imageUrl: `http://localhost:5000${data.imageUrl}` }));
+        setFormData(prev => ({ ...prev, imageUrl: data.imageUrl }));
         toast.success('Image uploaded');
       } else {
         toast.error('Failed to upload image');

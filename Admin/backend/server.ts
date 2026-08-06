@@ -27,7 +27,10 @@ const io = new Server(httpServer, {
   cors: {
     origin: '*', // For development, allow all origins
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
-  }
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['websocket', 'polling']
 })
 
 const prisma = new PrismaClient()
@@ -166,7 +169,10 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 1 * 1024 * 1024 } // 1MB limit
+});
 
 // Check if a student with the exact same Name and Phone Number already exists
 app.post('/api/applications/check-duplicate', async (req, res) => {
@@ -896,19 +902,33 @@ app.post('/api/blocks', async (req, res) => {
   }
 });
 
-// Upload image endpoint using Cloudinary
-app.post('/api/upload', upload.single('photo'), async (req: any, res: any) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
-  try {
-    const folder = req.body?.folder || 'hostel_management';
-    const { imageUrl, publicId } = await uploadImageToCloudinary(req.file, folder);
-    res.json({ imageUrl, publicId });
-  } catch (error: any) {
-    console.error('Error uploading file to Cloudinary:', error);
-    res.status(500).json({ error: 'Failed to upload image to cloud storage' });
-  }
+// Upload image endpoint using Cloudinary (1MB max limit)
+app.post('/api/upload', (req: any, res: any) => {
+  upload.single('photo')(req, res, async (err: any) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE' || err.message?.includes('File too large')) {
+        return res.status(400).json({ error: 'Upload image less than or equal to 1MB' });
+      }
+      return res.status(400).json({ error: err.message || 'Upload image less than or equal to 1MB' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    if (req.file.size > 1 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Upload image less than or equal to 1MB' });
+    }
+
+    try {
+      const folder = req.body?.folder || 'hostel_management';
+      const { imageUrl, publicId } = await uploadImageToCloudinary(req.file, folder);
+      res.json({ imageUrl, publicId });
+    } catch (error: any) {
+      console.error('Error uploading file to Cloudinary:', error);
+      res.status(500).json({ error: 'Failed to upload image to cloud storage' });
+    }
+  });
 });
 
 // Update block photo
@@ -3962,7 +3982,14 @@ app.post('/api/chat/channels/:channelId/messages', async (req, res) => {
 // Leave Applications
 app.get('/api/leaves', async (req, res) => {
   try {
+    const { studentUsn } = req.query;
+    let whereClause: any = {};
+    if (studentUsn && typeof studentUsn === 'string' && studentUsn.trim() !== '') {
+      whereClause.studentUsn = studentUsn.trim().toUpperCase();
+    }
+
     const leaves = await (prisma as any).leaveApplication.findMany({
+      where: whereClause,
       orderBy: { appliedAt: 'desc' }
     });
     res.json(leaves);
@@ -5199,10 +5226,16 @@ app.put('/api/student/profile', async (req, res) => {
     const updatedEmail = email ? String(email).trim() : undefined;
     const updatedYear = year || yearSem;
 
-    // Update Application
-    const app = await prisma.application.findFirst({
+    // Update Application (find by USN, email, or linked account)
+    let app = await prisma.application.findFirst({
       where: { OR: [{ usn: targetUsn }, { usn: updatedUsn }] }
     });
+
+    if (!app && updatedEmail) {
+      app = await prisma.application.findFirst({
+        where: { email: updatedEmail }
+      });
+    }
 
     if (app) {
       await prisma.application.update({
@@ -5241,22 +5274,40 @@ app.put('/api/student/profile', async (req, res) => {
   }
 });
 
-// Feedback Google Form Config Store
-let feedbackFormConfig = {
-  googleFormUrl: '',
-  enabled: true
-};
-
-app.get('/api/feedback/config', (req, res) => {
-  res.json(feedbackFormConfig);
+// Feedback Google Form Config Store (Persisted in MySQL via SystemSetting)
+app.get('/api/feedback/config', async (req, res) => {
+  try {
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: 'feedback_config' }
+    });
+    if (setting && setting.value) {
+      return res.json(JSON.parse(setting.value));
+    }
+  } catch {}
+  res.json({ googleFormUrl: '', enabled: true });
 });
 
-app.post('/api/feedback/config', (req, res) => {
-  const { googleFormUrl, enabled } = req.body;
-  if (typeof googleFormUrl === 'string') feedbackFormConfig.googleFormUrl = googleFormUrl;
-  if (typeof enabled === 'boolean') feedbackFormConfig.enabled = enabled;
-  io.emit('feedback_config_updated', feedbackFormConfig);
-  res.json({ success: true, config: feedbackFormConfig });
+app.post('/api/feedback/config', async (req, res) => {
+  try {
+    const { googleFormUrl, enabled } = req.body;
+    const configData = {
+      googleFormUrl: typeof googleFormUrl === 'string' ? googleFormUrl : '',
+      enabled: typeof enabled === 'boolean' ? enabled : true
+    };
+
+    await prisma.systemSetting.upsert({
+      where: { key: 'feedback_config' },
+      update: { value: JSON.stringify(configData) },
+      create: { key: 'feedback_config', value: JSON.stringify(configData) }
+    });
+
+    io.emit('feedback_config_updated', configData);
+    io.emit('data_updated');
+    res.json({ success: true, config: configData });
+  } catch (err: any) {
+    console.error('Error saving feedback config:', err);
+    res.status(500).json({ error: 'Failed to save feedback configuration' });
+  }
 });
 
 const PORT = process.env.PORT || 5000;

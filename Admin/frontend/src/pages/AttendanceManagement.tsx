@@ -32,6 +32,8 @@ export default function AttendanceManagement() {
   const [activeTab, setActiveTab] = useState<'MARK' | 'EDIT' | 'HISTORY'>('MARK');
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historyBlockFilter, setHistoryBlockFilter] = useState('ALL');
 
   // Selected Student for Calendar Popup Modal
   const [selectedCalendarStudent, setSelectedCalendarStudent] = useState<{ usn: string; name: string; block?: string; roomNo?: string } | null>(null);
@@ -214,7 +216,7 @@ export default function AttendanceManagement() {
     });
   }, [attendanceList, selectedBlock, searchQuery, role, allowedBlocks]);
 
-  // Group history records by unique student USN for Attendance History tab
+  // Group history records by unique student USN for Attendance History tab with Search & Block filtering
   const uniqueStudentHistory = useMemo(() => {
     const map = new Map<string, any>();
     historyList.forEach(rec => {
@@ -222,8 +224,24 @@ export default function AttendanceManagement() {
         map.set(rec.studentUsn, rec);
       }
     });
-    return Array.from(map.values());
-  }, [historyList]);
+    const allUnique = Array.from(map.values());
+
+    return allUnique.filter(rec => {
+      if (historyBlockFilter !== 'ALL') {
+        const recBlock = String(rec.block || rec.hostelBlock || '').trim().toLowerCase();
+        if (recBlock !== historyBlockFilter.trim().toLowerCase()) return false;
+      }
+      if (historySearchQuery.trim()) {
+        const q = historySearchQuery.toLowerCase().trim();
+        const nameMatch = String(rec.studentName || '').toLowerCase().includes(q);
+        const usnMatch = String(rec.studentUsn || '').toLowerCase().includes(q);
+        const blockMatch = String(rec.block || '').toLowerCase().includes(q);
+        const roomMatch = String(rec.roomNo || '').toLowerCase().includes(q);
+        return nameMatch || usnMatch || blockMatch || roomMatch;
+      }
+      return true;
+    });
+  }, [historyList, historyBlockFilter, historySearchQuery]);
 
   // Calendar calculations for selected student popup modal
   const cYear = calendarDate.getFullYear();
@@ -314,7 +332,7 @@ export default function AttendanceManagement() {
       {/* ========================================================================= */}
       {activeTab === 'HISTORY' && (
         <div className="bg-white/80 backdrop-blur-2xl border border-white/60 rounded-3xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
               <h3 className="text-base font-black text-slate-900">Attendance History Logs</h3>
               <p className="text-xs text-slate-400 font-semibold mt-0.5">Click "View" to open individual student attendance calendar.</p>
@@ -325,6 +343,34 @@ export default function AttendanceManagement() {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isHistoryLoading ? 'animate-spin' : ''}`} /> Refresh
             </button>
+          </div>
+
+          {/* Search & Block Filter Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={historySearchQuery}
+                onChange={e => setHistorySearchQuery(e.target.value)}
+                placeholder="Search history by Student Name, USN, Room..."
+                className="w-full pl-10 pr-4 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Filter Block:</span>
+              <select
+                value={historyBlockFilter}
+                onChange={e => setHistoryBlockFilter(e.target.value)}
+                className="bg-white border border-slate-200 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl outline-none cursor-pointer w-full sm:w-48"
+              >
+                <option value="ALL">All Hostel Blocks</option>
+                {systemBlocks.map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {isHistoryLoading ? (

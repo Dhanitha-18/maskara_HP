@@ -90,6 +90,13 @@ export default function MessMenuControl() {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    if (file.size > 1 * 1024 * 1024) {
+      e.target.value = '';
+      toast.error("Upload image less than or equal to 1MB");
+      alert("Upload image less than or equal to 1MB");
+      return;
+    }
+    
     const formData = new FormData();
     formData.append('photo', file);
 
@@ -102,7 +109,7 @@ export default function MessMenuControl() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed');
       
-      const uploadedUrl = 'http://localhost:5000' + data.imageUrl;
+      const uploadedUrl = data.imageUrl.startsWith('http') || data.imageUrl.startsWith('data:') ? data.imageUrl : `http://localhost:5000${data.imageUrl.startsWith('/') ? '' : '/'}${data.imageUrl}`;
       let updatedMenu: any = null;
       setCmsData((prev: any) => {
         const copy = { ...prev };

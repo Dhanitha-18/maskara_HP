@@ -77,10 +77,12 @@ export const Profile: React.FC = () => {
   };
 
   const getPhotoUrl = (url?: string | null) => {
-    if (!url) return null;
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    if (url.startsWith('/')) return `http://localhost:5000${url}`;
-    return `http://localhost:5000/${url}`;
+    if (!url || url === 'null' || url === 'undefined') return null;
+    const trimmed = String(url).trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) return trimmed;
+    const origin = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:5000` : 'http://localhost:5000';
+    if (trimmed.startsWith('/')) return `${origin}${trimmed}`;
+    return `${origin}/${trimmed}`;
   };
 
   const studentPhotoUrl = getPhotoUrl(student.photoUrl || student.passportPhoto || appData.photoUrl || appData.passportPhoto);

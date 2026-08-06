@@ -7,7 +7,7 @@ import {
   X, Eye, Edit3
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { io } from 'socket.io-client';
+import { socket } from '../../lib/socket';
 import { useAuthStore } from '../../store/useAuthStore';
 
 interface ChatMessage {
@@ -128,38 +128,43 @@ export default function SocialControl() {
 
   // Connect sockets on mount
   useEffect(() => {
-    socketRef.current = io('http://localhost:5000');
-
-    socketRef.current.on('chat_message_received', (data: { channelId: string; message: any }) => {
+    const handleMsg = (data: { channelId: string; message: any }) => {
       if (data.channelId === activeChannelId) {
         setMessages(prev => {
-          // Prevent duplicates
           if (prev.some(m => m.id === data.message.id)) return prev;
           return [...prev, { ...data.message, isSelf: data.message.usn === 'ADMIN-01' }];
         });
       }
-    });
+    };
 
-    socketRef.current.on('chat_channel_created', (newChan: Channel) => {
+    const handleChanCreated = (newChan: Channel) => {
       setChannels(prev => {
         if (prev.some(c => c.id === newChan.id)) return prev;
         return [...prev, newChan];
       });
-    });
+    };
 
-    socketRef.current.on('chat_channel_updated', (updatedChan: Channel) => {
+    const handleChanUpdated = (updatedChan: Channel) => {
       setChannels(prev => prev.map(c => c.id === updatedChan.id ? updatedChan : c));
-    });
+    };
 
-    socketRef.current.on('chat_channel_deleted', (deletedId: string) => {
+    const handleChanDeleted = (deletedId: string) => {
       setChannels(prev => prev.filter(c => c.id !== deletedId));
       if (activeChannelId === deletedId) {
         setActiveChannelId('general');
       }
-    });
+    };
+
+    socket.on('chat_message_received', handleMsg);
+    socket.on('chat_channel_created', handleChanCreated);
+    socket.on('chat_channel_updated', handleChanUpdated);
+    socket.on('chat_channel_deleted', handleChanDeleted);
 
     return () => {
-      if (socketRef.current) socketRef.current.disconnect();
+      socket.off('chat_message_received', handleMsg);
+      socket.off('chat_channel_created', handleChanCreated);
+      socket.off('chat_channel_updated', handleChanUpdated);
+      socket.off('chat_channel_deleted', handleChanDeleted);
     };
   }, [activeChannelId]);
 

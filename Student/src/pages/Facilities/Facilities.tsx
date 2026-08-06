@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { io } from 'socket.io-client';
+import { socket } from '../../lib/socket';
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { FACILITIES_HERO_IMAGE } from '../../assets/heroBanners';
 import { 
@@ -120,15 +120,15 @@ export const Facilities: React.FC = () => {
     };
     fetchFacilities();
 
-    const socket = io('http://localhost:5000');
-    socket.on('facilities_updated', fetchFacilities);
-    socket.on('data_updated', fetchFacilities);
+    const handleUpdate = () => { if (active) fetchFacilities(); };
+
+    socket.on('facilities_updated', handleUpdate);
+    socket.on('data_updated', handleUpdate);
 
     return () => { 
       active = false; 
-      socket.off('facilities_updated', fetchFacilities);
-      socket.off('data_updated', fetchFacilities);
-      socket.disconnect();
+      socket.off('facilities_updated', handleUpdate);
+      socket.off('data_updated', handleUpdate);
     };
   }, []);
 
@@ -150,7 +150,7 @@ export const Facilities: React.FC = () => {
           {/* Display facilities fetched from MySQL database */}
           {(adminFacilities.length > 0 ? adminFacilities : PG_FACILITIES.map((f, i) => ({ id: `default-${i}`, title: f.name, description: f.desc, imageUrl: f.image }))).map((facility: any) => {
             const imageSrc = facility.imageUrl || facility.image || '';
-            const fullImageSrc = imageSrc.startsWith('http') || imageSrc.startsWith('/') ? imageSrc : `http://localhost:5000${imageSrc}`;
+            const fullImageSrc = !imageSrc ? '' : (imageSrc.startsWith('http') || imageSrc.startsWith('data:') ? imageSrc : `http://localhost:5000${imageSrc.startsWith('/') ? '' : '/'}${imageSrc}`);
             const title = facility.title || facility.name;
             const desc = facility.description || facility.desc;
 

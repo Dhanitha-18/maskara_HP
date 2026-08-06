@@ -25,6 +25,7 @@ export default function FeedbackControl() {
   const currentMonthName = new Date().toLocaleString('en-US', { month: 'long' });
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthName);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [blockFilter, setBlockFilter] = useState<string>('ALL');
 
   // Google Form Config State
   const [googleFormUrl, setGoogleFormUrl] = useState<string>('');
@@ -103,6 +104,22 @@ export default function FeedbackControl() {
     });
   };
 
+  // Extract unique blocks from applications and feedback list
+  const availableBlocks = useMemo(() => {
+    const apps = Array.isArray(applicationsList) ? applicationsList : [];
+    const fbs = Array.isArray(feedbackList) ? feedbackList : [];
+    const blocks = new Set<string>();
+    apps.forEach((app: any) => {
+      const b = app.block || app.hostelBlock || app.roomBlock || (app.allocations && app.allocations[0]?.bed?.room?.block?.name);
+      if (b && String(b).trim() !== '') blocks.add(String(b).trim());
+    });
+    fbs.forEach((fb: any) => {
+      const b = fb.block || fb.hostelBlock;
+      if (b && String(b).trim() !== '') blocks.add(String(b).trim());
+    });
+    return Array.from(blocks).sort();
+  }, [applicationsList, feedbackList]);
+
   // Map students with feedback response status (Responded / Not Responded)
   const studentFeedbackStatuses = useMemo(() => {
     const apps = Array.isArray(applicationsList) ? applicationsList : [];
@@ -123,12 +140,14 @@ export default function FeedbackControl() {
       .map((app: any) => {
         const u = String(app.usn || '').trim().toUpperCase();
         const fbRecord = respondedMap.get(u);
+        const blockName = app.block || app.hostelBlock || app.roomBlock || (app.allocations && app.allocations[0]?.bed?.room?.block?.name) || 'General';
         return {
           id: app.id,
           studentName: app.studentName || 'Student',
           usn: app.usn || 'N/A',
           department: app.department || 'General',
           phoneNumber: app.phoneNumber || 'N/A',
+          block: blockName,
           hasResponded: Boolean(fbRecord),
           submittedAt: fbRecord?.createdAt || null
         };
@@ -146,6 +165,7 @@ export default function FeedbackControl() {
           usn: fb.usn || 'N/A',
           department: fb.department || 'General',
           phoneNumber: fb.phoneNumber || 'N/A',
+          block: fb.block || fb.hostelBlock || 'General',
           hasResponded: true,
           submittedAt: fb.createdAt || null
         });
@@ -153,14 +173,18 @@ export default function FeedbackControl() {
     });
 
     return combined.filter(student => {
+      if (blockFilter !== 'ALL') {
+        if (String(student.block || '').trim().toLowerCase() !== blockFilter.trim().toLowerCase()) return false;
+      }
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       return (
         student.studentName.toLowerCase().includes(q) ||
-        student.usn.toLowerCase().includes(q)
+        student.usn.toLowerCase().includes(q) ||
+        String(student.block || '').toLowerCase().includes(q)
       );
     });
-  }, [applicationsList, feedbackList, searchQuery, role, allowedBlocks]);
+  }, [applicationsList, feedbackList, searchQuery, blockFilter, role, allowedBlocks]);
 
   // Export to XLSX
   const handleExportXLSX = () => {
@@ -310,17 +334,34 @@ export default function FeedbackControl() {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Select Month:</span>
-          <select
-            value={selectedMonth}
-            onChange={e => setSelectedMonth(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl outline-none cursor-pointer w-full sm:w-48"
-          >
-            {MONTHS.map(month => (
-              <option key={month} value={month}>{month}</option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* Block Filter Dropdown */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Filter Block:</span>
+            <select
+              value={blockFilter}
+              onChange={e => setBlockFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl outline-none cursor-pointer w-full sm:w-44"
+            >
+              <option value="ALL">All Hostel Blocks</option>
+              {availableBlocks.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Select Month:</span>
+            <select
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl outline-none cursor-pointer w-full sm:w-44"
+            >
+              {MONTHS.map(month => (
+                <option key={month} value={month}>{month}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -332,6 +373,7 @@ export default function FeedbackControl() {
               <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-wider">
                 <th className="p-4 pl-6">Student Name</th>
                 <th className="p-4">USN</th>
+                <th className="p-4">Block</th>
                 <th className="p-4">Department</th>
                 <th className="p-4 text-center">Feedback Status</th>
                 <th className="p-4 text-right pr-6">Submission Date</th>
@@ -340,7 +382,7 @@ export default function FeedbackControl() {
             <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
               {studentFeedbackStatuses.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center text-slate-400">
+                  <td colSpan={6} className="p-12 text-center text-slate-400">
                     <MessageSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="font-bold text-slate-600">No student records found.</p>
                   </td>
@@ -359,6 +401,10 @@ export default function FeedbackControl() {
 
                     <td className="p-4 font-mono font-bold text-slate-800">
                       {item.usn}
+                    </td>
+
+                    <td className="p-4 font-bold text-indigo-700">
+                      {item.block || 'General'}
                     </td>
 
                     <td className="p-4 font-bold text-slate-600">
