@@ -48,6 +48,7 @@ export const SocialConnect: React.FC = () => {
   const studentName = student?.name || 'Student';
   
   const socketRef = useRef<any>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
   const [activeChannelId, setActiveChannelId] = useState<string>('general');
   const [inputText, setInputText] = useState('');
   

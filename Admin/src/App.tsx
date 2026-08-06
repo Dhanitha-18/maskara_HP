@@ -221,7 +221,7 @@ function AnimatedRoutes() {
             <Route path="/occupancy" element={<RouteGuard path="/occupancy"><ErrorBoundary fallbackTitle="Live Occupancy Error"><RoomOccupancy /></ErrorBoundary></RouteGuard>} />
             <Route path="/attendance" element={<RouteGuard path="/attendance"><ErrorBoundary fallbackTitle="Attendance Error"><AttendanceManagement /></ErrorBoundary></RouteGuard>} />
             <Route path="/communication" element={<RouteGuard path="/communication"><ErrorBoundary fallbackTitle="Communication Center Error"><CommunicationCenter /></ErrorBoundary></RouteGuard>} />
-            <Route path="/payments" element={<RouteGuard path="/payments"><ErrorBoundary fallbackTitle="Payment Dashboard Error"><PaymentDashboard /></RouteGuard>} />
+            <Route path="/payments" element={<RouteGuard path="/payments"><ErrorBoundary fallbackTitle="Payment Dashboard Error"><PaymentDashboard /></ErrorBoundary></RouteGuard>} />
             <Route path="/student-controls" element={<RouteGuard path="/student-controls"><ErrorBoundary fallbackTitle="Student Controls Error"><StudentControlsIndex /></ErrorBoundary></RouteGuard>} />
             <Route path="/admin-management" element={<RouteGuard path="/admin-management"><ErrorBoundary fallbackTitle="Admin Management Error"><AdminManagement /></ErrorBoundary></RouteGuard>} />
             <Route path="*" element={<Navigate to="/" replace />} />
