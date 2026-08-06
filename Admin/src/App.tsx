@@ -198,6 +198,8 @@ function RouteGuard({ children, path }: { children: React.ReactNode, path: strin
   return <Navigate to={firstAllowed} replace />;
 }
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 function AnimatedRoutes() {
   const location = useLocation();
   return (
@@ -210,19 +212,21 @@ function AnimatedRoutes() {
         transition={{ duration: 0.3, ease: "easeOut" }}
         className="w-full h-full"
       >
-        <Routes location={location}>
-          <Route path="/" element={<RouteGuard path="/"><DashboardStats /></RouteGuard>} />
-          <Route path="/applications" element={<RouteGuard path="/applications"><ApplicationsQueue /></RouteGuard>} />
-          <Route path="/database" element={<RouteGuard path="/database"><StudentDatabase /></RouteGuard>} />
-          <Route path="/blocks" element={<RouteGuard path="/blocks"><BlockOverview /></RouteGuard>} />
-          <Route path="/occupancy" element={<RouteGuard path="/occupancy"><RoomOccupancy /></RouteGuard>} />
-          <Route path="/attendance" element={<RouteGuard path="/attendance"><AttendanceManagement /></RouteGuard>} />
-          <Route path="/communication" element={<RouteGuard path="/communication"><CommunicationCenter /></RouteGuard>} />
-          <Route path="/payments" element={<RouteGuard path="/payments"><PaymentDashboard /></RouteGuard>} />
-          <Route path="/student-controls" element={<RouteGuard path="/student-controls"><StudentControlsIndex /></RouteGuard>} />
-          <Route path="/admin-management" element={<RouteGuard path="/admin-management"><AdminManagement /></RouteGuard>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes location={location}>
+            <Route path="/" element={<RouteGuard path="/"><ErrorBoundary fallbackTitle="Dashboard Overview Error"><DashboardStats /></ErrorBoundary></RouteGuard>} />
+            <Route path="/applications" element={<RouteGuard path="/applications"><ErrorBoundary fallbackTitle="Applications Queue Error"><ApplicationsQueue /></ErrorBoundary></RouteGuard>} />
+            <Route path="/database" element={<RouteGuard path="/database"><ErrorBoundary fallbackTitle="Student Database Error"><StudentDatabase /></ErrorBoundary></RouteGuard>} />
+            <Route path="/blocks" element={<RouteGuard path="/blocks"><ErrorBoundary fallbackTitle="Block Overview Error"><BlockOverview /></ErrorBoundary></RouteGuard>} />
+            <Route path="/occupancy" element={<RouteGuard path="/occupancy"><ErrorBoundary fallbackTitle="Live Occupancy Error"><RoomOccupancy /></ErrorBoundary></RouteGuard>} />
+            <Route path="/attendance" element={<RouteGuard path="/attendance"><ErrorBoundary fallbackTitle="Attendance Error"><AttendanceManagement /></ErrorBoundary></RouteGuard>} />
+            <Route path="/communication" element={<RouteGuard path="/communication"><ErrorBoundary fallbackTitle="Communication Center Error"><CommunicationCenter /></ErrorBoundary></RouteGuard>} />
+            <Route path="/payments" element={<RouteGuard path="/payments"><ErrorBoundary fallbackTitle="Payment Dashboard Error"><PaymentDashboard /></RouteGuard>} />
+            <Route path="/student-controls" element={<RouteGuard path="/student-controls"><ErrorBoundary fallbackTitle="Student Controls Error"><StudentControlsIndex /></ErrorBoundary></RouteGuard>} />
+            <Route path="/admin-management" element={<RouteGuard path="/admin-management"><ErrorBoundary fallbackTitle="Admin Management Error"><AdminManagement /></ErrorBoundary></RouteGuard>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </ErrorBoundary>
       </motion.div>
     </AnimatePresence>
   );

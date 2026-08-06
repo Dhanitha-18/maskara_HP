@@ -91,36 +91,40 @@ const RequireApplicationGuard: React.FC<{ children: React.ReactNode }> = ({ chil
   return <>{children}</>;
 };
 
+import { ErrorBoundary } from '../components/common/ErrorBoundary';
+
 export const AppRouter: React.FC = () => {
   return (
-    <Routes>
-      {/* Login Page */}
-      <Route path="/login" element={<Login />} />
+    <ErrorBoundary fallbackTitle="Student Portal View Error">
+      <Routes>
+        {/* Login Page */}
+        <Route path="/login" element={<ErrorBoundary fallbackTitle="Login Error"><Login /></ErrorBoundary>} />
 
-      {/* Main Website Layout */}
-      <Route path="/" element={<MainLayout />}>
-        {/* Always accessible pages */}
-        <Route index element={<Overview />} />
-        <Route path="facilities" element={<Facilities />} />
-        <Route path="mess" element={<Mess />} />
-        <Route path="apply" element={<ApplicationForm />} />
+        {/* Main Website Layout */}
+        <Route path="/" element={<MainLayout />}>
+          {/* Always accessible pages */}
+          <Route index element={<ErrorBoundary fallbackTitle="Overview Error"><Overview /></ErrorBoundary>} />
+          <Route path="facilities" element={<ErrorBoundary fallbackTitle="Facilities Error"><Facilities /></ErrorBoundary>} />
+          <Route path="mess" element={<ErrorBoundary fallbackTitle="Mess Menu Error"><Mess /></ErrorBoundary>} />
+          <Route path="apply" element={<ErrorBoundary fallbackTitle="Application Form Error"><ApplicationForm /></ErrorBoundary>} />
 
-        {/* Protected student features requiring student login and allocation */}
-        <Route path="circulars" element={<RequireApplicationGuard><Circulars /></RequireApplicationGuard>} />
-        <Route path="circular" element={<RequireApplicationGuard><Circulars /></RequireApplicationGuard>} />
-        <Route path="social-connect" element={<RequireApplicationGuard><SocialConnect /></RequireApplicationGuard>} />
-        <Route path="social_connect" element={<RequireApplicationGuard><SocialConnect /></RequireApplicationGuard>} />
-        <Route path="socialconnect" element={<RequireApplicationGuard><SocialConnect /></RequireApplicationGuard>} />
-        <Route path="profile" element={<RequireApplicationGuard><Profile /></RequireApplicationGuard>} />
-        <Route path="payment" element={<RequireApplicationGuard><Payment /></RequireApplicationGuard>} />
-        <Route path="complaints" element={<RequireApplicationGuard><Complaints /></RequireApplicationGuard>} />
-        <Route path="attendance" element={<RequireApplicationGuard><Attendance /></RequireApplicationGuard>} />
-        <Route path="leave-application" element={<RequireApplicationGuard><LeaveApplication /></RequireApplicationGuard>} />
-        <Route path="feedback" element={<RequireApplicationGuard><Feedback /></RequireApplicationGuard>} />
+          {/* Protected student features requiring student login and allocation */}
+          <Route path="circulars" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Circulars Error"><Circulars /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="circular" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Circulars Error"><Circulars /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="social-connect" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Social Connect Error"><SocialConnect /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="social_connect" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Social Connect Error"><SocialConnect /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="socialconnect" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Social Connect Error"><SocialConnect /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="profile" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Profile Error"><Profile /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="payment" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Payment Error"><Payment /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="complaints" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Complaints Error"><Complaints /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="attendance" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Attendance Error"><Attendance /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="leave-application" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Leave Application Error"><LeaveApplication /></ErrorBoundary></RequireApplicationGuard>} />
+          <Route path="feedback" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Feedback Error"><Feedback /></ErrorBoundary></RequireApplicationGuard>} />
 
-        {/* Redirect unknown routes to Overview */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+          {/* Redirect unknown routes to Overview */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </ErrorBoundary>
   );
 };
