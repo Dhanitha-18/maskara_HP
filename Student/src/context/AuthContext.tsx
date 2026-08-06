@@ -26,12 +26,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const savedPhone = sessionStorage.getItem('student_phone') || localStorage.getItem('student_phone');
     const savedToken = sessionStorage.getItem('student_token') || localStorage.getItem('student_token');
 
-    if (savedUsn || savedName) {
+    if (savedToken && (savedUsn || savedName)) {
       setStudentUsn(savedUsn);
       setStudentName(savedName);
       setStudentPhone(savedPhone);
       setToken(savedToken);
       setIsLoggedIn(true);
+
+      // Verify against backend database
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      fetch(`${apiUrl}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${savedToken}` }
+      })
+        .then(res => {
+          if (!res.ok) {
+            logout();
+          }
+        })
+        .catch(() => {});
     } else {
       setIsLoggedIn(false);
     }
