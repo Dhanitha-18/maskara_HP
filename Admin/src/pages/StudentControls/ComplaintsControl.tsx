@@ -283,7 +283,7 @@ export default function ComplaintsControl() {
             <span className="text-lg font-black text-emerald-600 font-mono mt-0.5 block">{resolvedCount} Solved</span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <CheckCircle className="w-4 h-4" />
+            <CheckCircle2 className="w-4 h-4" />
           </div>
         </div>
       </div>
