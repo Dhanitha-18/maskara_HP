@@ -11,6 +11,8 @@ services:
         value: 5000
       - key: DATABASE_URL
         sync: false
+      - key: DIRECT_URL
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
