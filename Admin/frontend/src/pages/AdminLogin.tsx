@@ -39,7 +39,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success && data.admin) {
-        setAdminUser(data.admin);
+        setAdminUser(data.admin, data.token);
         onLogin();
       } else {
         const u = username.toLowerCase().trim();

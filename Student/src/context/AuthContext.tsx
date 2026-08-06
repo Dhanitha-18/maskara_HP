@@ -5,8 +5,9 @@ interface AuthContextType {
   studentUsn: string | null;
   studentName: string | null;
   studentPhone: string | null;
+  token: string | null;
   setStudentName: (name: string) => void;
-  login: (usn: string, name?: string, phone?: string) => void;
+  login: (usn: string, name?: string, phone?: string, token?: string) => void;
   logout: () => void;
 }
 
@@ -17,23 +18,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [studentUsn, setStudentUsn] = useState<string | null>(null);
   const [studentName, setStudentName] = useState<string | null>(null);
   const [studentPhone, setStudentPhone] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
-  // Use sessionStorage so fresh app startup always opens on Student Login
   useEffect(() => {
-    const savedUsn = sessionStorage.getItem('student_usn');
-    const savedName = sessionStorage.getItem('student_name');
-    const savedPhone = sessionStorage.getItem('student_phone');
+    const savedUsn = sessionStorage.getItem('student_usn') || localStorage.getItem('student_usn');
+    const savedName = sessionStorage.getItem('student_name') || localStorage.getItem('student_name');
+    const savedPhone = sessionStorage.getItem('student_phone') || localStorage.getItem('student_phone');
+    const savedToken = sessionStorage.getItem('student_token') || localStorage.getItem('student_token');
+
     if (savedUsn || savedName) {
       setStudentUsn(savedUsn);
       setStudentName(savedName);
       setStudentPhone(savedPhone);
+      setToken(savedToken);
       setIsLoggedIn(true);
     } else {
       setIsLoggedIn(false);
     }
   }, []);
 
-  const login = (usn: string, name?: string, phone?: string) => {
+  const login = (usn: string, name?: string, phone?: string, authToken?: string) => {
     const normalizedUsn = usn ? usn.trim().toUpperCase() : `STD-${Date.now()}`;
     setStudentUsn(normalizedUsn);
     setIsLoggedIn(true);
@@ -50,6 +54,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.setItem('student_phone', phone);
       localStorage.setItem('student_phone', phone);
     }
+    if (authToken) {
+      setToken(authToken);
+      sessionStorage.setItem('student_token', authToken);
+      localStorage.setItem('student_token', authToken);
+    }
   };
 
   const logout = () => {
@@ -57,12 +66,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setStudentUsn(null);
     setStudentName(null);
     setStudentPhone(null);
+    setToken(null);
     sessionStorage.removeItem('student_usn');
     sessionStorage.removeItem('student_name');
     sessionStorage.removeItem('student_phone');
+    sessionStorage.removeItem('student_token');
     localStorage.removeItem('student_usn');
     localStorage.removeItem('student_name');
     localStorage.removeItem('student_phone');
+    localStorage.removeItem('student_token');
     localStorage.removeItem('cached_application_state');
   };
 
@@ -77,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       studentUsn,
       studentName,
       studentPhone,
+      token,
       setStudentName: updateStudentName,
       login,
       logout

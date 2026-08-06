@@ -33,8 +33,8 @@ function getInitialUser(): AdminUser {
   } catch {}
   return {
     id: 'default-chief',
-    email: 'admin@omsai.com',
-    name: 'Sindhu Sharma',
+    email: 'admin123@gmail.com',
+    name: 'Chief Administrator',
     role: 'CHIEF',
     title: 'Chief Warden & Administrator',
     allowedTabs: DEFAULT_TABS,
@@ -47,29 +47,37 @@ interface AuthState {
   role: Role;
   name: string;
   title: string;
+  token: string | null;
   allowedTabs: string[];
   allowedBlocks: string[];
-  setAdminUser: (user: AdminUser) => void;
+  setAdminUser: (user: AdminUser, token?: string) => void;
   logout: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => {
   const initial = getInitialUser();
+  const savedToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+
   return {
     user: initial,
     role: initial.role,
     name: initial.name,
     title: initial.title,
+    token: savedToken,
     allowedTabs: initial.allowedTabs || DEFAULT_TABS,
     allowedBlocks: initial.allowedBlocks || ['ALL'],
-    setAdminUser: (user: AdminUser) => {
+    setAdminUser: (user: AdminUser, token?: string) => {
       localStorage.setItem('admin_user', JSON.stringify(user));
       localStorage.setItem('admin_authenticated', 'true');
+      if (token) {
+        localStorage.setItem('admin_token', token);
+      }
       set({
         user,
         role: user.role,
         name: user.name,
         title: user.title,
+        token: token || savedToken,
         allowedTabs: user.allowedTabs || DEFAULT_TABS,
         allowedBlocks: user.allowedBlocks || ['ALL']
       });
@@ -77,10 +85,11 @@ export const useAuthStore = create<AuthState>((set) => {
     logout: () => {
       localStorage.removeItem('admin_authenticated');
       localStorage.removeItem('admin_user');
+      localStorage.removeItem('admin_token');
       const resetUser = {
         id: 'default-chief',
-        email: 'admin@omsai.com',
-        name: 'Sindhu Sharma',
+        email: 'admin123@gmail.com',
+        name: 'Chief Administrator',
         role: 'CHIEF' as Role,
         title: 'Chief Warden & Administrator',
         allowedTabs: DEFAULT_TABS,
@@ -91,6 +100,7 @@ export const useAuthStore = create<AuthState>((set) => {
         role: resetUser.role,
         name: resetUser.name,
         title: resetUser.title,
+        token: null,
         allowedTabs: resetUser.allowedTabs,
         allowedBlocks: resetUser.allowedBlocks
       });
