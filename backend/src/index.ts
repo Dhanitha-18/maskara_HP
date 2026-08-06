@@ -45,7 +45,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Helper function to auto-seed Chief Admin if needed
+// Helper function to auto-seed Chief Admin and default channels on server startup
 async function seedDefaultChiefAdmin() {
   try {
     const adminCount = await prisma.adminAccount.count();
@@ -67,6 +67,23 @@ async function seedDefaultChiefAdmin() {
         }
       });
       console.log('Auto-seeded default Chief Admin (admin123@gmail.com).');
+    }
+
+    const defaultChannels = [
+      { name: 'general', desc: 'General hostel discussion and announcements', iconName: 'MessageSquare' },
+      { name: 'marketplace', desc: 'Buy and sell items within the hostel community', iconName: 'ShoppingBag' }
+    ];
+
+    for (const channel of defaultChannels) {
+      await prisma.chatChannel.upsert({
+        where: { name: channel.name },
+        update: {},
+        create: {
+          name: channel.name,
+          desc: channel.desc,
+          iconName: channel.iconName
+        }
+      });
     }
   } catch (err) {
     console.error('Error seeding chief admin:', err);

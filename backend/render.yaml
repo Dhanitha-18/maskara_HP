@@ -3,7 +3,7 @@ services:
     name: maskara-backend
     env: node
     buildCommand: npm install && npm run build
-    startCommand: npm run prisma:push && npm run prisma:seed && npm start
+    startCommand: npx prisma db push && npm start
     envVars:
       - key: NODE_ENV
         value: production
