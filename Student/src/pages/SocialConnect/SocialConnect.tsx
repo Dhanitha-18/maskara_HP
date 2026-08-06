@@ -70,34 +70,45 @@ export const SocialConnect: React.FC = () => {
   const [interestedItem, setInterestedItem] = useState<ChatMessage | null>(null);
   const [interestOfferMessage, setInterestOfferMessage] = useState('Hey! Is this item still available? I would like to buy it.');
 
-  const socketRef = useRef<any>(null);
-  const chatBottomRef = useRef<HTMLDivElement | null>(null);
+  // Mention autocomplete popup state
+  const [showMentionPopup, setShowMentionPopup] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
 
-  // Fetch Channels on Mount
+  const studentBlock = (student as any)?.allocatedBlock || (student as any)?.block || hostel?.block || '';
+
+  // Fetch Channels on Mount or Student Block change
   useEffect(() => {
-    fetch('http://localhost:5000/api/chat/channels')
+    const blockParam = studentBlock ? `?block=${encodeURIComponent(studentBlock)}` : '';
+    fetch(`http://localhost:5000/api/chat/channels${blockParam}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
-          setChannels(data);
-          if (!data.some((c: any) => c.id === activeChannelId)) {
-            setActiveChannelId(data[0].id);
+          // Client side safety check for block assignment
+          const filtered = data.filter((c: any) => {
+            if (!c.targetBlock || c.targetBlock === 'ALL') return true;
+            if (!studentBlock) return true;
+            const cBlock = String(c.targetBlock).trim().toLowerCase();
+            const sBlock = String(studentBlock).trim().toLowerCase();
+            return cBlock === sBlock || sBlock.includes(cBlock) || cBlock.includes(sBlock);
+          });
+          setChannels(filtered);
+          if (!filtered.some((c: any) => c.id === activeChannelId)) {
+            setActiveChannelId(filtered[0]?.id || 'general');
           }
         }
       })
       .catch(err => console.error('Failed to load channels', err));
 
-    // Fetch Resident list from applications (for Directory filtered by student block)
+    // Fetch Resident list from applications (filtered strictly by student block)
     fetch('http://localhost:5000/api/applications')
       .then(res => res.json())
       .then(all => {
         if (Array.isArray(all)) {
-          const studentBlock = (student as any)?.allocatedBlock || (student as any)?.block || '';
           const approved = all.filter((a: any) => {
             const isApp = a.status === 'APPROVED' || a.status === 'ALLOCATED';
             if (!isApp) return false;
             if (!studentBlock) return true;
-            const aBlock = (a.block || a.allocations?.[0]?.bed?.room?.block?.name || '').trim().toLowerCase();
+            const aBlock = (a.block || a.hostelPref || a.allocations?.[0]?.bed?.room?.block?.name || '').trim().toLowerCase();
             const sBlock = studentBlock.trim().toLowerCase();
             return !aBlock || aBlock.includes(sBlock) || sBlock.includes(aBlock);
           });
@@ -105,7 +116,33 @@ export const SocialConnect: React.FC = () => {
         }
       })
       .catch(err => console.error('Failed to load residents', err));
-  }, []);
+  }, [studentBlock]);
+
+  // Handle Input typing and @ mention suggestion popup
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputText(val);
+
+    const lastAtIdx = val.lastIndexOf('@');
+    if (lastAtIdx !== -1 && lastAtIdx >= val.lastIndexOf(' ')) {
+      const q = val.slice(lastAtIdx + 1);
+      setMentionQuery(q);
+      setShowMentionPopup(true);
+    } else {
+      setShowMentionPopup(false);
+    }
+  };
+
+  const handleSelectMention = (residentName: string) => {
+    const lastAtIdx = inputText.lastIndexOf('@');
+    if (lastAtIdx !== -1) {
+      const prefix = inputText.slice(0, lastAtIdx);
+      setInputText(`${prefix}@${residentName} `);
+    } else {
+      setInputText(prev => `${prev}@${residentName} `);
+    }
+    setShowMentionPopup(false);
+  };
 
   // Fetch messages when active channel changes
   useEffect(() => {
@@ -140,6 +177,13 @@ export const SocialConnect: React.FC = () => {
     socketRef.current.on('chat_channel_created', (newChan: Channel) => {
       setChannels(prev => {
         if (prev.some(c => c.id === newChan.id)) return prev;
+        if (newChan.targetBlock && newChan.targetBlock !== 'ALL' && studentBlock) {
+          const cBlock = String(newChan.targetBlock).trim().toLowerCase();
+          const sBlock = String(studentBlock).trim().toLowerCase();
+          if (cBlock !== sBlock && !sBlock.includes(cBlock) && !cBlock.includes(sBlock)) {
+            return prev;
+          }
+        }
         return [...prev, newChan];
       });
     });
@@ -158,7 +202,7 @@ export const SocialConnect: React.FC = () => {
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
     };
-  }, [activeChannelId, student.usn]);
+  }, [activeChannelId, student.usn, studentBlock]);
 
   // Scroll window to top on page mount
   useEffect(() => {
@@ -552,19 +596,50 @@ export const SocialConnect: React.FC = () => {
             <div ref={chatBottomRef} />
           </div>
 
-          {/* Chat input footer */}
-          <form onSubmit={handleSendMessage} className="h-16 border-t border-border flex items-center px-4 gap-3 bg-white shrink-0">
+          {/* Chat input footer with @ mention autocomplete */}
+          <form onSubmit={handleSendMessage} className="relative h-16 border-t border-border flex items-center px-4 gap-3 bg-white shrink-0">
+            {showMentionPopup && (
+              <div className="absolute bottom-16 left-4 right-4 bg-white border border-slate-200 rounded-xl shadow-xl z-30 max-h-44 overflow-y-auto p-1 font-sans">
+                <div className="px-2.5 py-1 text-[9px] font-black uppercase text-slate-400 border-b border-slate-100 flex justify-between items-center">
+                  <span>Mention Resident ({studentBlock ? `Block ${studentBlock}` : 'All Blocks'})</span>
+                  <span className="text-[8px] font-normal text-slate-300">Click to tag</span>
+                </div>
+                {residents
+                  .filter((r: any) => r.studentName && r.studentName.toLowerCase().includes(mentionQuery.toLowerCase()))
+                  .slice(0, 6)
+                  .map((r: any) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => handleSelectMention(r.studentName)}
+                      className="w-full text-left px-3 py-2 hover:bg-indigo-50 rounded-lg text-xs font-bold text-slate-800 flex items-center justify-between cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-[10px] uppercase">
+                          {r.studentName.charAt(0)}
+                        </div>
+                        <span>@{r.studentName}</span>
+                      </div>
+                      <span className="text-[9px] text-slate-400 font-mono">{r.usn}</span>
+                    </button>
+                  ))}
+                {residents.filter((r: any) => r.studentName && r.studentName.toLowerCase().includes(mentionQuery.toLowerCase())).length === 0 && (
+                  <div className="px-3 py-2 text-[10px] text-slate-400 italic">No resident found in this block</div>
+                )}
+              </div>
+            )}
+
             <input 
               type="text" 
-              placeholder={`Message #${activeChannel.name}...`}
+              placeholder={`Message #${activeChannel.name}... (type @ to mention)`}
               value={inputText}
-              onChange={e => setInputText(e.target.value)}
+              onChange={handleInputChange}
               className="flex-1 border border-border rounded-xl px-4 py-2.5 text-xs font-bold focus:ring-2 focus:ring-primary/20 outline-none"
             />
             
             <button
               type="submit"
-              className="bg-primary hover:bg-primary-dark text-white px-4 py-2.5 rounded-xl shadow transition-colors flex items-center gap-1.5 font-bold text-xs"
+              className="bg-primary hover:bg-primary-dark text-white px-4 py-2.5 rounded-xl shadow transition-colors flex items-center gap-1.5 font-bold text-xs cursor-pointer"
             >
               <span>Send</span>
               <Send className="w-3.5 h-3.5" />

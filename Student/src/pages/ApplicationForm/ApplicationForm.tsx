@@ -91,7 +91,7 @@ export const ApplicationForm: React.FC = () => {
 
   const [formErrors, setFormErrors] = useState<string | null>(null);
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     if (step === 1) {
       if (quota !== 'MANAGEMENT' && !rank.trim()) {
         setFormErrors("Entrance Exam Rank is required for the selected quota.");
@@ -145,6 +145,22 @@ export const ApplicationForm: React.FC = () => {
       if (!photoFile) {
         setFormErrors("Passport size photo is mandatory. Please upload your photo.");
         return;
+      }
+
+      // Check if student with exact same Name AND Phone Number already exists (in PG or pending application)
+      try {
+        const checkRes = await fetch(`${API_BASE_URL}/api/applications/check-duplicate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentName: fullName.trim(), phoneNumber: cleanContact })
+        });
+        const checkData = await checkRes.json();
+        if (checkData.exists) {
+          setFormErrors("A student with this Name and Phone Number already exists.");
+          return;
+        }
+      } catch (err) {
+        console.error("Error checking duplicate student:", err);
       }
     } else if (step === 2) {
       if (!fatherName.trim()) {

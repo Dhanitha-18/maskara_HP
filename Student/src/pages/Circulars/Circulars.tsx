@@ -449,10 +449,31 @@ export const Circulars: React.FC = () => {
     return { total, unread, archived };
   }, [notices]);
 
-  const handleDownloadAttachment = (att: Attachment) => {
+  const handleDownloadAttachment = async (att: Attachment) => {
+    showToast(`Downloading ${att.name || 'document'}...`);
     if (att.url) {
-      window.open(att.url, '_blank');
-      return;
+      const fullUrl = att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`;
+      try {
+        const response = await fetch(fullUrl);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = att.name || fullUrl.split('/').pop() || 'document.pdf';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        return;
+      } catch (err) {
+        const link = document.createElement('a');
+        link.href = fullUrl;
+        link.download = att.name || 'document';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
     }
     const content = `Official Notice Attachment: ${att.name}\nType: ${att.type}\nSize: ${att.size || 'Unknown'}\n\nThank you.`;
     const blob = new Blob([content], { type: att.type === 'pdf' ? 'application/pdf' : 'text/plain' });
@@ -462,7 +483,6 @@ export const Circulars: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast(`Downloading ${att.name}...`);
   };
 
   return (

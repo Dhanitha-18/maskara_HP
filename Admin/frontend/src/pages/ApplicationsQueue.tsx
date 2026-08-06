@@ -11,9 +11,15 @@ import { usePresence } from '../context/PresenceContext';
 import { API_BASE_URL } from '../lib/api';
 import { jsPDF } from 'jspdf';
 
-const getPhotoUrl = (url: string) => {
-  if (!url) return '';
-  return url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+const getPhotoUrl = (raw?: string | any) => {
+  let url = typeof raw === 'string' ? raw : (raw?.passportPhoto || raw?.photoUrl || raw?.photo || raw?.passport_photo || raw?.image || '');
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) return trimmed;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  const cleanUrl = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  const base = API_BASE_URL || 'http://localhost:5000';
+  return `${base}${cleanUrl}`;
 };
 
 const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
@@ -121,7 +127,8 @@ const handleDownloadPDF = async (app: any) => {
   drawSectionHeader('STUDENT INFORMATION');
   drawFieldRow('Student Name', app.studentName, 'USN / Roll Number', app.usn);
   drawFieldRow('Gender', app.gender, 'Date of Birth', app.dob ? new Date(app.dob).toLocaleDateString('en-IN') : 'N/A');
-  drawFieldRow('Department', app.department, 'Year', app.year || app.yearSem || 'N/A');
+  drawFieldRow('Department', app.department);
+  drawFieldRow('Year', app.year || app.yearSem || 'N/A');
   drawFieldRow('Student Email', app.email, 'Phone Number', app.phoneNumber);
   drawFieldRow('College Email', app.collegeEmail || 'N/A', 'Blood Group', app.bloodGroup || 'N/A');
   
@@ -681,9 +688,9 @@ export default function ApplicationsQueue() {
                               
                               <div className="flex justify-center my-2">
                                 <div className="w-32 h-40 rounded-xl border-2 border-slate-200 bg-slate-50 flex flex-col items-center justify-center overflow-hidden shadow-inner relative group">
-                                  {app.photoUrl || app.passportPhoto ? (
+                                  {getPhotoUrl(app) ? (
                                     <img 
-                                      src={getPhotoUrl(app.photoUrl || app.passportPhoto)} 
+                                      src={getPhotoUrl(app)} 
                                       alt={app.studentName} 
                                       className="w-full h-full object-cover" 
                                     />
@@ -766,9 +773,9 @@ export default function ApplicationsQueue() {
                             
                             <div className="flex justify-center my-2">
                               <div className="w-32 h-40 rounded-xl border-2 border-slate-200 bg-slate-50 flex flex-col items-center justify-center overflow-hidden shadow-inner relative group">
-                                {app.photoUrl || app.passportPhoto ? (
+                                {getPhotoUrl(app) ? (
                                   <img 
-                                    src={getPhotoUrl(app.photoUrl || app.passportPhoto)} 
+                                    src={getPhotoUrl(app)} 
                                     alt={app.studentName} 
                                     className="w-full h-full object-cover" 
                                   />

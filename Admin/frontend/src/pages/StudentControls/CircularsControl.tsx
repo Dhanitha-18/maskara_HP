@@ -6,12 +6,12 @@ import { toast } from 'sonner';
 export default function CircularsControl() {
   const queryClient = useQueryClient();
   const [isAdding, setIsAdding] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     desc: '',
     date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
     category: 'Events',
-    priority: 'Normal',
     author: 'Admin',
     fileSize: '150 KB'
   });
@@ -79,9 +79,10 @@ export default function CircularsControl() {
       toast.success('Notice published successfully');
       setIsAdding(false);
       setDocFile(null);
+      setCustomCategory('');
       setFormData({
         title: '', desc: '', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-        category: 'Events', priority: 'Normal', author: 'Admin', fileSize: '150 KB'
+        category: 'Events', author: 'Admin', fileSize: '150 KB'
       });
     },
     onError: () => toast.error('Failed to publish notice')
@@ -100,7 +101,11 @@ export default function CircularsControl() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate(formData);
+    const finalCategory = formData.category === 'Other' ? (customCategory.trim() || 'Other') : formData.category;
+    createMutation.mutate({
+      ...formData,
+      category: finalCategory
+    });
   };
 
   if (isLoading) return <div className="p-8 flex justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>;
@@ -175,19 +180,21 @@ export default function CircularsControl() {
                 <option value="Maintenance">Maintenance</option>
                 <option value="Events">Events</option>
                 <option value="Regulations">Regulations</option>
+                <option value="Other">Other</option>
               </select>
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Priority</label>
-              <select
-                value={formData.priority}
-                onChange={e => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full p-2.5 border border-slate-300 rounded-xl cursor-pointer"
-              >
-                <option value="Normal">Normal</option>
-                <option value="High">High</option>
-                <option value="Urgent">Urgent</option>
-              </select>
+              {formData.category === 'Other' && (
+                <div className="mt-2">
+                  <label className="block font-bold text-slate-700 mb-1">Specify Custom Category *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Health & Safety / Sports / Special Notice"
+                    value={customCategory}
+                    onChange={e => setCustomCategory(e.target.value)}
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              )}
             </div>
             <div>
               <label className="block font-bold text-slate-700 mb-1">Author / Department</label>

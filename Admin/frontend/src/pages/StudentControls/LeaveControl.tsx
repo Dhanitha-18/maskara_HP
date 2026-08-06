@@ -291,6 +291,18 @@ export default function LeaveControl() {
                               </div>
                             )}
                           </div>
+                        ) : isVacating ? (
+                          <div className="bg-purple-50/80 border border-purple-200/80 p-2 rounded-lg space-y-0.5">
+                            <p className="text-[10px] font-black text-purple-900 uppercase">Vacating Details:</p>
+                            <p className="font-bold text-slate-800">Reason: {leave.reason || 'N/A'}</p>
+                            <p className="text-[10px] text-slate-600">Intended Date: {formatDate(leave.fromDate)}</p>
+                            {leave.signatureDataUrl && (
+                              <div className="mt-1 border-t border-purple-200/60 pt-1">
+                                <span className="text-[9px] font-bold text-slate-500 block mb-0.5">Student Signature:</span>
+                                <img src={leave.signatureDataUrl} alt="Signature" className="h-10 max-w-[140px] object-contain border rounded bg-white p-0.5" />
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <>
                             {leave.destination && (

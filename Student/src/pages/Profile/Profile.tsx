@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 
 export const Profile: React.FC = () => {
   const { student, hostel, paymentStatus, applicationState, backendPayments, updateStudent } = usePayment();
-  const { isLoggedIn, studentUsn: authUsn } = useAuth();
+  const { isLoggedIn, studentUsn: authUsn, login } = useAuth();
   const navigate = useNavigate();
   const [showAppFormModal, setShowAppFormModal] = useState(false);
 
@@ -54,10 +54,14 @@ export const Profile: React.FC = () => {
 
       if (!res.ok) throw new Error('Failed to update profile');
 
+      // Update AuthContext session so USN stays synced across all tabs
+      if (editedUsn && editedUsn !== authUsn) {
+        login(editedUsn, student.name || undefined, student.phone || undefined);
+      }
+
       updateStudent({
         usn: editedUsn,
         email: editedEmail,
-        semester: selectedYear as any,
         yearSem: selectedYear as any,
         year: selectedYear as any
       });
@@ -181,9 +185,9 @@ export const Profile: React.FC = () => {
                 </div>
 
                 <div className="space-y-0.5 border-t border-slate-100/60 pt-2.5">
-                  <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">Program & Semester</span>
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">Program</span>
                   <span className="text-slate-900 font-bold block text-xs">
-                    {displayVal(appData.program || 'B.E.')} • {displayVal(appData.semester || appData.yearSem || student.semester)}
+                    {displayVal(appData.program || 'B.E.')}
                   </span>
                 </div>
 
@@ -314,11 +318,7 @@ export const Profile: React.FC = () => {
                     <span className="text-slate-900 font-bold block mt-0.5">{displayVal(appData.program)}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">8. Semester</span>
-                    <span className="text-slate-900 font-bold block mt-0.5">{displayVal(appData.semester || appData.yearSem)}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">9. Branch</span>
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">8. Branch</span>
                     <span className="text-slate-900 font-bold block mt-0.5">{displayVal(appData.branch || appData.department || student.department)}</span>
                   </div>
                   <div>
@@ -539,8 +539,7 @@ export const Profile: React.FC = () => {
                   <div><span className="text-text-muted text-[10px] uppercase block">5. Email</span><span className="font-bold text-slate-900 font-mono">{displayVal(appData.email)}</span></div>
                   <div><span className="text-text-muted text-[10px] uppercase block">6. Date of Birth</span><span className="font-bold text-slate-900">{appData.dob ? new Date(appData.dob).toLocaleDateString('en-IN') : 'Not Available'}</span></div>
                   <div><span className="text-text-muted text-[10px] uppercase block">7. Program</span><span className="font-bold text-slate-900">{displayVal(appData.program)}</span></div>
-                  <div><span className="text-text-muted text-[10px] uppercase block">8. Semester</span><span className="font-bold text-slate-900">{displayVal(appData.semester || appData.yearSem)}</span></div>
-                  <div><span className="text-text-muted text-[10px] uppercase block">9. Branch</span><span className="font-bold text-slate-900">{displayVal(appData.branch || appData.department)}</span></div>
+                  <div><span className="text-text-muted text-[10px] uppercase block">8. Branch</span><span className="font-bold text-slate-900">{displayVal(appData.branch || appData.department)}</span></div>
                   <div><span className="text-text-muted text-[10px] uppercase block">10. Blood Group</span><span className="font-bold text-slate-900">{displayVal(appData.bloodGroup)}</span></div>
                   <div><span className="text-text-muted text-[10px] uppercase block">11. Aadhaar Number</span><span className="font-bold text-slate-900 font-mono">{displayVal(appData.aadhaarNumber)}</span></div>
                   <div><span className="text-text-muted text-[10px] uppercase block">12. Nationality</span><span className="font-bold text-slate-900">{displayVal(appData.nationality)}</span></div>

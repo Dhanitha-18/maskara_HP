@@ -82,6 +82,17 @@ export default function SocialControl() {
   const [showRenameChannelModal, setShowRenameChannelModal] = useState<Channel | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renameDescValue, setRenameDescValue] = useState('');
+  const [newChannelBlock, setNewChannelBlock] = useState<string>('ALL');
+
+  // Fetch available hostel blocks
+  const { data: availableBlocks = [] } = useQuery({
+    queryKey: ['available-blocks'],
+    queryFn: async () => {
+      const res = await fetch('http://localhost:5000/api/blocks');
+      if (!res.ok) throw new Error('Failed to fetch blocks');
+      return res.json();
+    }
+  });
 
   // Fetch Channels
   const { data: serverChannels, isLoading: isChannelsLoading } = useQuery({
@@ -152,19 +163,18 @@ export default function SocialControl() {
     };
   }, [activeChannelId]);
 
-  // Synchronize state when server loads
+  // Sync servers query results to local state
   useEffect(() => {
     if (serverChannels) setChannels(serverChannels);
   }, [serverChannels]);
 
   useEffect(() => {
-    if (serverMessages) {
-      setMessages(serverMessages.map((m: any) => ({
-        ...m,
-        isSelf: m.usn === 'ADMIN-01'
-      })));
-    }
+    if (serverMessages) setMessages(serverMessages);
   }, [serverMessages]);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   // Scroll window to top on page mount
   useEffect(() => {
@@ -182,12 +192,10 @@ export default function SocialControl() {
     const payload = {
       senderName: 'Hostel Admin',
       usn: 'ADMIN-01',
-      roomNo: 'Office',
+      roomNo: 'Warden Office',
       message: inputText.trim(),
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-
-    setInputText('');
 
     try {
       const res = await fetch(`http://localhost:5000/api/chat/channels/${activeChannelId}/messages`, {
@@ -195,7 +203,10 @@ export default function SocialControl() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error('Failed to send message');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send message');
+
+      setInputText('');
     } catch (err: any) {
       toast.error(err.message || 'Failed to deliver message');
     }
@@ -214,7 +225,8 @@ export default function SocialControl() {
           name: newChannelName.trim(),
           desc: newChannelDesc.trim(),
           iconName: newChannelIcon,
-          badge: newChannelBadge.trim() || undefined
+          badge: newChannelBadge.trim() || undefined,
+          targetBlock: newChannelBlock
         })
       });
       const data = await res.json();
@@ -225,6 +237,7 @@ export default function SocialControl() {
       setNewChannelName('');
       setNewChannelDesc('');
       setNewChannelBadge('');
+      setNewChannelBlock('ALL');
     } catch (err: any) {
       toast.error(err.message || 'Duplicate channel name');
     }
@@ -629,6 +642,22 @@ export default function SocialControl() {
                   className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-black mb-1">Target Hostel Block *</label>
+                <select
+                  value={newChannelBlock}
+                  onChange={e => setNewChannelBlock(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold bg-white text-slate-800"
+                >
+                  <option value="ALL">All Blocks (Global Channel)</option>
+                  {availableBlocks.map((b: any) => (
+                    <option key={b.id} value={b.name}>
+                      {b.name} ({b.gender ? String(b.gender).toUpperCase() : 'All'})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

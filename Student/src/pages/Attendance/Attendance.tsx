@@ -93,7 +93,9 @@ export const Attendance: React.FC = () => {
     const map = new Map<string, StudentAttendanceRecord>();
     history.forEach(rec => {
       if (rec.date) {
-        map.set(rec.date, rec);
+        // Normalize: handle both "2026-08-06" and "2026-08-06T00:00:00.000Z" formats
+        const cleanDate = String(rec.date).split('T')[0];
+        map.set(cleanDate, rec);
       }
     });
     return map;

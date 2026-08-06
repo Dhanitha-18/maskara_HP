@@ -330,10 +330,6 @@ export const LeaveApplication: React.FC = () => {
       alert('Please specify the reason for vacating the hostel.');
       return;
     }
-    if (!vacateData.bankName || !vacateData.accountNumber || !vacateData.ifscCode) {
-      alert('Please fill in complete Bank Refund account details.');
-      return;
-    }
 
     setIsSubmitting(true);
     const nameToUse = studentName || student?.name || 'Student';
@@ -358,10 +354,10 @@ export const LeaveApplication: React.FC = () => {
           toDate: vacateData.vacatingDate,
           totalDays: 0,
           reason: vacateData.reason.trim(),
-          bankName: vacateData.bankName.trim(),
-          accountHolder: vacateData.accountHolder.trim() || nameToUse,
-          accountNumber: vacateData.accountNumber.trim(),
-          ifscCode: vacateData.ifscCode.trim(),
+          bankName: (vacateData.bankName || '').trim() || null,
+          accountHolder: (vacateData.accountHolder || '').trim() || nameToUse,
+          accountNumber: (vacateData.accountNumber || '').trim() || null,
+          ifscCode: (vacateData.ifscCode || '').trim() || null,
           depositAmount: Number(vacateData.depositAmount || 15000),
           signatureDataUrl: finalSignature || '',
           status: 'Pending'
@@ -794,33 +790,49 @@ export const LeaveApplication: React.FC = () => {
 
                 {/* Calendar Grid (Display ONLY Approved Leave in Green) */}
                 <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold pt-2">
-                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, idx) => (
-                    <div key={idx} className="text-text-muted py-1">{d}</div>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, idx) => (
+                    <div key={idx} className="text-text-muted py-1 font-extrabold uppercase text-[9px]">{d}</div>
                   ))}
 
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map(day => {
-                    // Check if day falls within any approved leave
-                    const isApprovedLeave = leaves.some(l => {
-                      if (String(l.status).toLowerCase() !== 'approved') return false;
-                      if (!l.fromDate || !l.toDate) return false;
-                      const f = new Date(l.fromDate).getDate();
-                      const t = new Date(l.toDate).getDate();
-                      return day >= f && day <= t;
+                  {/* Dynamic Month/Year Offset & Day Tiles */}
+                  {(() => {
+                    const daysInCalendarMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+                    const firstDayOfCalendarMonth = new Date(calendarYear, calendarMonth, 1).getDay();
+                    
+                    const blankTiles = Array.from({ length: firstDayOfCalendarMonth }).map((_, i) => (
+                      <div key={`blank-${i}`} className="p-2 rounded-lg bg-slate-50/40 text-transparent">.</div>
+                    ));
+
+                    const dayTiles = Array.from({ length: daysInCalendarMonth }, (_, i) => i + 1).map(day => {
+                      const cellDate = new Date(calendarYear, calendarMonth, day);
+                      cellDate.setHours(0, 0, 0, 0);
+
+                      const isApprovedLeave = leaves.some(l => {
+                        if (String(l.status).toLowerCase() !== 'approved') return false;
+                        if (!l.fromDate || !l.toDate) return false;
+                        const f = new Date(l.fromDate);
+                        f.setHours(0, 0, 0, 0);
+                        const t = new Date(l.toDate);
+                        t.setHours(23, 59, 59, 999);
+                        return cellDate >= f && cellDate <= t;
+                      });
+
+                      return (
+                        <div 
+                          key={day}
+                          className={`p-2 rounded-lg text-xs font-bold transition-all ${
+                            isApprovedLeave
+                              ? 'bg-emerald-500 text-white font-black shadow-xs'
+                              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {day}
+                        </div>
+                      );
                     });
 
-                    return (
-                      <div 
-                        key={day}
-                        className={`p-2 rounded-lg text-xs font-bold transition-all ${
-                          isApprovedLeave
-                            ? 'bg-emerald-500 text-white font-black shadow-xs'
-                            : 'bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        {day}
-                      </div>
-                    );
-                  })}
+                    return [...blankTiles, ...dayTiles];
+                  })()}
                 </div>
               </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { FACILITIES_HERO_IMAGE } from '../../assets/heroBanners';
 import { 
@@ -104,7 +105,7 @@ export const Facilities: React.FC = () => {
   const [selectedImages, setSelectedImages] = useState<string[] | null>(null);
   const [adminFacilities, setAdminFacilities] = useState<AdminFacility[]>([]);
 
-  // Fetch admin-managed facilities from backend with auto-refresh
+  // Fetch admin-managed facilities from backend with auto-refresh & socket sync
   useEffect(() => {
     let active = true;
     const fetchFacilities = () => {
@@ -118,7 +119,17 @@ export const Facilities: React.FC = () => {
         .catch(() => {});
     };
     fetchFacilities();
-    return () => { active = false; };
+
+    const socket = io('http://localhost:5000');
+    socket.on('facilities_updated', fetchFacilities);
+    socket.on('data_updated', fetchFacilities);
+
+    return () => { 
+      active = false; 
+      socket.off('facilities_updated', fetchFacilities);
+      socket.off('data_updated', fetchFacilities);
+      socket.disconnect();
+    };
   }, []);
 
   return (

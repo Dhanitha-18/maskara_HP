@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { io } from 'socket.io-client';
 import { usePayment } from '../../context/PaymentContext';
 import { useAuth } from '../../context/AuthContext';
 import { HeroBanner } from '../../components/layout/HeroBanner';
@@ -78,25 +79,48 @@ export const Feedback: React.FC = () => {
   const embedUrl = useMemo(() => toEmbedUrl(formConfig.googleFormUrl), [formConfig.googleFormUrl]);
   const directUrl = useMemo(() => toDirectUrl(formConfig.googleFormUrl), [formConfig.googleFormUrl]);
 
-  // Fetch Google Form config from Admin backend
+  // Fetch Google Form config from Admin backend with real-time socket sync
   useEffect(() => {
-    fetch('http://localhost:5000/api/feedback/config')
-      .then(res => res.json())
-      .then(data => {
-        if (data) {
-          setFormConfig({
-            googleFormUrl: data.googleFormUrl || '',
-            enabled: data.enabled !== false
-          });
-        }
-      })
-      .catch(() => {});
+    const fetchConfig = () => {
+      fetch('http://localhost:5000/api/feedback/config')
+        .then(res => res.json())
+        .then(data => {
+          if (data) {
+            setFormConfig({
+              googleFormUrl: data.googleFormUrl || '',
+              enabled: data.enabled !== false
+            });
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchConfig();
+
+    const socket = io('http://localhost:5000');
+    socket.on('feedback_config_updated', (cfg: any) => {
+      if (cfg) {
+        setFormConfig({
+          googleFormUrl: cfg.googleFormUrl || '',
+          enabled: cfg.enabled !== false
+        });
+      } else {
+        fetchConfig();
+      }
+    });
+    socket.on('data_updated', fetchConfig);
 
     // Check if student already responded in localStorage
     const saved = localStorage.getItem(`feedback_responded_${studentUsn}`);
     if (saved === 'true') {
       setHasResponded(true);
     }
+
+    return () => {
+      socket.off('feedback_config_updated');
+      socket.off('data_updated');
+      socket.disconnect();
+    };
   }, [studentUsn]);
 
   const handleConfirmResponse = async () => {

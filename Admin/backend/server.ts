@@ -7,6 +7,7 @@ import { createServer } from 'http'
 import { Server } from 'socket.io'
 import nodemailer from "nodemailer";
 import crypto from 'crypto';
+import { uploadImageToCloudinary, deleteFromCloudinary } from './services/cloudinaryService';
 
 
 const transporter = nodemailer.createTransport({
@@ -58,8 +59,9 @@ async function sendRealEmail(
   }
 }
 
-app.use(cors())
-app.use(express.json())
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Presence State
 export type AdminPresence = {
@@ -166,6 +168,48 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Check if a student with the exact same Name and Phone Number already exists
+app.post('/api/applications/check-duplicate', async (req, res) => {
+  try {
+    const { studentName, phoneNumber } = req.body;
+    const cleanName = String(studentName || '').trim().toLowerCase();
+    const cleanPhone = String(phoneNumber || '').trim();
+
+    if (!cleanName || !cleanPhone) {
+      return res.json({ exists: false });
+    }
+
+    const apps = await (prisma as any).application.findMany({
+      where: {
+        phoneNumber: cleanPhone,
+        status: { not: 'REJECTED' }
+      }
+    });
+
+    const matchApp = apps.find((a: any) => a.studentName && a.studentName.trim().toLowerCase() === cleanName);
+    if (matchApp) {
+      return res.json({ exists: true, message: 'A student with this Name and Phone Number already exists.' });
+    }
+
+    const accounts = await (prisma as any).studentAccount.findMany({
+      where: {
+        phoneNumber: cleanPhone,
+        status: 'ACTIVE'
+      }
+    });
+
+    const matchAccount = accounts.find((acc: any) => acc.studentName && acc.studentName.trim().toLowerCase() === cleanName);
+    if (matchAccount) {
+      return res.json({ exists: true, message: 'A student with this Name and Phone Number already exists.' });
+    }
+
+    return res.json({ exists: false });
+  } catch (error) {
+    console.error('Error in /api/applications/check-duplicate:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Student submits hostel application
 app.post('/api/applications', async (req, res) => {
   try {
@@ -238,7 +282,7 @@ app.post('/api/applications', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Student Name and Phone Number are required.' });
     }
 
-    // Requirement: USNs should be different for every student (unique) & Name+Phone combination should not be repeated
+    // Requirement: USNs should be unique for non-rejected students & Name+Phone combination should not be repeated
     const existingApps = await prisma.application.findMany({
       where: {
         OR: [
@@ -248,7 +292,7 @@ app.post('/api/applications', async (req, res) => {
       }
     });
 
-    const duplicateUsn = existingApps.find(a => a.usn && String(a.usn).trim().toUpperCase() === cleanUsn.toUpperCase());
+    const duplicateUsn = existingApps.find(a => a.status !== 'REJECTED' && a.usn && String(a.usn).trim().toUpperCase() === cleanUsn.toUpperCase());
     if (duplicateUsn) {
       return res.status(400).json({
         success: false,
@@ -256,11 +300,15 @@ app.post('/api/applications', async (req, res) => {
       });
     }
 
-    const duplicatePhone = existingApps.find(a => a.phoneNumber && String(a.phoneNumber).trim() === cleanPhone);
-    if (duplicatePhone) {
+    const duplicateCombo = existingApps.find(a => 
+      a.status !== 'REJECTED' &&
+      a.phoneNumber && String(a.phoneNumber).trim() === cleanPhone &&
+      a.studentName && String(a.studentName).trim().toLowerCase() === cleanName.toLowerCase()
+    );
+    if (duplicateCombo) {
       return res.status(400).json({
         success: false,
-        error: `An application with phone number '${cleanPhone}' already exists. Contact phone number must be unique for every student.`
+        error: 'A student with this Name and Phone Number already exists.'
       });
     }
 
@@ -487,7 +535,35 @@ app.get('/api/blocks', async (req, res) => {
         }
       }
     });
-    res.json(blocks);
+
+    const activeAllocations = await prisma.allocation.findMany({
+      where: { status: 'ACTIVE' },
+      select: { bedId: true, applicationId: true }
+    });
+
+    const activeBedMap = new Map<string, string>();
+    activeAllocations.forEach(alloc => {
+      if (alloc.bedId) {
+        activeBedMap.set(alloc.bedId, alloc.applicationId);
+      }
+    });
+
+    const sanitizedBlocks = blocks.map(block => ({
+      ...block,
+      rooms: block.rooms.map(room => ({
+        ...room,
+        beds: room.beds.map(bed => {
+          const isOccupied = activeBedMap.has(bed.id) || bed.status === 'OCCUPIED';
+          return {
+            ...bed,
+            status: isOccupied ? 'OCCUPIED' : bed.status,
+            occupiedByApplicationId: activeBedMap.get(bed.id) || null
+          };
+        })
+      }))
+    }));
+
+    res.json(sanitizedBlocks);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch blocks' });
   }
@@ -550,6 +626,14 @@ app.post('/api/allocate', async (req, res) => {
 
       if (!targetBed) {
         throw new Error('Target bed not found.');
+      }
+
+      const activeAllocOnBed = await tx.allocation.findFirst({
+        where: { bedId, status: 'ACTIVE' }
+      });
+
+      if (activeAllocOnBed && activeAllocOnBed.applicationId !== appRecord.id) {
+        throw new Error('This bed is already occupied or unavailable.');
       }
 
       if (targetBed.status === 'OCCUPIED' || targetBed.status === 'MAINTENANCE') {
@@ -812,13 +896,19 @@ app.post('/api/blocks', async (req, res) => {
   }
 });
 
-// Upload image endpoint
-app.post('/api/upload', upload.single('photo'), (req, res) => {
+// Upload image endpoint using Cloudinary
+app.post('/api/upload', upload.single('photo'), async (req: any, res: any) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  const imageUrl = `/uploads/${req.file.filename}`;
-  res.json({ imageUrl });
+  try {
+    const folder = req.body?.folder || 'hostel_management';
+    const { imageUrl, publicId } = await uploadImageToCloudinary(req.file, folder);
+    res.json({ imageUrl, publicId });
+  } catch (error: any) {
+    console.error('Error uploading file to Cloudinary:', error);
+    res.status(500).json({ error: 'Failed to upload image to cloud storage' });
+  }
 });
 
 // Update block photo
@@ -2623,15 +2713,59 @@ app.post('/api/student/login', async (req, res) => {
     const cleanName = String(studentName).trim();
     const cleanPhone = String(phoneNumber).trim();
 
-    // 1. Query active accounts from StudentAccount DB table
-    const account = await (prisma as any).studentAccount.findFirst({
+    // 1. Query active accounts from StudentAccount DB table with matching phone number
+    const accounts = await (prisma as any).studentAccount.findMany({
       where: {
         phoneNumber: cleanPhone,
         status: 'ACTIVE'
       }
     });
 
-    if (!account || account.studentName.trim().toLowerCase() !== cleanName.toLowerCase()) {
+    let account = accounts.find(
+      (a: any) => a.studentName && a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
+    );
+
+    // Fallback: If not in StudentAccount, also check Application table for active/pending applications
+    if (!account) {
+      const pendingApps = await (prisma as any).application.findMany({
+        where: {
+          phoneNumber: cleanPhone,
+          status: { not: 'REJECTED' }
+        }
+      });
+      const matchingApp = pendingApps.find(
+        (a: any) => a.studentName && a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
+      );
+      if (matchingApp) {
+        account = await (prisma as any).studentAccount.upsert({
+          where: { usn: matchingApp.usn },
+          update: {
+            studentName: matchingApp.studentName,
+            phoneNumber: matchingApp.phoneNumber,
+            status: 'ACTIVE'
+          },
+          create: {
+            usn: matchingApp.usn,
+            studentName: matchingApp.studentName,
+            phoneNumber: matchingApp.phoneNumber,
+            status: 'ACTIVE'
+          }
+        });
+      } else {
+        // Auto-restore / create active StudentAccount if student logs in with valid Name and Phone
+        const newUsn = `STU-${Date.now()}`;
+        account = await (prisma as any).studentAccount.create({
+          data: {
+            usn: newUsn,
+            studentName: cleanName,
+            phoneNumber: cleanPhone,
+            status: 'ACTIVE'
+          }
+        }).catch(() => null);
+      }
+    }
+
+    if (!account) {
       return res.status(404).json({
         success: false,
         error: 'No account exists'
@@ -2639,21 +2773,26 @@ app.post('/api/student/login', async (req, res) => {
     }
 
     // 2. Double check matching Application status in DB
-    const application = await prisma.application.findUnique({
-      where: { usn: account.usn }
+    const applications = await prisma.application.findMany({
+      where: {
+        OR: [
+          { usn: account.usn },
+          account.applicationId ? { id: account.applicationId } : {},
+          { phoneNumber: cleanPhone }
+        ]
+      }
     });
 
-    const isRejected = !application || (application.status && String(application.status).toUpperCase() === 'REJECTED');
+    const application = applications.find(
+      (a: any) => (a.usn === account.usn) || (account.applicationId && a.id === account.applicationId) || (a.studentName && a.studentName.trim().toLowerCase() === cleanName.toLowerCase())
+    );
+
+    const isRejected = application && String(application.status).toUpperCase() === 'REJECTED';
 
     if (isRejected) {
-      // Delete credentials from StudentAccount DB table
-      await (prisma as any).studentAccount.deleteMany({
-        where: { usn: account.usn }
-      }).catch(() => {});
-
       return res.status(404).json({
         success: false,
-        error: 'No account exists'
+        error: 'Your application has been rejected by administration.'
       });
     }
 
@@ -2676,13 +2815,24 @@ app.get('/api/student/status/:usn', async (req, res) => {
   try {
     const { usn } = req.params;
 
-    const account = await (prisma as any).studentAccount.findUnique({
-      where: { usn }
+    const account = await (prisma as any).studentAccount.findFirst({
+      where: {
+        OR: [
+          { usn },
+          { id: usn }
+        ]
+      }
     });
 
-    // Find application by USN
-    const application = await prisma.application.findUnique({
-      where: { usn },
+    // Find application by USN, applicationId or matching account details
+    const applications = await prisma.application.findMany({
+      where: {
+        OR: [
+          { usn },
+          account?.applicationId ? { id: account.applicationId } : {},
+          account?.phoneNumber ? { phoneNumber: account.phoneNumber } : {}
+        ]
+      },
       include: {
         documents: true,
         allocations: {
@@ -2700,12 +2850,20 @@ app.get('/api/student/status/:usn', async (req, res) => {
       }
     });
 
-    const isAppRejected = !application || (application.status && String(application.status).toUpperCase() === 'REJECTED');
+    const application = applications.find(
+      (a: any) => (a.usn === usn) || (account?.applicationId && a.id === account.applicationId) || (account?.studentName && a.studentName && a.studentName.trim().toLowerCase() === account.studentName.trim().toLowerCase())
+    );
 
-    if (!account || isAppRejected) {
+    const isAppRejected = application && String(application.status).toUpperCase() === 'REJECTED';
+
+    if (isAppRejected) {
       if (account) {
-        await (prisma as any).studentAccount.deleteMany({ where: { usn } }).catch(() => {});
+        await (prisma as any).studentAccount.deleteMany({ where: { usn: account.usn } }).catch(() => {});
       }
+      return res.status(404).json({ found: false, error: 'No account exists', applicationState: 'rejected' });
+    }
+
+    if (!account && !application) {
       return res.status(404).json({ found: false, error: 'No account exists', applicationState: 'rejected' });
     }
 
@@ -3427,6 +3585,8 @@ app.get('/api/facilities', async (req, res) => {
 app.post('/api/facilities', async (req, res) => {
   try {
     const facility = await prisma.facility.create({ data: req.body });
+    io.emit('facilities_updated');
+    io.emit('data_updated');
     res.json(facility);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create facility' });
@@ -3435,6 +3595,8 @@ app.post('/api/facilities', async (req, res) => {
 app.delete('/api/facilities/:id', async (req, res) => {
   try {
     await prisma.facility.delete({ where: { id: req.params.id } });
+    io.emit('facilities_updated');
+    io.emit('data_updated');
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete facility' });
@@ -3447,6 +3609,8 @@ app.put('/api/facilities/:id', async (req, res) => {
       where: { id: req.params.id },
       data: req.body
     });
+    io.emit('facilities_updated');
+    io.emit('data_updated');
     res.json(facility);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update facility' });
@@ -3674,7 +3838,8 @@ app.delete('/api/social/:id', async (req, res) => {
 // Social Connect Chat APIs
 app.get('/api/chat/channels', async (req, res) => {
   try {
-    let channels = await prisma.chatChannel.findMany({
+    const studentBlock = req.query.block ? String(req.query.block).trim().toLowerCase() : null;
+    let channels = await (prisma as any).chatChannel.findMany({
       orderBy: { createdAt: 'asc' }
     });
     if (channels.length === 0) {
@@ -3686,11 +3851,20 @@ app.get('/api/chat/channels', async (req, res) => {
         { id: 'lostfound', name: 'lost-and-found', iconName: 'HelpCircle', desc: 'Report & claim lost items in common areas' },
         { id: 'sports', name: 'sports-and-events', iconName: 'Sparkles', desc: 'Cricket matches, gaming nights & weekend plans' }
       ];
-      await prisma.chatChannel.createMany({ data: defaultChannels });
-      channels = await prisma.chatChannel.findMany({
+      await (prisma as any).chatChannel.createMany({ data: defaultChannels });
+      channels = await (prisma as any).chatChannel.findMany({
         orderBy: { createdAt: 'asc' }
       });
     }
+
+    if (studentBlock) {
+      channels = channels.filter((c: any) => {
+        if (!c.targetBlock || c.targetBlock === 'ALL') return true;
+        const cBlock = String(c.targetBlock).trim().toLowerCase();
+        return cBlock === studentBlock || studentBlock.includes(cBlock) || cBlock.includes(studentBlock);
+      });
+    }
+
     res.json(channels);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch channels' });
@@ -3699,20 +3873,23 @@ app.get('/api/chat/channels', async (req, res) => {
 
 app.post('/api/chat/channels', async (req, res) => {
   try {
-    const { name, desc, iconName, badge } = req.body;
+    const { name, desc, iconName, badge, targetBlock, block } = req.body;
+    const blockVal = targetBlock || block || null;
     // Format name to slug
     const formattedName = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const channel = await prisma.chatChannel.create({
+    const channel = await (prisma as any).chatChannel.create({
       data: {
         name: formattedName,
         desc: desc || '',
         iconName: iconName || 'MessageSquare',
-        badge: badge || null
+        badge: badge || null,
+        targetBlock: (blockVal && blockVal !== 'ALL') ? String(blockVal).trim() : null
       }
     });
     io.emit('chat_channel_created', channel);
     res.json(channel);
   } catch (error) {
+    console.error('Create channel error:', error);
     res.status(500).json({ error: 'Failed to create channel. Name might be duplicate.' });
   }
 });
@@ -5047,7 +5224,16 @@ app.put('/api/student/profile', async (req, res) => {
       }
     }).catch(() => {});
 
+    // If USN changed, also update Payment records so they remain linked
+    if (targetUsn !== updatedUsn) {
+      await prisma.payment.updateMany({
+        where: { studentUsn: targetUsn },
+        data: { studentUsn: updatedUsn }
+      }).catch(() => {});
+    }
+
     io.emit('data_updated');
+    io.emit('STUDENT_UPDATED', { oldUsn: targetUsn, newUsn: updatedUsn });
     return res.json({ success: true, usn: updatedUsn, email: updatedEmail, year: updatedYear });
   } catch (error: any) {
     console.error('Profile update error:', error);

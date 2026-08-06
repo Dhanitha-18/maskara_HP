@@ -291,13 +291,14 @@ model EmailHistory {
 }
 
 model ChatChannel {
-  id        String        @id @default(uuid())
-  name      String        @unique
-  desc      String
-  iconName  String        @default("MessageSquare")
-  badge     String?
-  createdAt DateTime      @default(now())
-  messages  ChatMessage[]
+  id          String        @id @default(uuid())
+  name        String        @unique
+  desc        String
+  iconName    String        @default("MessageSquare")
+  badge       String?
+  targetBlock String?
+  createdAt   DateTime      @default(now())
+  messages    ChatMessage[]
 }
 
 model ChatMessage {

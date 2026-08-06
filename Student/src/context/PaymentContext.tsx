@@ -272,9 +272,16 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     socket.on('data_updated', handleDataUpdated);
+    socket.on('BED_ALLOCATED', handleDataUpdated);
+    socket.on('APPLICATION_UPDATED', handleDataUpdated);
+    socket.on('STUDENT_UPDATED', handleDataUpdated);
     socket.on('student_account_deleted', handleAccountDeleted);
+
     return () => {
       socket.off('data_updated', handleDataUpdated);
+      socket.off('BED_ALLOCATED', handleDataUpdated);
+      socket.off('APPLICATION_UPDATED', handleDataUpdated);
+      socket.off('STUDENT_UPDATED', handleDataUpdated);
       socket.off('student_account_deleted', handleAccountDeleted);
       socket.disconnect();
     };

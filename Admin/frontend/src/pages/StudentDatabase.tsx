@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { io } from 'socket.io-client';
 import { 
   Loader2, Search, Download, Filter, FileSpreadsheet, ChevronDown, ChevronRight, 
   User, Users, Building2, Activity, FileText, Calendar, Mail, Phone, MapPin, 
@@ -11,9 +12,31 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import { API_BASE_URL } from '../lib/api';
 
-const getPhotoUrl = (url: string) => {
-  if (!url) return '';
-  return url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+const getPhotoUrl = (raw?: string | any) => {
+  let url = typeof raw === 'string' ? raw : (raw?.passportPhoto || raw?.photoUrl || raw?.photo || raw?.passport_photo || raw?.image || '');
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) return trimmed;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  const cleanUrl = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  const base = API_BASE_URL || 'http://localhost:5000';
+  return `${base}${cleanUrl}`;
+};
+
+const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
+  try {
+    const res = await fetch(imageUrl);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Failed to convert image to Base64', error);
+    return null;
+  }
 };
 
 const formatSubmissionDate = (dateStr: string | null | undefined) => {
@@ -41,7 +64,7 @@ const displayVal = (val: any) => {
   return val;
 };
 
-const handleDownloadPDF = (app: any) => {
+const handleDownloadPDF = async (app: any) => {
   if (!app) return;
   const doc = new jsPDF({
     orientation: 'p',
@@ -62,6 +85,33 @@ const handleDownloadPDF = (app: any) => {
   doc.setFontSize(10);
   doc.text('BMS Institute of Technology and Management', 15, 28);
   doc.text('Consolidated Student Application & Profile Record', 15, 33);
+
+  // Passport Size Photo rendering
+  const photoPath = app.photoUrl || app.passportPhoto || app.photo || app.passport_photo || app.image;
+  let photoAdded = false;
+  if (photoPath) {
+    try {
+      const resolvedPhotoUrl = getPhotoUrl(photoPath);
+      const base64Img = await getBase64ImageFromUrl(resolvedPhotoUrl);
+      if (base64Img) {
+        doc.addImage(base64Img, 'JPEG', 158, 48, 34, 42);
+        photoAdded = true;
+      }
+    } catch (err) {
+      console.error('Error adding photo to PDF:', err);
+    }
+  }
+
+  if (!photoAdded) {
+    doc.setDrawColor(209, 213, 219);
+    doc.setFillColor(249, 250, 251);
+    doc.roundedRect(158, 48, 34, 42, 2, 2, 'FD');
+    doc.setFontSize(8);
+    doc.setTextColor(156, 163, 175);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Photo Not', 175, 67, { align: 'center' });
+    doc.text('Available', 175, 72, { align: 'center' });
+  }
 
   let currentY = 50;
 
@@ -107,7 +157,8 @@ const handleDownloadPDF = (app: any) => {
   drawSectionHeader('STUDENT INFORMATION');
   drawFieldRow('Student Name', app.studentName || 'N/A', 'USN / Roll Number', app.usn || app.bmsitId || 'N/A');
   drawFieldRow('Gender', app.gender || 'N/A', 'Date of Birth', app.dob ? new Date(app.dob).toLocaleDateString('en-IN') : 'N/A');
-  drawFieldRow('Department / Branch', app.branch || app.department || 'N/A', 'Year', app.year || app.semester || app.yearSem || 'N/A');
+  drawFieldRow('Department / Branch', app.branch || app.department || 'N/A');
+  drawFieldRow('Year', app.year || app.semester || app.yearSem || 'N/A');
   drawFieldRow('Personal Email', app.email || 'N/A', 'Phone Number', app.phoneNumber || 'N/A');
   drawFieldRow('College Email', app.collegeEmail || 'N/A', 'Blood Group', app.bloodGroup || 'N/A');
   drawFieldRow('Aadhaar Number', app.aadhaarNumber || 'N/A', 'Nationality / Religion', `${app.nationality || 'Indian'} / ${app.religion || 'N/A'}`);
@@ -135,6 +186,7 @@ const handleDownloadPDF = (app: any) => {
 import { useAuthStore } from '../store/useAuthStore';
 
 export default function StudentDatabase() {
+  const queryClient = useQueryClient();
   const { role, allowedBlocks } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -144,6 +196,27 @@ export default function StudentDatabase() {
   const [activeModalTab, setActiveModalTab] = useState<string>('ALL');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [expandedTabState, setExpandedTabState] = useState<Record<string, string>>({});
+
+  // Real-time socket sync for reallocation and profile updates
+  useEffect(() => {
+    const socket = io('http://localhost:5000');
+    const handleUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['applications_all'] });
+      queryClient.invalidateQueries({ queryKey: ['payments_all'] });
+    };
+    socket.on('data_updated', handleUpdate);
+    socket.on('BED_ALLOCATED', handleUpdate);
+    socket.on('APPLICATION_UPDATED', handleUpdate);
+    socket.on('STUDENT_UPDATED', handleUpdate);
+
+    return () => {
+      socket.off('data_updated', handleUpdate);
+      socket.off('BED_ALLOCATED', handleUpdate);
+      socket.off('APPLICATION_UPDATED', handleUpdate);
+      socket.off('STUDENT_UPDATED', handleUpdate);
+      socket.disconnect();
+    };
+  }, [queryClient]);
 
   const { data: applications, isLoading: isLoadingApps } = useQuery({
     queryKey: ['applications_all'],
@@ -885,8 +958,15 @@ export default function StudentDatabase() {
                                             )}
                                           </div>
 
-                                          {app.documents && app.documents.length > 0 ? (
-                                            app.documents.map((doc: any) => (
+                                          {(() => {
+                                            const otherDocs = (app.documents || []).filter((d: any) => {
+                                              const n = (d.name || d.type || '').toLowerCase();
+                                              return !n.includes('passport');
+                                            });
+                                            if (otherDocs.length === 0) {
+                                              return <p className="text-slate-400 text-[11px] italic text-center py-2">No additional document files uploaded.</p>;
+                                            }
+                                            return otherDocs.map((doc: any) => (
                                               <div key={doc.id || doc.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                                                 <div className="flex items-center gap-2">
                                                   <FileText className="w-4 h-4 text-indigo-600" />
@@ -904,10 +984,8 @@ export default function StudentDatabase() {
                                                   <ExternalLink className="w-3.5 h-3.5" /> View
                                                 </a>
                                               </div>
-                                            ))
-                                          ) : (
-                                            <p className="text-slate-400 text-[11px] italic text-center py-2">No additional document files uploaded.</p>
-                                          )}
+                                            ));
+                                          })()}
                                         </div>
                                       </div>
                                     )}
@@ -1280,8 +1358,15 @@ export default function StudentDatabase() {
                             )}
                           </div>
 
-                          {app.documents && app.documents.length > 0 ? (
-                            app.documents.map((doc: any) => (
+                          {(() => {
+                            const otherDocs = (app.documents || []).filter((d: any) => {
+                              const n = (d.name || d.type || '').toLowerCase();
+                              return !n.includes('passport');
+                            });
+                            if (otherDocs.length === 0) {
+                              return <p className="text-slate-400 text-[11px] italic text-center py-2">No additional document files uploaded.</p>;
+                            }
+                            return otherDocs.map((doc: any) => (
                               <div key={doc.id || doc.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                                 <div className="flex items-center gap-2">
                                   <FileText className="w-4 h-4 text-indigo-600" />
@@ -1299,10 +1384,8 @@ export default function StudentDatabase() {
                                   <ExternalLink className="w-3.5 h-3.5" /> View
                                 </a>
                               </div>
-                            ))
-                          ) : (
-                            <p className="text-slate-400 text-[11px] italic text-center py-2">No additional document files uploaded.</p>
-                          )}
+                            ));
+                          })()}
                         </div>
                       </div>
                     )}
