@@ -1040,21 +1040,32 @@ app.post('/api/settings/:key', async (req, res) => {
 
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
-    const totalApplications = await prisma.application.count();
-    const approvedApplications = await prisma.application.count({ where: { status: 'APPROVED' } });
-    const totalBeds = await prisma.bed.count();
+    const pendingApplications = await prisma.application.count({ where: { status: 'PENDING' } });
+    const paymentPendingApplications = await prisma.application.count({ where: { status: 'PAYMENT_PENDING' } });
+    const availableBeds = await prisma.bed.count({ where: { status: 'AVAILABLE' } });
     const occupiedBeds = await prisma.bed.count({ where: { status: 'OCCUPIED' } });
-    const totalPayments = await prisma.payment.count();
-    const pendingPayments = await prisma.payment.count({ where: { status: 'PENDING_REVIEW' } });
+    const totalBlocks = await prisma.block.count();
+
+    // Count male/female occupancy from allocations
+    const maleAllocations = await prisma.allocation.count({
+      where: { status: 'ACTIVE', bed: { room: { block: { gender: 'MALE' } } } }
+    });
+    const femaleAllocations = await prisma.allocation.count({
+      where: { status: 'ACTIVE', bed: { room: { block: { gender: 'FEMALE' } } } }
+    });
 
     res.json({
-      totalApplications,
-      approvedApplications,
-      totalBeds,
-      occupiedBeds,
-      occupancyRate: totalBeds ? Math.round((occupiedBeds / totalBeds) * 100) : 0,
-      totalPayments,
-      pendingPayments
+      applications: {
+        pending: pendingApplications,
+        paymentPending: paymentPendingApplications
+      },
+      beds: {
+        available: availableBeds,
+        occupied: occupiedBeds
+      },
+      maleOccupancy: maleAllocations,
+      femaleOccupancy: femaleAllocations,
+      totalBlocks
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
