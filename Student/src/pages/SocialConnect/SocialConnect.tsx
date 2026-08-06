@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { usePayment } from '../../context/PaymentContext';
+import { useAuth } from '../../context/AuthContext';
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { 
   Send, ShieldAlert, Heart, Plus, ShoppingBag, 
@@ -39,7 +40,14 @@ function formatChannelTitle(name?: string): string {
 }
 
 export const SocialConnect: React.FC = () => {
-  const { student, hostel } = usePayment();
+  const { student: paymentStudent, hostel } = usePayment() || {};
+  const { user: authUser } = useAuth() || {};
+  
+  const student = paymentStudent || authUser || { name: 'Student', usn: '1BY24CS000' };
+  const studentUsn = student?.usn || '1BY24CS000';
+  const studentName = student?.name || 'Student';
+  
+  const socketRef = useRef<any>(null);
   const [activeChannelId, setActiveChannelId] = useState<string>('general');
   const [inputText, setInputText] = useState('');
   
@@ -156,14 +164,14 @@ export const SocialConnect: React.FC = () => {
         if (Array.isArray(data)) {
           setMessages(data.map((m: any) => ({
             ...m,
-            isSelf: m.usn === student.usn
+            isSelf: m.usn === studentUsn
           })));
         } else {
           setMessages([]);
         }
       })
       .catch(err => console.error('Failed to load messages', err));
-  }, [activeChannelId, student.usn]);
+  }, [activeChannelId, studentUsn]);
 
   // Socket.IO Listener Setup
   useEffect(() => {
@@ -173,7 +181,7 @@ export const SocialConnect: React.FC = () => {
       if (data.channelId === activeChannelId) {
         setMessages(prev => {
           if (prev.some(m => m.id === data.message.id)) return prev;
-          return [...prev, { ...data.message, isSelf: data.message.usn === student.usn }];
+          return [...prev, { ...data.message, isSelf: data.message.usn === studentUsn }];
         });
       }
     });
@@ -220,8 +228,8 @@ export const SocialConnect: React.FC = () => {
     if (!inputText.trim()) return;
 
     const payload = {
-      senderName: student.name,
-      usn: student.usn,
+      senderName: studentName,
+      usn: studentUsn,
       roomNo: hostel ? `Room ${hostel.room}` : 'Room 304',
       message: inputText.trim(),
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
@@ -251,8 +259,8 @@ export const SocialConnect: React.FC = () => {
     if (itemImagePreset === 'cycle') finalImgUrl = 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=400&q=80';
 
     const payload = {
-      senderName: student.name,
-      usn: student.usn,
+      senderName: studentName,
+      usn: studentUsn,
       roomNo: hostel ? `Room ${hostel.room}` : 'Room 304',
       message: `${itemTitle}: ${itemDesc}`,
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -284,8 +292,8 @@ export const SocialConnect: React.FC = () => {
     if (!interestedItem) return;
 
     const payload = {
-      senderName: student.name,
-      usn: student.usn,
+      senderName: studentName,
+      usn: studentUsn,
       roomNo: hostel ? `Room ${hostel.room}` : 'Room 304',
       message: `[INQUIRY] Hey ${interestedItem.senderName}, I am interested in your listing '${interestedItem.message.split(':')[0]}'. ${interestOfferMessage}`,
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
