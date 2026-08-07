@@ -241,21 +241,14 @@ app.post('/api/student/login', async (req, res) => {
             status: 'ACTIVE'
           }
         });
-      } else {
-        const newUsn = `STU-${Date.now()}`;
-        account = await prisma.studentAccount.create({
-          data: {
-            usn: newUsn,
-            studentName: cleanName,
-            phoneNumber: cleanPhone,
-            status: 'ACTIVE'
-          }
-        });
       }
     }
 
     if (!account) {
-      return res.status(404).json({ success: false, error: 'No active student account found.' });
+      return res.status(404).json({
+        success: false,
+        error: 'No active student account or application found for this Name and Phone Number. Please submit a hostel application first.'
+      });
     }
 
     // 2. Fetch associated application

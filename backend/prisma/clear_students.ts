@@ -42,6 +42,13 @@ async function clearStudentData() {
     const emailHistCount = await prisma.emailHistory.deleteMany({});
     console.log(`- Cleared ${emailHistCount.count} EmailHistory records`);
 
+    const deletedAdmins = await prisma.adminAccount.deleteMany({
+      where: {
+        email: { not: 'admin123@gmail.com' }
+      }
+    });
+    console.log(`- Cleared ${deletedAdmins.count} Sub-Admin accounts (kept Chief Admin admin123@gmail.com)`);
+
     const resetBeds = await prisma.bed.updateMany({
       data: { status: 'AVAILABLE' }
     });
