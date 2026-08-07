@@ -447,7 +447,7 @@ app.get('/api/applications', async (req, res) => {
           }
         }
       },
-      orderBy: { appliedAt: 'desc' }
+      orderBy: { appliedAt: 'asc' }
     });
     return res.json(apps);
   } catch (err: any) {

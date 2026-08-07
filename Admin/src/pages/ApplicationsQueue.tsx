@@ -336,6 +336,11 @@ export default function ApplicationsQueue() {
     return app.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
            app.usn.toLowerCase().includes(searchQuery.toLowerCase()) ||
            app.department.toLowerCase().includes(searchQuery.toLowerCase());
+  // FCFS: sort by appliedAt ascending (earliest application = position 1)
+  })?.sort((a: any, b: any) => {
+    const dateA = new Date(a.appliedAt || a.createdAt || 0).getTime();
+    const dateB = new Date(b.appliedAt || b.createdAt || 0).getTime();
+    return dateA - dateB;
   });
 
   const handleSelectTopN = () => {
