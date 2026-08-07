@@ -891,14 +891,18 @@ app.delete('/api/admin/accounts/:id', async (req, res) => {
 });
 
 // ==================== STUDENT PORTAL ROUTES ====================
-app.get('/api/student/status/:usn', async (req, res) => {
+app.get('/api/student/status/:identifier', async (req, res) => {
   try {
-    const inputUsn = (req.params.usn || '').trim();
+    const rawInput = (req.params.identifier || req.params.usn || '').trim();
+    const cleanPhone = rawInput.replace(/\D/g, '') || rawInput;
+
     const application = await prisma.application.findFirst({
       where: {
         OR: [
-          { usn: inputUsn },
-          { phoneNumber: inputUsn }
+          { id: rawInput },
+          { phoneNumber: rawInput },
+          { phoneNumber: cleanPhone },
+          ...(rawInput.length > 3 ? [{ usn: rawInput }] : [])
         ]
       },
       include: {
@@ -915,7 +919,7 @@ app.get('/api/student/status/:usn', async (req, res) => {
     }
 
     const allocation = application.allocations[0] || null;
-    const isAllocated = !!allocation || application.status === 'ALLOCATED' || application.status === 'APPROVED';
+    const isAllocated = !!allocation || application.status === 'ALLOCATED' || application.status === 'APPROVED' || application.status === 'ROOM_ALLOTTED';
 
     const hostelInfo = allocation?.bed?.room ? {
       hostel: allocation.bed.room.block.gender === 'FEMALE' ? 'Girls Hostel' : 'Boys Hostel',
@@ -928,7 +932,13 @@ app.get('/api/student/status/:usn', async (req, res) => {
     } : null;
 
     const payments = await prisma.payment.findMany({
-      where: { studentUsn: application.usn },
+      where: {
+        OR: [
+          { applicationId: application.id },
+          { phoneNumber: application.phoneNumber },
+          ...(application.usn ? [{ studentUsn: application.usn }] : [])
+        ]
+      },
       orderBy: { createdAt: 'desc' }
     });
 

@@ -115,13 +115,14 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // FETCH REAL STATUS FROM BACKEND
   // ──────────────────────────────────────────────
   const refreshStatus = useCallback(async () => {
-    if (!studentUsn || !isLoggedIn) return;
+    const studentIdentifier = studentUsn || studentPhone || localStorage.getItem('student_phone') || localStorage.getItem('student_usn');
+    if (!studentIdentifier || !isLoggedIn) return;
     if (isRefreshing.current) return;
     isRefreshing.current = true;
 
     if (!hasLoadedOnce.current) setIsLoadingStatus(true);
     try {
-      const data = await apiRequest(`/api/student/status/${studentUsn}`);
+      const data = await apiRequest(`/api/student/status/${encodeURIComponent(studentIdentifier)}`);
 
       if (!data.found || data.error === 'No account exists') {
         setApplicationState('applied');
@@ -246,22 +247,22 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [studentUsn, isLoggedIn, setStudentName]);
 
-  // Fetch status on login; poll every 30s for background sync (not 3s)
+  // Fetch status on login; poll every 30s for background sync
   useEffect(() => {
-    if (!studentUsn || !isLoggedIn) return;
+    if (!isLoggedIn) return;
 
     refreshStatus();
     const interval = setInterval(refreshStatus, 30000);
     return () => clearInterval(interval);
-  }, [studentUsn, isLoggedIn, refreshStatus]);
+  }, [isLoggedIn, refreshStatus]);
 
   // Listen for real-time socket events so changes reflect instantly
   useEffect(() => {
-    if (!studentUsn || !isLoggedIn) return;
+    if (!isLoggedIn) return;
 
     const handleDataUpdated = () => { refreshStatus(); };
     const handleAccountDeleted = (data: any) => {
-      if (data?.usns?.includes(studentUsn)) {
+      if (data?.usns?.includes(studentUsn) || data?.phones?.includes(studentPhone)) {
         localStorage.removeItem('cached_application_state');
         logout();
       }
@@ -280,7 +281,7 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       socket.off('STUDENT_UPDATED', handleDataUpdated);
       socket.off('student_account_deleted', handleAccountDeleted);
     };
-  }, [studentUsn, isLoggedIn, refreshStatus, logout]);
+  }, [isLoggedIn, studentUsn, studentPhone, refreshStatus, logout]);
 
   // ──────────────────────────────────────────────
   // EXISTING FUNCTIONS (kept for compatibility)
