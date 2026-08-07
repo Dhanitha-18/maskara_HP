@@ -209,38 +209,49 @@ app.post('/api/student/login', async (req, res) => {
       return res.status(400).json({ error: 'Name and Phone Number are required.' });
     }
 
-    const cleanName = String(studentName).trim();
-    const cleanPhone = String(phoneNumber).trim();
+    const cleanName = String(studentName).trim().toLowerCase();
+    const rawPhoneDigits = String(phoneNumber).replace(/\D/g, '');
+    const cleanPhone10 = rawPhoneDigits.slice(-10);
 
-    // 1. Check StudentAccount
-    const accounts = await prisma.studentAccount.findMany({
-      where: { phoneNumber: cleanPhone, status: 'ACTIVE' }
+    if (!cleanName || !cleanPhone10) {
+      return res.status(400).json({ error: 'Valid Name and 10-digit Phone Number are required.' });
+    }
+
+    // 1. Fetch all active student accounts and match by phone digits & name
+    const allAccounts = await prisma.studentAccount.findMany({
+      where: { status: 'ACTIVE' }
     });
 
-    let account = accounts.find(
-      (a) => a.studentName && a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
-    );
+    let account = allAccounts.find((a) => {
+      const aPhoneDigits = (a.phoneNumber || '').replace(/\D/g, '').slice(-10);
+      const aName = (a.studentName || '').trim().toLowerCase();
+      return (aPhoneDigits === cleanPhone10 || a.phoneNumber?.trim() === String(phoneNumber).trim()) && aName === cleanName;
+    });
 
-    // Fallback: Check Application table
+    // 2. Fallback: Search Application table directly
     if (!account) {
-      const pendingApps = await prisma.application.findMany({
-        where: {
-          phoneNumber: cleanPhone,
-          status: { not: 'REJECTED' }
-        }
+      const allApps = await prisma.application.findMany({
+        where: { status: { not: 'REJECTED' } }
       });
-      const matchingApp = pendingApps.find(
-        (a) => a.studentName && a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
-      );
+
+      const matchingApp = allApps.find((app) => {
+        const appPhoneDigits = (app.phoneNumber || '').replace(/\D/g, '').slice(-10);
+        const appName = (app.studentName || '').trim().toLowerCase();
+        return (appPhoneDigits === cleanPhone10 || app.phoneNumber?.trim() === String(phoneNumber).trim()) && appName === cleanName;
+      });
 
       if (matchingApp) {
-        const existingAcc = matchingApp.usn ? await prisma.studentAccount.findFirst({ where: { usn: matchingApp.usn } }) : null;
+        const existingAcc = matchingApp.usn
+          ? await prisma.studentAccount.findFirst({ where: { usn: matchingApp.usn } })
+          : await prisma.studentAccount.findFirst({ where: { applicationId: matchingApp.id } });
+
         if (existingAcc) {
           account = await prisma.studentAccount.update({
             where: { id: existingAcc.id },
             data: {
               studentName: matchingApp.studentName,
               phoneNumber: matchingApp.phoneNumber,
+              applicationId: matchingApp.id,
               status: 'ACTIVE'
             }
           });
@@ -250,6 +261,7 @@ app.post('/api/student/login', async (req, res) => {
               usn: matchingApp.usn || '',
               studentName: matchingApp.studentName,
               phoneNumber: matchingApp.phoneNumber,
+              applicationId: matchingApp.id,
               status: 'ACTIVE'
             }
           });
@@ -264,13 +276,13 @@ app.post('/api/student/login', async (req, res) => {
       });
     }
 
-    // 2. Fetch associated application
+    // 3. Fetch associated application
     const application = await prisma.application.findFirst({
       where: {
         OR: [
-          { usn: account.usn },
-          account.applicationId ? { id: account.applicationId } : {},
-          { phoneNumber: cleanPhone }
+          ...(account.applicationId ? [{ id: account.applicationId }] : []),
+          ...(account.usn ? [{ usn: account.usn }] : []),
+          { phoneNumber: account.phoneNumber }
         ]
       }
     });
@@ -279,9 +291,11 @@ app.post('/api/student/login', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Your application has been rejected by administration.' });
     }
 
+    const effectiveUsn = account.usn || application?.usn || account.phoneNumber;
+
     const studentPayload = {
       id: account.id,
-      usn: account.usn,
+      usn: effectiveUsn,
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
       userType: 'STUDENT'
@@ -292,7 +306,7 @@ app.post('/api/student/login', async (req, res) => {
     return res.json({
       success: true,
       token,
-      usn: account.usn,
+      usn: effectiveUsn,
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
       application
@@ -379,19 +393,32 @@ app.post('/api/applications', async (req, res) => {
       }
     });
 
-    // Create Student Account entry
-    if (newApp.usn) {
-      const existingAcc = await prisma.studentAccount.findFirst({ where: { usn: newApp.usn } });
-      if (existingAcc) {
-        await prisma.studentAccount.update({
-          where: { id: existingAcc.id },
-          data: { studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id }
-        });
-      } else {
-        await prisma.studentAccount.create({
-          data: { usn: newApp.usn, studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id }
-        });
-      }
+    // Create or update Student Account entry so login works immediately
+    const existingAcc = newApp.usn
+      ? await prisma.studentAccount.findFirst({ where: { usn: newApp.usn } })
+      : await prisma.studentAccount.findFirst({ where: { applicationId: newApp.id } });
+
+    if (existingAcc) {
+      await prisma.studentAccount.update({
+        where: { id: existingAcc.id },
+        data: {
+          usn: newApp.usn || existingAcc.usn || '',
+          studentName: newApp.studentName,
+          phoneNumber: newApp.phoneNumber,
+          applicationId: newApp.id,
+          status: 'ACTIVE'
+        }
+      });
+    } else {
+      await prisma.studentAccount.create({
+        data: {
+          usn: newApp.usn || '',
+          studentName: newApp.studentName,
+          phoneNumber: newApp.phoneNumber,
+          applicationId: newApp.id,
+          status: 'ACTIVE'
+        }
+      });
     }
 
     return res.status(201).json({ success: true, application: newApp });
