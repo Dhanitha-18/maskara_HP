@@ -217,6 +217,15 @@ export default function SocialControl() {
     }
   };
 
+  const safeParseJson = async (res: Response) => {
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { error: `Server error (${res.status})` };
+    }
+  };
+
   // Channels CRUD handlers
   const handleCreateChannel = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,9 +243,10 @@ export default function SocialControl() {
           targetBlock: newChannelBlock
         })
       });
-      const data = await res.json();
+      const data = await safeParseJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to create channel');
 
+      queryClient.invalidateQueries({ queryKey: ['chat-channels'] });
       toast.success('Channel created successfully');
       setShowCreateChannelModal(false);
       setNewChannelName('');
@@ -244,7 +254,7 @@ export default function SocialControl() {
       setNewChannelBadge('');
       setNewChannelBlock('ALL');
     } catch (err: any) {
-      toast.error(err.message || 'Duplicate channel name');
+      toast.error(err.message || 'Failed to create channel');
     }
   };
 
@@ -261,9 +271,10 @@ export default function SocialControl() {
           desc: renameDescValue.trim()
         })
       });
-      const data = await res.json();
+      const data = await safeParseJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to rename channel');
 
+      queryClient.invalidateQueries({ queryKey: ['chat-channels'] });
       toast.success('Channel updated');
       setShowRenameChannelModal(null);
     } catch (err: any) {
@@ -286,7 +297,11 @@ export default function SocialControl() {
         const res = await fetch(`http://localhost:5000/api/chat/channels/${id}`, {
           method: 'DELETE'
         });
-        if (!res.ok) throw new Error('Failed to delete channel');
+        if (!res.ok) {
+          const data = await safeParseJson(res);
+          throw new Error(data.error || 'Failed to delete channel');
+        }
+        queryClient.invalidateQueries({ queryKey: ['chat-channels'] });
         toast.success('Channel deleted successfully');
       } catch (err: any) {
         toast.error(err.message);

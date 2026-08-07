@@ -1150,6 +1150,75 @@ app.get('/api/chat/channels', async (req, res) => {
   }
 });
 
+app.post('/api/chat/channels', async (req, res) => {
+  try {
+    const { name, desc, iconName, badge, targetBlock } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Channel name is required' });
+    }
+
+    const cleanName = name.trim().toLowerCase().replace(/\s+/g, '-');
+    const existing = await prisma.chatChannel.findFirst({
+      where: { name: { equals: cleanName, mode: 'insensitive' } }
+    });
+    if (existing) {
+      return res.status(400).json({ error: 'A channel with this name already exists' });
+    }
+
+    const channel = await prisma.chatChannel.create({
+      data: {
+        name: cleanName,
+        desc: desc ? desc.trim() : `${cleanName} channel`,
+        iconName: iconName || 'MessageSquare',
+        badge: badge ? badge.trim() : null,
+        targetBlock: targetBlock || 'ALL'
+      }
+    });
+
+    io.emit('chat_channel_created', channel);
+    res.status(201).json(channel);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/chat/channels/:id', async (req, res) => {
+  try {
+    const { name, desc, iconName, badge, targetBlock } = req.body;
+    const updated = await prisma.chatChannel.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name: name.trim().toLowerCase().replace(/\s+/g, '-') }),
+        ...(desc !== undefined && { desc: desc.trim() }),
+        ...(iconName && { iconName }),
+        ...(badge !== undefined && { badge: badge ? badge.trim() : null }),
+        ...(targetBlock && { targetBlock })
+      }
+    });
+
+    io.emit('chat_channel_updated', updated);
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/chat/channels/:id', async (req, res) => {
+  try {
+    await prisma.chatMessage.deleteMany({
+      where: { channelId: req.params.id }
+    });
+    await prisma.chatChannel.delete({
+      where: { id: req.params.id }
+    });
+
+    io.emit('chat_channel_deleted', req.params.id);
+    res.json({ success: true, id: req.params.id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/chat/channels/:id/messages', async (req, res) => {
   try {
     const messages = await prisma.chatMessage.findMany({
