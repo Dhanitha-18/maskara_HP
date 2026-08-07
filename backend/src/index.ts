@@ -404,7 +404,22 @@ app.post('/api/applications', async (req, res) => {
 app.get('/api/applications', async (req, res) => {
   try {
     const apps = await prisma.application.findMany({
-      include: { documents: true, allocations: true },
+      include: {
+        documents: true,
+        allocations: {
+          include: {
+            bed: {
+              include: {
+                room: {
+                  include: {
+                    block: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       orderBy: { appliedAt: 'desc' }
     });
     return res.json(apps);
@@ -540,6 +555,9 @@ app.post('/api/allocate', async (req, res) => {
         applicationId,
         bedId,
         status: 'ALLOCATED'
+      },
+      include: {
+        bed: { include: { room: { include: { block: true } } } }
       }
     });
 
@@ -578,7 +596,10 @@ app.post('/api/allocate/batch', async (req, res) => {
 
       if (availableBed) {
         const allocation = await prisma.allocation.create({
-          data: { applicationId: appId, bedId: availableBed.id, status: 'ALLOCATED' }
+          data: { applicationId: appId, bedId: availableBed.id, status: 'ALLOCATED' },
+          include: {
+            bed: { include: { room: { include: { block: true } } } }
+          }
         });
         await prisma.bed.update({ where: { id: availableBed.id }, data: { status: 'OCCUPIED' } });
         const updatedApp = await prisma.application.update({ where: { id: appId }, data: { status: 'ALLOCATED' } });
@@ -631,7 +652,10 @@ app.post('/api/reallocate', async (req, res) => {
 
     const updatedAllocation = await prisma.allocation.update({
       where: { id: allocationId },
-      data: { bedId: newBedId }
+      data: { bedId: newBedId },
+      include: {
+        bed: { include: { room: { include: { block: true } } } }
+      }
     });
 
     const app = await prisma.application.findUnique({ where: { id: oldAllocation.applicationId } });
@@ -681,6 +705,12 @@ app.post('/api/student/payment', async (req, res) => {
         paymentDate: data.paymentDate ? new Date(data.paymentDate) : new Date(),
         screenshotUrl: data.screenshotUrl,
         amount: data.amount ? parseFloat(data.amount) : 0,
+        paymentTitle: data.paymentTitle || null,
+        semester: data.semester || null,
+        transferBank: data.transferBank || null,
+        accountHolderName: data.accountHolderName || null,
+        accountHolderRelation: data.accountHolderRelation || null,
+        accountHolderContact: data.accountHolderContact || null,
         status: 'PENDING_REVIEW'
       }
     });
@@ -696,7 +726,7 @@ app.put('/api/payments/:id/approve', async (req, res) => {
   try {
     const updated = await prisma.payment.update({
       where: { id: req.params.id },
-      data: { status: 'APPROVED', reviewedAt: new Date() }
+      data: { status: 'APPROVED', reviewedBy: req.body.reviewedBy || 'Admin', reviewedAt: new Date() }
     });
     io.emit('payment_updated', updated);
     res.json({ success: true, payment: updated });
@@ -709,7 +739,7 @@ app.put('/api/payments/:id/reject', async (req, res) => {
   try {
     const updated = await prisma.payment.update({
       where: { id: req.params.id },
-      data: { status: 'REJECTED', reviewedAt: new Date(), remarks: req.body.remarks }
+      data: { status: 'REJECTED', reviewedBy: req.body.reviewedBy || 'Admin', reviewedAt: new Date(), remarks: req.body.remarks }
     });
     io.emit('payment_updated', updated);
     res.json({ success: true, payment: updated });
