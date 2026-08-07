@@ -53,6 +53,8 @@ if [ $TSC_EXIT -ne 0 ]; then
 else
   echo "✅ [Admin] TypeScript OK"
 fi
+cd ..
+
 # ── Backend: TypeScript check ──────────────────────────────
 echo ""
 echo "▶ [Backend] TypeScript check..."
