@@ -80,10 +80,13 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [receipts, setReceipts] = useState<ReceiptItem[]>(mockReceipts);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [applicationState, setApplicationState] = useState<'not_applied' | 'applied' | 'room_allotted' | 'paid'>(() => {
-    // Restore cached state so tabs don't flash "locked" on page load
-    const cached = localStorage.getItem('cached_application_state');
-    if (cached === 'applied' || cached === 'room_allotted' || cached === 'paid') return cached;
-    return 'not_applied';
+    // Restore per-student cached state if available
+    const usn = localStorage.getItem('student_usn');
+    if (usn) {
+      const cached = localStorage.getItem(`cached_application_state_${usn}`);
+      if (cached === 'applied' || cached === 'room_allotted' || cached === 'paid') return cached;
+    }
+    return 'applied';
   });
   const [backendPayments, setBackendPayments] = useState<any[]>([]);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
@@ -101,52 +104,47 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [studentName, studentUsn]);
 
-  // Cache applicationState to localStorage whenever it changes
+  // Cache applicationState to localStorage per student USN
   useEffect(() => {
-    if (applicationState !== 'not_applied') {
-      localStorage.setItem('cached_application_state', applicationState);
+    if (studentUsn && applicationState) {
+      localStorage.setItem(`cached_application_state_${studentUsn}`, applicationState);
     }
-  }, [applicationState]);
+  }, [applicationState, studentUsn]);
 
   // ──────────────────────────────────────────────
   // FETCH REAL STATUS FROM BACKEND
   // ──────────────────────────────────────────────
   const refreshStatus = useCallback(async () => {
     if (!studentUsn || !isLoggedIn) return;
-    // Prevent concurrent refresh calls
     if (isRefreshing.current) return;
     isRefreshing.current = true;
 
-    // Only show loading spinner on first load
     if (!hasLoadedOnce.current) setIsLoadingStatus(true);
     try {
       const data = await apiRequest(`/api/student/status/${studentUsn}`);
 
-      if (!data.found || data.error === 'No account exists' || data.applicationState === 'rejected') {
-        if (data.error === 'No account exists' || data.applicationState === 'rejected') {
-          localStorage.removeItem('cached_application_state');
-          logout();
-        }
-        setApplicationState('not_applied');
+      if (!data.found || data.error === 'No account exists') {
+        setApplicationState('applied');
         return;
       }
 
-      // Map backend applicationState to our local states
+      // Map backend applicationState directly
       const stateMap: Record<string, 'not_applied' | 'applied' | 'room_allotted' | 'paid'> = {
-        'not_applied': 'not_applied',
+        'not_applied': 'applied',
         'applied': 'applied',
         'PENDING': 'applied',
         'APPROVED': 'applied',
         'HOLD': 'applied',
         'REJECTED': 'applied',
         'ALLOCATED': 'room_allotted',
-        'on_hold': 'applied',
-        'rejected': 'applied',
         'room_allotted': 'room_allotted',
         'paid': 'paid'
       };
-      const mappedState = stateMap[data.applicationState.toUpperCase()] || stateMap[data.applicationState] || 'not_applied';
+      const mappedState = stateMap[data.applicationState] || 'applied';
       setApplicationState(mappedState);
+      if (studentUsn) {
+        localStorage.setItem(`cached_application_state_${studentUsn}`, mappedState);
+      }
 
       // Update student info from real application data
       if (data.application) {

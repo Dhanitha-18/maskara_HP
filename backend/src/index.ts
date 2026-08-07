@@ -512,6 +512,9 @@ app.get('/api/allocations', async (req, res) => {
 app.post('/api/allocate', async (req, res) => {
   try {
     const { applicationId, bedId } = req.body;
+    if (!applicationId || !bedId) {
+      return res.status(400).json({ error: 'Application ID and Bed ID are required.' });
+    }
 
     const allocation = await prisma.allocation.create({
       data: {
@@ -526,12 +529,97 @@ app.post('/api/allocate', async (req, res) => {
       data: { status: 'OCCUPIED' }
     });
 
-    await prisma.application.update({
+    const updatedApp = await prisma.application.update({
       where: { id: applicationId },
       data: { status: 'ALLOCATED' }
     });
 
+    io.emit('BED_ALLOCATED', { applicationId, usn: updatedApp.usn, bedId, allocation });
+    io.emit('APPLICATION_UPDATED', { applicationId, usn: updatedApp.usn, status: 'ALLOCATED' });
+    io.emit('data_updated');
+
     res.json({ success: true, allocation });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/allocate/batch', async (req, res) => {
+  try {
+    const { applicationIds, blockId, floor } = req.body;
+    let allocatedCount = 0;
+
+    for (const appId of applicationIds) {
+      const availableBed = await prisma.bed.findFirst({
+        where: {
+          status: 'AVAILABLE',
+          room: { blockId, floor: parseInt(floor) || 1 }
+        }
+      });
+
+      if (availableBed) {
+        const allocation = await prisma.allocation.create({
+          data: { applicationId: appId, bedId: availableBed.id, status: 'ALLOCATED' }
+        });
+        await prisma.bed.update({ where: { id: availableBed.id }, data: { status: 'OCCUPIED' } });
+        const updatedApp = await prisma.application.update({ where: { id: appId }, data: { status: 'ALLOCATED' } });
+        allocatedCount++;
+        io.emit('BED_ALLOCATED', { applicationId: appId, usn: updatedApp.usn, bedId: availableBed.id, allocation });
+      }
+    }
+
+    io.emit('data_updated');
+    res.json({ success: true, allocated: allocatedCount, totalRequested: applicationIds.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/allocate/undo', async (req, res) => {
+  try {
+    const { applicationId } = req.body;
+    const allocation = await prisma.allocation.findFirst({ where: { applicationId } });
+
+    if (allocation) {
+      await prisma.bed.update({ where: { id: allocation.bedId }, data: { status: 'AVAILABLE' } });
+      await prisma.allocation.delete({ where: { id: allocation.id } });
+    }
+
+    const updatedApp = await prisma.application.update({
+      where: { id: applicationId },
+      data: { status: 'PENDING' }
+    });
+
+    io.emit('APPLICATION_UPDATED', { applicationId, usn: updatedApp.usn, status: 'PENDING' });
+    io.emit('data_updated');
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/reallocate', async (req, res) => {
+  try {
+    const { allocationId, newBedId } = req.body;
+    const oldAllocation = await prisma.allocation.findUnique({ where: { id: allocationId } });
+
+    if (!oldAllocation) {
+      return res.status(404).json({ error: 'Allocation record not found' });
+    }
+
+    await prisma.bed.update({ where: { id: oldAllocation.bedId }, data: { status: 'AVAILABLE' } });
+    await prisma.bed.update({ where: { id: newBedId }, data: { status: 'OCCUPIED' } });
+
+    const updatedAllocation = await prisma.allocation.update({
+      where: { id: allocationId },
+      data: { bedId: newBedId }
+    });
+
+    const app = await prisma.application.findUnique({ where: { id: oldAllocation.applicationId } });
+    io.emit('BED_ALLOCATED', { applicationId: oldAllocation.applicationId, usn: app?.usn, bedId: newBedId, allocation: updatedAllocation });
+    io.emit('data_updated');
+
+    res.json({ success: true, allocation: updatedAllocation });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -721,8 +809,14 @@ app.delete('/api/admin/accounts/:id', async (req, res) => {
 // ==================== STUDENT PORTAL ROUTES ====================
 app.get('/api/student/status/:usn', async (req, res) => {
   try {
-    const application = await prisma.application.findUnique({
-      where: { usn: req.params.usn },
+    const inputUsn = (req.params.usn || '').trim();
+    const application = await prisma.application.findFirst({
+      where: {
+        OR: [
+          { usn: inputUsn },
+          { phoneNumber: inputUsn }
+        ]
+      },
       include: {
         allocations: {
           include: {
@@ -731,12 +825,41 @@ app.get('/api/student/status/:usn', async (req, res) => {
         }
       }
     });
+
     if (!application) {
-      return res.status(404).json({ error: 'Student application not found' });
+      return res.status(404).json({ found: false, error: 'No application found' });
     }
 
     const allocation = application.allocations[0] || null;
-    res.json({ success: true, application, allocation });
+    const isAllocated = !!allocation || application.status === 'ALLOCATED' || application.status === 'APPROVED';
+
+    const hostelInfo = allocation?.bed?.room ? {
+      hostel: allocation.bed.room.block.gender === 'FEMALE' ? 'Girls Hostel' : 'Boys Hostel',
+      block: allocation.bed.room.block.name,
+      floor: `Floor ${allocation.bed.room.floor}`,
+      room: allocation.bed.room.roomNo,
+      bed: `Bed ${allocation.bed.bedNo}`,
+      sharing: allocation.bed.room.type || 'Standard',
+      admissionDate: new Date(allocation.allocatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    } : null;
+
+    const payments = await prisma.payment.findMany({
+      where: { studentUsn: application.usn },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const isPaid = payments.some(p => p.status === 'APPROVED');
+    const applicationState = isPaid ? 'paid' : (isAllocated ? 'room_allotted' : 'applied');
+
+    return res.json({
+      found: true,
+      success: true,
+      applicationState,
+      application,
+      allocation,
+      hostelInfo,
+      payments
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
