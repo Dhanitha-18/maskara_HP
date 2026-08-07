@@ -1216,6 +1216,13 @@ app.post('/api/settings/:key', async (req, res) => {
       update: { value: JSON.stringify(req.body) },
       create: { key: req.params.key, value: JSON.stringify(req.body) }
     });
+
+    if (req.params.key === 'mess-menu') {
+      const menuPayload = req.body.menu || req.body;
+      io.emit('MESS_MENU_UPDATED', menuPayload);
+    }
+    io.emit('data_updated', { type: req.params.key });
+
     res.json({ success: true, setting });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

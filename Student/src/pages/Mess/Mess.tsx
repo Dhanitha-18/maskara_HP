@@ -123,7 +123,9 @@ export const Mess: React.FC = () => {
   });
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const weeklyMenu = cmsData?.menu || {};
+  const weeklyMenu = (cmsData?.menu && (cmsData.menu.Monday || cmsData.menu.Tuesday)) 
+    ? cmsData.menu 
+    : (cmsData?.Monday ? cmsData : (cmsData?.menu?.menu || cmsData?.menu || {}));
   const dayMenu = weeklyMenu[activeDay] || { Breakfast: { name: '', desc: '', img: '', time: '' }, Lunch: { name: '', desc: '', img: '', time: '' }, Snacks: { name: '', desc: '', img: '', time: '' }, Dinner: { name: '', desc: '', img: '', time: '' } };
 
   useEffect(() => {

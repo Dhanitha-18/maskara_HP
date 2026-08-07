@@ -117,17 +117,14 @@ export default function MessMenuControl() {
       const rawUrl = data.url || data.imageUrl || data.fileUrl || '';
       const uploadedUrl = rawUrl.startsWith('http') || rawUrl.startsWith('data:') ? rawUrl : `${API_BASE_URL}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
       
-      let updatedMenu: any = null;
-      setCmsData((prev: any) => {
-        const copy = JSON.parse(JSON.stringify(prev || {}));
-        const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
-        if (!weekly[activeDay]) weekly[activeDay] = {};
-        if (!weekly[activeDay][mealKey]) weekly[activeDay][mealKey] = {};
-        weekly[activeDay][mealKey].img = uploadedUrl;
-        updatedMenu = copy;
-        return copy;
-      });
-      if (updatedMenu) mutation.mutate(updatedMenu);
+      const copy = JSON.parse(JSON.stringify(cmsData || {}));
+      const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
+      if (!weekly[activeDay]) weekly[activeDay] = {};
+      if (!weekly[activeDay][mealKey]) weekly[activeDay][mealKey] = {};
+      weekly[activeDay][mealKey].img = uploadedUrl;
+
+      setCmsData(copy);
+      mutation.mutate(copy);
       toast.success('Image uploaded and synced live to Student Portal!', { id: toastId });
     } catch (error: any) {
       toast.error(error.message || 'Upload failed', { id: toastId });
@@ -135,17 +132,13 @@ export default function MessMenuControl() {
   };
 
   const handleImageDelete = (mealKey: string) => {
-    let updatedMenu: any = null;
-    setCmsData((prev: any) => {
-      const copy = JSON.parse(JSON.stringify(prev || {}));
-      const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
-      if (weekly[activeDay] && weekly[activeDay][mealKey]) {
-        weekly[activeDay][mealKey].img = '';
-      }
-      updatedMenu = copy;
-      return copy;
-    });
-    if (updatedMenu) mutation.mutate(updatedMenu);
+    const copy = JSON.parse(JSON.stringify(cmsData || {}));
+    const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
+    if (weekly[activeDay] && weekly[activeDay][mealKey]) {
+      weekly[activeDay][mealKey].img = '';
+    }
+    setCmsData(copy);
+    mutation.mutate(copy);
     toast.success('Image deleted and synced live to Student Portal!');
   };
 
@@ -159,12 +152,14 @@ export default function MessMenuControl() {
   };
 
   const saveHeader = () => {
-    setCmsData((prev: any) => ({
-      ...prev,
+    const copy = {
+      ...cmsData,
       header: { title: headerTitle, subtitle: headerSubtitle, badge: headerBadge }
-    }));
+    };
+    setCmsData(copy);
+    mutation.mutate(copy);
     setEditingHeader(false);
-    toast.success('Header details updated locally. Save globally to apply.');
+    toast.success('Header details updated and saved to server.');
   };
 
   // Meal Editors
@@ -176,52 +171,48 @@ export default function MessMenuControl() {
   };
 
   const saveMeal = (key: string) => {
-    setCmsData((prev: any) => {
-      const copy = JSON.parse(JSON.stringify(prev || {}));
-      const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
-      if (!weekly[activeDay]) weekly[activeDay] = {};
-      weekly[activeDay][key] = {
-        ...weekly[activeDay][key],
-        name: mealName,
-        desc: mealDesc,
-        time: mealTime
-      };
-      return copy;
-    });
+    const copy = JSON.parse(JSON.stringify(cmsData || {}));
+    const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
+    if (!weekly[activeDay]) weekly[activeDay] = {};
+    weekly[activeDay][key] = {
+      ...weekly[activeDay][key],
+      name: mealName,
+      desc: mealDesc,
+      time: mealTime
+    };
+    setCmsData(copy);
+    mutation.mutate(copy);
     setEditingMealKey(null);
-    toast.success(`${key} card updated locally.`);
+    toast.success(`${key} card updated and saved to server.`);
   };
 
   const deleteMeal = (key: string) => {
     if (confirm(`Are you sure you want to delete ${key} from ${activeDay}'s menu?`)) {
-      setCmsData((prev: any) => {
-        const copy = JSON.parse(JSON.stringify(prev || {}));
-        const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
-        if (weekly[activeDay]) {
-          delete weekly[activeDay][key];
-        }
-        mutation.mutate(copy);
-        return copy;
-      });
+      const copy = JSON.parse(JSON.stringify(cmsData || {}));
+      const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
+      if (weekly[activeDay]) {
+        delete weekly[activeDay][key];
+      }
+      setCmsData(copy);
+      mutation.mutate(copy);
       toast.success(`${key} deleted from ${activeDay} and saved to server.`);
     }
   };
 
   const addMealSlot = (key: string) => {
-    setCmsData((prev: any) => {
-      const copy = JSON.parse(JSON.stringify(prev || {}));
-      const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
-      if (!weekly[activeDay]) weekly[activeDay] = {};
-      weekly[activeDay][key] = {
-        name: `New ${key} Dish`,
-        desc: 'New meal description...',
-        time: key === 'Breakfast' ? '7:30 AM - 9:00 AM' : key === 'Lunch' ? '12:30 PM - 2:00 PM' : key === 'Snacks' ? '5:00 PM - 6:00 PM' : '7:30 PM - 9:00 PM',
-        img: '',
-        type: 'Veg'
-      };
-      return copy;
-    });
-    toast.success(`${key} slot added to ${activeDay}.`);
+    const copy = JSON.parse(JSON.stringify(cmsData || {}));
+    const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
+    if (!weekly[activeDay]) weekly[activeDay] = {};
+    weekly[activeDay][key] = {
+      name: `New ${key} Dish`,
+      desc: 'New meal description...',
+      time: key === 'Breakfast' ? '7:30 AM - 9:00 AM' : key === 'Lunch' ? '12:30 PM - 2:00 PM' : key === 'Snacks' ? '5:00 PM - 6:00 PM' : '7:30 PM - 9:00 PM',
+      img: '',
+      type: 'Veg'
+    };
+    setCmsData(copy);
+    mutation.mutate(copy);
+    toast.success(`${key} slot added to ${activeDay} and saved to server.`);
   };
 
   // Policies / Guidelines
@@ -233,12 +224,14 @@ export default function MessMenuControl() {
   };
 
   const savePolicy = () => {
-    setCmsData((prev: any) => ({
-      ...prev,
+    const copy = {
+      ...cmsData,
       policies: { title: policyTitle, points: policyPoints }
-    }));
+    };
+    setCmsData(copy);
+    mutation.mutate(copy);
     setEditingPolicy(false);
-    toast.success('Dining policies updated locally.');
+    toast.success('Dining policies updated and saved to server.');
   };
 
   // Supplier info
@@ -250,12 +243,14 @@ export default function MessMenuControl() {
   };
 
   const saveSupplier = () => {
-    setCmsData((prev: any) => ({
-      ...prev,
+    const copy = {
+      ...cmsData,
       supplier: { title: supplierTitle, points: supplierPoints }
-    }));
+    };
+    setCmsData(copy);
+    mutation.mutate(copy);
     setEditingSupplier(false);
-    toast.success('Supplier information updated locally.');
+    toast.success('Supplier information updated and saved to server.');
   };
 
   // Inclusions
@@ -266,14 +261,13 @@ export default function MessMenuControl() {
   };
 
   const saveInclusion = (key: string) => {
-    setCmsData((prev: any) => {
-      const copy = { ...prev };
-      if (!copy.inclusions) copy.inclusions = {};
-      copy.inclusions[key] = { title: inclusionTitle, desc: inclusionDesc };
-      return copy;
-    });
+    const copy = JSON.parse(JSON.stringify(cmsData || {}));
+    if (!copy.inclusions) copy.inclusions = {};
+    copy.inclusions[key] = { title: inclusionTitle, desc: inclusionDesc };
+    setCmsData(copy);
+    mutation.mutate(copy);
     setEditingInclusionKey(null);
-    toast.success('Service inclusion updated locally.');
+    toast.success('Service inclusion updated and saved to server.');
   };
 
   // Table-view cell editing
@@ -285,24 +279,23 @@ export default function MessMenuControl() {
   const saveTableCell = () => {
     if (!editingTableCell) return;
     const { day, meal } = editingTableCell;
-    setCmsData((prev: any) => {
-      const copy = JSON.parse(JSON.stringify(prev || {}));
-      const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
-      if (!weekly[day]) weekly[day] = {};
-      if (!weekly[day][meal]) {
-        weekly[day][meal] = {
-          name: '',
-          desc: 'Meal configured via weekly grid view.',
-          time: meal === 'Breakfast' ? '7:30 AM - 9:00 AM' : meal === 'Lunch' ? '12:30 PM - 2:00 PM' : meal === 'Snacks' ? '5:00 PM - 6:00 PM' : '7:30 PM - 9:00 PM',
-          img: '',
-          type: 'Veg'
-        };
-      }
-      weekly[day][meal].name = tableMealName;
-      return copy;
-    });
+    const copy = JSON.parse(JSON.stringify(cmsData || {}));
+    const weekly = copy.menu && typeof copy.menu === 'object' ? copy.menu : copy;
+    if (!weekly[day]) weekly[day] = {};
+    if (!weekly[day][meal]) {
+      weekly[day][meal] = {
+        name: '',
+        desc: 'Meal configured via weekly grid view.',
+        time: meal === 'Breakfast' ? '7:30 AM - 9:00 AM' : meal === 'Lunch' ? '12:30 PM - 2:00 PM' : meal === 'Snacks' ? '5:00 PM - 6:00 PM' : '7:30 PM - 9:00 PM',
+        img: '',
+        type: 'Veg'
+      };
+    }
+    weekly[day][meal].name = tableMealName;
+    setCmsData(copy);
+    mutation.mutate(copy);
     setEditingTableCell(null);
-    toast.success(`Grid schedule cell updated locally.`);
+    toast.success(`Grid schedule cell updated and saved to server.`);
   };
 
   const getMealIcon = (key: string) => {
