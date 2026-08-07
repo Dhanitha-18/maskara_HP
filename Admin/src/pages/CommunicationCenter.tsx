@@ -67,23 +67,23 @@ const FALLBACK_STUDENTS: StudentData[] = [
 const DEFAULT_TEMPLATES: Record<WorkflowType, { subject: string; body: string }> = {
   ALLOCATION: {
     subject: 'Hostel Bed Allocation Confirmed - {name}',
-    body: 'Dear {name} (USN: {usn}),\n\nWe are pleased to inform you that you have been allocated a bed in Block {block}, Room {room} for this academic block. Please complete the admission formalities and pay the hostel fees within 3 working days.\n\nBest regards,\nHostel Administration Board'
+    body: 'Dear {name},\n\nWe are pleased to inform you that you have been allocated a bed in Block {block}, Room {room} for this academic block. Please complete the admission formalities and pay the hostel fees within 3 working days.\n\nBest regards,\nHostel Administration Board'
   },
   REJECTION: {
     subject: 'Hostel Accommodation Application Status Update',
-    body: 'Dear {name} (USN: {usn}),\n\nThank you for your application seeking accommodation in our hostels. We regret to inform you that due to high demand and limited bed availability, we are unable to allot a bed to you at this time. Your application remains on the waitlist.\n\nBest regards,\nHostel Admissions Board'
+    body: 'Dear {name},\n\nThank you for your application seeking accommodation in our hostels. We regret to inform you that due to high demand and limited bed availability, we are unable to allot a bed to you at this time. Your application remains on the waitlist.\n\nBest regards,\nHostel Admissions Board'
   },
   PAYMENT_CONFIRMATION: {
     subject: 'Hostel Fee Payment Receipt Confirmation',
-    body: 'Dear {name} (USN: {usn}),\n\nThis is to confirm that your fee payment for the hostel accommodation has been successfully received and credited to your account. Your room allocation is now fully active.\n\nBest regards,\nHostel Accounts Department'
+    body: 'Dear {name},\n\nThis is to confirm that your fee payment for the hostel accommodation has been successfully received and credited to your account. Your room allocation is now fully active.\n\nBest regards,\nHostel Accounts Department'
   },
   PAYMENT_REMINDER: {
     subject: 'IMPORTANT: Pending Hostel Fee Payment Reminder',
-    body: 'Dear {name} (USN: {usn}),\n\nThis is a friendly reminder that your hostel fees for this semester are currently unpaid/overdue. Please clear the pending dues immediately to secure and maintain your room allocation.\n\nBest regards,\nHostel Accounts Department'
+    body: 'Dear {name},\n\nThis is a friendly reminder that your hostel fees for this semester are currently unpaid/overdue. Please clear the pending dues immediately to secure and maintain your room allocation.\n\nBest regards,\nHostel Accounts Department'
   },
   ANNUAL_FEE_REMINDER: {
     subject: 'Notice: Annual Hostel Fee Payment Schedule',
-    body: 'Dear {name} (USN: {usn}),\n\nThis is to notify all hostellers that the annual hostel fee schedule for the upcoming academic year is now open. Kindly complete the payment before the deadline to ensure reservation of your block and room.\n\nBest regards,\nHostel Management Team'
+    body: 'Dear {name},\n\nThis is to notify all hostellers that the annual hostel fee schedule for the upcoming academic year is now open. Kindly complete the payment before the deadline to ensure reservation of your block and room.\n\nBest regards,\nHostel Management Team'
   }
 };
 
@@ -1288,7 +1288,6 @@ useEffect(() => {
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100">
                       <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Student Name</th>
-                      <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">USN</th>
                       <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Email Address</th>
                       <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Workflow</th>
                       <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Subject</th>
@@ -1318,9 +1317,6 @@ useEffect(() => {
                         >
                           <td className="p-4">
                             <span className="font-extrabold text-slate-800">{record.studentName}</span>
-                          </td>
-                          <td className="p-4 font-semibold text-slate-600 text-sm">
-                            {record.usn}
                           </td>
                           <td className="p-4 font-semibold text-slate-500 text-sm">
                             {record.email}

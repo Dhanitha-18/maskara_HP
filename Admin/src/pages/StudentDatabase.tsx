@@ -171,8 +171,7 @@ const handleDownloadPDF = async (app: any) => {
   drawFieldRow('Application Status', app.status || 'N/A', 'BMSIT Reference ID', app.bmsitId || 'N/A');
 
   drawSectionHeader('STUDENT INFORMATION');
-  drawFieldRow('Student Name', app.studentName || 'N/A', 'USN / Roll Number', app.usn || app.bmsitId || 'N/A');
-  drawFieldRow('Gender', app.gender || 'N/A', 'Date of Birth', app.dob ? new Date(app.dob).toLocaleDateString('en-IN') : 'N/A');
+  drawFieldRow('Student Name', app.studentName || 'N/A', 'Gender', app.gender || 'N/A');
   drawFieldRow('Department / Branch', app.branch || app.department || 'N/A');
   drawFieldRow('Year', app.year || app.semester || app.yearSem || 'N/A');
   drawFieldRow('Personal Email', app.email || 'N/A', 'Phone Number', app.phoneNumber || 'N/A');
@@ -337,7 +336,6 @@ export default function StudentDatabase() {
     const headers = [
       'Timestamp',
       'Application ID',
-      'USN',
       'Name',
       'Gender',
       'Contact Number',
@@ -554,7 +552,6 @@ export default function StudentDatabase() {
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">#</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50 bg-indigo-100/70 text-indigo-950 font-bold">Timestamp</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50 sticky left-0 bg-indigo-50 shadow-[1px_0_0_rgba(199,210,254,0.5)] z-30">Application ID</th>
-                  <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">USN</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Name</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Gender</th>
                   <th className="p-3 text-[10px] font-black text-indigo-900 uppercase tracking-wider border-r border-indigo-200/50">Contact Number</th>
@@ -632,7 +629,6 @@ export default function StudentDatabase() {
                         </td>
                         <td className="p-3 text-xs font-semibold text-slate-600 font-mono border-r border-slate-100 bg-slate-50/50">{formatSubmissionDate(app.appliedAt || app.createdAt)}</td>
                         <td className="p-3 text-sm font-bold text-indigo-700 border-r border-slate-100 sticky left-0 bg-white group-hover:bg-indigo-50/50 shadow-[1px_0_0_rgba(241,245,249,1)] group-hover:shadow-[1px_0_0_rgba(199,210,254,0.5)] z-10 transition-colors font-mono">{appIdFormatted}</td>
-                        <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100 font-mono">{displayVal(app.bmsitId || app.usn)}</td>
                         <td className="p-3 text-sm font-bold text-slate-800 border-r border-slate-100">{displayVal(app.studentName)}</td>
                         <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.gender)}</td>
                         <td className="p-3 text-sm font-semibold text-slate-600 border-r border-slate-100">{displayVal(app.phoneNumber)}</td>
@@ -723,8 +719,6 @@ export default function StudentDatabase() {
                                           </span>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs font-semibold text-slate-600">
-                                          <span><strong className="text-slate-400">USN:</strong> {displayVal(app.bmsitId || app.usn)}</span>
-                                          <span>•</span>
                                           <span><strong className="text-slate-400">App ID:</strong> {appIdFormatted}</span>
                                           <span>•</span>
                                           <span><strong className="text-slate-400">Program:</strong> {displayVal(app.program)} ({displayVal(app.branch || app.department)})</span>
@@ -772,10 +766,6 @@ export default function StudentDatabase() {
                                           <div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase">Full Name</p>
                                             <p className="font-bold text-slate-800 mt-0.5">{displayVal(app.studentName)}</p>
-                                          </div>
-                                          <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase">USN / BMSIT ID</p>
-                                            <p className="font-bold text-indigo-700 font-mono mt-0.5">{displayVal(app.bmsitId || app.usn)}</p>
                                           </div>
                                           <div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase">Gender</p>
@@ -1117,8 +1107,6 @@ export default function StudentDatabase() {
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-300 font-medium">
-                        <span><strong className="text-slate-400">USN:</strong> {displayVal(app.bmsitId || app.usn)}</span>
-                        <span>•</span>
                         <span><strong className="text-slate-400">App ID:</strong> {appIdFormatted}</span>
                         <span>•</span>
                         <span><strong className="text-slate-400">Branch:</strong> {displayVal(app.branch || app.department)}</span>
@@ -1172,10 +1160,6 @@ export default function StudentDatabase() {
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase">Full Name</p>
                             <p className="font-bold text-slate-800 mt-0.5">{displayVal(app.studentName)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">USN / BMSIT ID</p>
-                            <p className="font-bold text-indigo-700 font-mono mt-0.5">{displayVal(app.bmsitId || app.usn)}</p>
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase">Gender</p>

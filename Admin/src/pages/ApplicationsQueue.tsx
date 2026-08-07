@@ -125,8 +125,8 @@ const handleDownloadPDF = async (app: any) => {
 
   // 2. Student Information
   drawSectionHeader('STUDENT INFORMATION');
-  drawFieldRow('Student Name', app.studentName, 'USN / Roll Number', app.usn);
-  drawFieldRow('Gender', app.gender, 'Date of Birth', app.dob ? new Date(app.dob).toLocaleDateString('en-IN') : 'N/A');
+  drawFieldRow('Student Name', app.studentName, 'Gender', app.gender);
+  drawFieldRow('Date of Birth', app.dob ? new Date(app.dob).toLocaleDateString('en-IN') : 'N/A', 'Department', app.department);
   drawFieldRow('Department', app.department);
   drawFieldRow('Year', app.year || app.yearSem || 'N/A');
   drawFieldRow('Student Email', app.email, 'Phone Number', app.phoneNumber);
@@ -625,12 +625,6 @@ export default function ApplicationsQueue() {
                               <p className="text-xs text-slate-400 font-semibold">Unique Application ID</p>
                               <p className="font-bold text-indigo-700 font-mono text-xs bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 inline-block mt-0.5">
                                 {app.id.startsWith('APP-') ? app.id : `APP-2026-${app.id.slice(0, 6).toUpperCase()}`}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-400 font-semibold">USN / Roll No</p>
-                              <p className="font-bold text-slate-700 hover:text-indigo-600 transition-colors cursor-pointer group flex items-center">
-                                {app.usn} <ExternalLink className="w-3 h-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
                               </p>
                             </div>
                             <div>

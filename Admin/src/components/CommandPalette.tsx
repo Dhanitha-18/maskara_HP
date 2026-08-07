@@ -168,7 +168,7 @@ export default function CommandPalette() {
                         </div>
                         <div className="flex-1 overflow-hidden">
                           <p className="font-bold text-slate-800 truncate">{app.studentName}</p>
-                          <p className="text-xs text-slate-500 truncate">{app.usn} • {app.department}</p>
+                          <p className="text-xs text-slate-500 truncate">{app.department}</p>
                         </div>
                         <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                           <ArrowRight className="w-4 h-4 text-indigo-500" />

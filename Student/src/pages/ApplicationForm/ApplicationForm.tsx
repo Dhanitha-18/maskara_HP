@@ -526,17 +526,6 @@ export const ApplicationForm: React.FC = () => {
                     />
                   </div>
                 )}
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">USN (Optional)</label>
-                  <input 
-                    type="text" 
-                    placeholder="Enter USN"
-                    value={bmsitId}
-                    onChange={e => setBmsitId(e.target.value.toUpperCase())}
-                    className="w-full border border-border rounded-lg p-2 text-xs font-bold font-mono outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  />
-                </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Program *</label>
                   <select 

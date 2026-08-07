@@ -22,7 +22,6 @@ export default function AllocatedStudentsTable({ onReallocate }: AllocatedStuden
 
   const filteredAllocations = allocations?.filter((alloc: any) => 
     alloc.application.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    alloc.application.usn.toLowerCase().includes(searchQuery.toLowerCase()) ||
     alloc.bed.room.block.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -39,7 +38,7 @@ export default function AllocatedStudentsTable({ onReallocate }: AllocatedStuden
             <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search name, USN, or block..." 
+              placeholder="Search name, application ID, or block..." 
               className="w-full pl-9 pr-4 py-2 bg-transparent text-sm font-semibold focus:outline-none placeholder:font-medium text-slate-700"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -89,7 +88,7 @@ export default function AllocatedStudentsTable({ onReallocate }: AllocatedStuden
                         </div>
                         <div>
                           <p className="font-bold text-slate-800">{alloc.application.studentName}</p>
-                          <p className="text-xs font-semibold text-slate-500">{alloc.application.usn}</p>
+                          <p className="text-xs font-semibold text-slate-500">{alloc.application.phoneNumber}</p>
                         </div>
                       </div>
                     </td>

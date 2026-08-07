@@ -383,7 +383,6 @@ export default function AttendanceManagement() {
                 <thead>
                   <tr className="bg-slate-950 text-white font-bold uppercase text-[10px] tracking-wider">
                     <th className="p-3.5 rounded-tl-xl">Student Details</th>
-                    <th className="p-3.5">USN</th>
                     <th className="p-3.5">Block & Room</th>
                     <th className="p-3.5 text-center rounded-tr-xl">Attendance Status</th>
                   </tr>
@@ -403,7 +402,6 @@ export default function AttendanceManagement() {
                             </div>
                           </div>
                         </td>
-                        <td className="p-3.5 font-mono font-bold text-indigo-600">{rec.studentUsn}</td>
                         <td className="p-3.5 text-slate-700 font-semibold">{rec.block || 'Main Block'} • Room {rec.roomNo || 'N/A'}</td>
                         <td className="p-3.5 text-center">
                           <button
@@ -539,7 +537,6 @@ export default function AttendanceManagement() {
                   <thead>
                     <tr className="bg-slate-100/70 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
                       <th className="p-4 rounded-tl-xl">Student Details</th>
-                      <th className="p-4">USN</th>
                       <th className="p-4">Block & Room</th>
                       <th className="p-4">Date</th>
                       <th className="p-4 text-center rounded-tr-xl">
@@ -564,10 +561,6 @@ export default function AttendanceManagement() {
                                 <p className="text-[10px] text-slate-400">{item.phoneNumber || 'No phone'}</p>
                               </div>
                             </div>
-                          </td>
-
-                          <td className="p-4 font-mono font-bold text-slate-800 uppercase">
-                            {item.studentUsn}
                           </td>
 
                           <td className="p-4">
@@ -634,7 +627,7 @@ export default function AttendanceManagement() {
                   <h3 className="text-base font-black text-slate-900">{selectedCalendarStudent.name}</h3>
                 </div>
                 <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                  USN: <span className="font-mono text-indigo-600 font-bold">{selectedCalendarStudent.usn}</span> • {selectedCalendarStudent.block} Room {selectedCalendarStudent.roomNo || 'N/A'}
+                  {selectedCalendarStudent.block} Room {selectedCalendarStudent.roomNo || 'N/A'}
                 </p>
               </div>
               <button
