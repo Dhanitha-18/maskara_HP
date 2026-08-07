@@ -66,25 +66,42 @@ export default function PaymentsControl() {
   });
 
   // Fetch Payment Requests
+  // Backend stores the entire list as JSON under the 'payment-requests' key
   const { data: paymentRequests, isLoading: isLoadingRequests } = useQuery({
     queryKey: ['payment-requests'],
     queryFn: async () => {
       const res = await fetch('http://localhost:5000/api/settings/payment-requests');
       if (!res.ok) throw new Error('Failed to fetch payment requests');
       return res.json();
-    }
+    },
+    // Normalise: the backend returns null when nothing saved yet, or the raw array
+    select: (data: any): any[] => (Array.isArray(data) ? data : [])
   });
+
+  // Helper: fetch current list, apply transform, save back
+  const updatePaymentList = async (transform: (list: any[]) => any[]) => {
+    const getRes = await fetch('http://localhost:5000/api/settings/payment-requests');
+    const current = getRes.ok ? await getRes.json() : null;
+    const list: any[] = Array.isArray(current) ? current : [];
+    const updated = transform(list);
+    const saveRes = await fetch('http://localhost:5000/api/settings/payment-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated)
+    });
+    if (!saveRes.ok) throw new Error('Failed to save payment requests');
+    return saveRes.json();
+  };
 
   // Publish New Payment Request Mutation
   const publishPaymentMutation = useMutation({
     mutationFn: async (data: typeof newPayment) => {
-      const res = await fetch('http://localhost:5000/api/settings/payment-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (!res.ok) throw new Error('Failed to publish payment');
-      return res.json();
+      const newItem = {
+        ...data,
+        id: `pr-${Date.now()}`,
+        createdAt: new Date().toISOString()
+      };
+      return updatePaymentList(list => [...list, newItem]);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-requests'] });
@@ -104,13 +121,9 @@ export default function PaymentsControl() {
   // Update Payment Request Mutation (Toggle status or details)
   const updatePaymentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await fetch(`http://localhost:5000/api/settings/payment-requests/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (!res.ok) throw new Error('Failed to update payment request');
-      return res.json();
+      return updatePaymentList(list =>
+        list.map(item => item.id === id ? { ...item, ...data } : item)
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-requests'] });
@@ -122,9 +135,7 @@ export default function PaymentsControl() {
   // Delete Payment Request Mutation
   const deletePaymentMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`http://localhost:5000/api/settings/payment-requests/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
-      return res.json();
+      return updatePaymentList(list => list.filter(item => item.id !== id));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-requests'] });
