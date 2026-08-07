@@ -3,96 +3,10 @@ import { socket } from '../../lib/socket';
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { FACILITIES_HERO_IMAGE } from '../../assets/heroBanners';
 import { 
-  Wifi, 
-  WashingMachine,
-  LucideFilter,
-  Power,
-  LucideCylinder,
-  CctvIcon,
-  SportShoe,
-  BrushCleaningIcon,
-  FireExtinguisher,
-  ShirtIcon,
-  BathIcon,
-  ArrowUpDownIcon,
   X,
   Building2
 } from 'lucide-react';
 
-const PG_FACILITIES = [
-  { 
-    name: 'High-Speed Wi-Fi', 
-    desc: 'Commercial gigabit bandwidth across all lounge and study areas.', 
-    icon: Wifi,
-    image: "/facilities/wifib.jpeg"
-  },
-  { 
-    name: 'Laundry Services', 
-    desc: 'Washing machines and professional dry cleaning schedules twice a week.', 
-    icon: WashingMachine,
-    image: "/facilities/washingmachine.jpeg"
-  },
-  { 
-    name: 'RO Purified Water', 
-    desc: 'Continuous RO water dispensers on every floor checked for TDS levels.', 
-    icon: LucideFilter,
-    image: "/facilities/rowater.jpeg"
-  },
-  { 
-    name: 'Power Backup', 
-    desc: 'Silent diesel generator backup ensuring 24/7 electricity coverage.', 
-    icon: Power,
-    image: "/facilities/power.jpeg"
-  },
-  { 
-    name: 'Biometric Security', 
-    desc: 'Secure biometric fingerprint access points on main entry gates.', 
-    icon: LucideCylinder,
-    image: "/facilities/tanker.jpeg"
-  },
-  { 
-    name: 'CCTV Surveillance', 
-    desc: '60+ CCTV high definition cameras covering lobbies, corridors, and perimeters.', 
-    icon: CctvIcon,
-    image: "/facilities/cctv.jpeg"
-  },
-  { 
-    name: 'Two-Wheeler Parking', 
-    desc: 'Dedicated basement parking spots with security guard patrols.', 
-    icon: SportShoe,
-    image: "/facilities/shoerack.jpeg"
-  },
-  { 
-    name: 'Daily Housekeeping', 
-    desc: 'Professional sweeping and garbage disposal in all rooms every morning.', 
-    icon: BrushCleaningIcon,
-    image: "/facilities/cleaning2.jpeg"
-  },
-  { 
-    name: 'Indoor Games Arena', 
-    desc: 'Table tennis, carrom boards, and chess in the recreation lounge.', 
-    icon: FireExtinguisher,
-    image: "/facilities/FireExtinguisher.jpeg"
-  },
-  { 
-    name: 'Quiet Study Area', 
-    desc: 'Separate soundproof cabins equipped with desk lights and ports.', 
-    icon: ShirtIcon,
-    image: "/facilities/dryarea.jpeg"
-  },
-  { 
-    name: 'Hot Water Supply', 
-    desc: 'Solar heaters backed by instant geysers in all restrooms.', 
-    icon: BathIcon,
-    image: "/facilities/tanker.jpeg"
-  },
-  { 
-    name: 'Modern Lift Access', 
-    desc: 'Reliable 8-passenger automatic elevator with ARD safety triggers.', 
-    icon: ArrowUpDownIcon,
-    image: "/facilities/lift.jpeg"
-  }
-];
 
 interface AdminFacility {
   id: string;
@@ -148,42 +62,48 @@ export const Facilities: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Display facilities fetched from MySQL database */}
-          {(adminFacilities.length > 0 ? adminFacilities : PG_FACILITIES.map((f, i) => ({ id: `default-${i}`, title: f.name, description: f.desc, imageUrl: f.image }))).map((facility: any) => {
-            const imageSrc = facility.imageUrl || facility.image || '';
-            const fullImageSrc = !imageSrc ? '' : (imageSrc.startsWith('http') || imageSrc.startsWith('data:') ? imageSrc : `http://localhost:5000${imageSrc.startsWith('/') ? '' : '/'}${imageSrc}`);
-            const title = facility.title || facility.name;
-            const desc = facility.description || facility.desc;
+          {adminFacilities.length > 0 ? (
+            adminFacilities.map((facility: any) => {
+              const imageSrc = facility.imageUrl || '';
+              const fullImageSrc = !imageSrc ? '' : (imageSrc.startsWith('http') || imageSrc.startsWith('data:') ? imageSrc : `http://localhost:5000${imageSrc.startsWith('/') ? '' : '/'}${imageSrc}`);
+              const title = facility.title;
+              const desc = facility.description;
 
-            return (
-              <div 
-                key={facility.id || title} 
-                onClick={() => fullImageSrc ? setSelectedImages([fullImageSrc]) : null}
-                className="relative aspect-[3.2/3.3] rounded-2xl overflow-hidden shadow-soft border border-border group cursor-pointer"
-              >
-                {fullImageSrc ? (
-                  <img 
-                    src={fullImageSrc}
-                    alt={title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-indigo-50 to-violet-100 flex items-center justify-center">
-                    <Building2 className="w-12 h-12 text-indigo-300" />
-                  </div>
-                )}
+              return (
+                <div 
+                  key={facility.id} 
+                  onClick={() => fullImageSrc ? setSelectedImages([fullImageSrc]) : null}
+                  className="relative aspect-[3.2/3.3] rounded-2xl overflow-hidden shadow-soft border border-border group cursor-pointer"
+                >
+                  {fullImageSrc ? (
+                    <img 
+                      src={fullImageSrc}
+                      alt={title} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-indigo-50 to-violet-100 flex items-center justify-center">
+                      <Building2 className="w-12 h-12 text-indigo-300" />
+                    </div>
+                  )}
 
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex flex-col justify-end p-5 transition-all duration-300 opacity-0 group-hover:opacity-100 translate-y-3 group-hover:translate-y-0">
-                  <div className="text-white space-y-1">
-                    <h4 className="text-sm font-black tracking-wide uppercase text-primary-light">{title}</h4>
-                    <p className="text-xs text-slate-200 font-semibold leading-relaxed">{desc}</p>
-                    {fullImageSrc && (
-                      <span className="text-[10px] text-slate-400 font-bold block pt-1.5 uppercase tracking-wider">Click to view full image &rarr;</span>
-                    )}
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex flex-col justify-end p-5 transition-all duration-300 opacity-0 group-hover:opacity-100 translate-y-3 group-hover:translate-y-0">
+                    <div className="text-white space-y-1">
+                      <h4 className="text-sm font-black tracking-wide uppercase text-primary-light">{title}</h4>
+                      <p className="text-xs text-slate-200 font-semibold leading-relaxed">{desc}</p>
+                      {fullImageSrc && (
+                        <span className="text-[10px] text-slate-400 font-bold block pt-1.5 uppercase tracking-wider">Click to view full image &rarr;</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          ) : (
+            <div className="col-span-1 md:col-span-3 text-center py-12 text-slate-500 font-medium">
+              No facilities have been added yet.
+            </div>
+          )}
         </div>
       </div>
 
