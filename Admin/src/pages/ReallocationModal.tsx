@@ -28,7 +28,7 @@ export default function ReallocationModal({ isOpen, onClose, allocationId, gende
   const { data: blocks = [], isLoading: loadingBlocks } = useQuery({
     queryKey: ['blocks'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/blocks');
+      const res = await fetch('/api/blocks');
       if (!res.ok) throw new Error('Failed to fetch blocks');
       return res.json();
     },
@@ -37,7 +37,7 @@ export default function ReallocationModal({ isOpen, onClose, allocationId, gende
 
   const reallocateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('http://localhost:5000/api/reallocate', {
+      const res = await fetch('/api/reallocate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ allocationId, newBedId: bedId, adminName, reason })

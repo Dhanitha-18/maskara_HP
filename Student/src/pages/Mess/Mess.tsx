@@ -123,10 +123,57 @@ export const Mess: React.FC = () => {
   });
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const weeklyMenu = (cmsData?.menu && (cmsData.menu.Monday || cmsData.menu.Tuesday)) 
+  
+  const defaultFallbackMenu: Record<string, any> = {
+    Monday: {
+      Breakfast: { name: 'Idli, Vada, Sambar, and Chutney', time: '8:00 AM - 9:30 AM', img: '/menu/1.png', desc: 'Includes Bread, Jam, Butter, Egg, Corn flakes, Tea, Coffee, Milk & Fruit' },
+      Lunch: { name: 'Dum aloo & carrot palya', time: '1:00 PM - 2:30 PM', img: '/menu/2.png', desc: 'Includes Chapati, Rice, Sambar, Dal & Urid Pappad' },
+      Snacks: { name: 'French fries, peri peri masala, Tomato sauce, Mayonnaise', time: '5:00 PM - 6:00 PM', img: '/menu/3.png', desc: 'Includes Tea, Coffee & Milk' },
+      Dinner: { name: 'CholeMasala + Rave unde + Vangi Bath', time: '8:00 PM - 9:30 PM', img: '/menu/4.png', desc: 'Includes Chapati, Salad, Pickle, Curd, Ghee, Rice & Sambar' }
+    },
+    Tuesday: {
+      Breakfast: { name: 'Bisibele bath and Upma with veg', time: '8:00 AM - 9:30 AM', img: '/menu/5.png', desc: 'Includes Bread, Jam, Butter, Egg, Corn flakes, Tea, Coffee, Milk & Fruit' },
+      Lunch: { name: 'Mixed grain curry (lobia, green moong, brown Channa, Green peas) + beetroot palya', time: '1:00 PM - 2:30 PM', img: '/menu/6.png', desc: 'Includes Chapati, Rice, Sambar, Dal & Urid Pappad' },
+      Snacks: { name: 'Maggi (TCM)', time: '5:00 PM - 6:00 PM', img: '/menu/7.png', desc: 'Includes Tea, Coffee & Milk' },
+      Dinner: { name: 'Aloo Capsicum + Egg curry + Pudina Palav + Kulfi/Cone ice cream mini', time: '8:00 PM - 9:30 PM', img: '/menu/8.png', desc: 'Includes Chapati, Salad, Pickle, Curd, Ghee, Rice & Sambar' }
+    },
+    Wednesday: {
+      Breakfast: { name: 'Set dosa Veg sagu & Chutney', time: '8:00 AM - 9:30 AM', img: '/menu/9.png', desc: 'Includes Bread, Jam, Butter, Egg, Corn flakes, Tea, Coffee, Milk & Fruit' },
+      Lunch: { name: 'Black channa masala & Aloo dry (Bhujiya)', time: '1:00 PM - 2:30 PM', img: '/menu/10.png', desc: 'Includes Chapati, Rice, Sambar, Dal & Urid Pappad' },
+      Snacks: { name: 'Pani Puri, mashed masala aloo, sweet water, spicy water, boondi khara', time: '5:00 PM - 6:00 PM', img: '/menu/11.png', desc: 'Includes Tea, Coffee & Milk' },
+      Dinner: { name: 'Chicken chilly / Chicken curry, Chilly Paneer with Ghee Rice', time: '8:00 PM - 9:30 PM', img: '/menu/12.png', desc: 'Includes Chapati, Salad, Pickle, Curd, Ghee, Rice & Sambar' }
+    },
+    Thursday: {
+      Breakfast: { name: 'Aloo paratha + Dahi, Plain Chutney', time: '8:00 AM - 9:30 AM', img: '/menu/13.png', desc: 'Includes Bread, Jam, Butter, Egg, Corn flakes, Tea, Coffee, Milk & Fruit' },
+      Lunch: { name: 'Rajma and Jerkins kabuli channa', time: '1:00 PM - 2:30 PM', img: '/menu/14.png', desc: 'Includes Chapati, Rice, Sambar, Dal & Urid Pappad' },
+      Snacks: { name: 'Vadapav', time: '5:00 PM - 6:00 PM', img: '/menu/15.png', desc: 'Includes Tea, Coffee & Milk' },
+      Dinner: { name: 'Cabbage Manchurian / veg kofta gravy + roti, Peas pulav', time: '8:00 PM - 9:30 PM', img: '/menu/16.png', desc: 'Includes Chapati, Salad, Pickle, Curd, Ghee, Rice & Sambar' }
+    },
+    Friday: {
+      Breakfast: { name: 'Bread omlette + Tomato bath', time: '8:00 AM - 9:30 AM', img: '/menu/17.png', desc: 'Includes Bread, Jam, Butter, Egg, Corn flakes, Tea, Coffee, Milk & Fruit' },
+      Lunch: { name: 'Aloo Gobi & Moong', time: '1:00 PM - 2:30 PM', img: '/menu/18.png', desc: 'Includes Chapati, Rice, Sambar, Dal & Urid Pappad' },
+      Snacks: { name: 'Onion Pakoda / Sweet corn', time: '5:00 PM - 6:00 PM', img: '/menu/19.png', desc: 'Includes Tea, Coffee & Milk' },
+      Dinner: { name: 'Bhindi gravy + Mudde + Bassaru, Soppina palya + Custard', time: '8:00 PM - 9:30 PM', img: '/menu/20.png', desc: 'Includes Chapati, Salad, Pickle, Curd, Ghee, Rice & Sambar' }
+    },
+    Saturday: {
+      Breakfast: { name: 'Rava Idli + Poha namkeen', time: '8:00 AM - 9:30 AM', img: '/menu/21.png', desc: 'Includes Bread, Jam, Butter, Egg, Corn flakes, Tea, Coffee, Milk & Fruit' },
+      Lunch: { name: 'Mushroom pulao raitha, Paneer Butter masala, Gulab jamun', time: '1:00 PM - 2:30 PM', img: '/menu/22.png', desc: 'Includes Chapati, Rice, Sambar, Dal & Urid Pappad' },
+      Snacks: { name: 'Cream Biscuit (Oreo/bourbon) + TCM', time: '5:00 PM - 6:00 PM', img: '/menu/23.png', desc: 'Includes Tea, Coffee & Milk' },
+      Dinner: { name: 'Puliyogare / Chitranna + Egg burji + White rice, Puri with chole + dal', time: '8:00 PM - 9:30 PM', img: '/menu/19.png', desc: 'Includes Chapati, Salad, Pickle, Curd & Ghee' }
+    },
+    Sunday: {
+      Breakfast: { name: 'Masala Dosa, Shenga chutney and Sambar & Aloo Palya', time: '8:00 AM - 9:30 AM', img: '/menu/20.png', desc: 'Includes Bread, Jam, Butter, Corn flakes, Tea, Coffee, Milk & Fruit' },
+      Lunch: { name: 'Gobi-Manchurian (Dry) + Cone Ice cream', time: '1:00 PM - 2:30 PM', img: '/menu/21.png', desc: 'Includes Chapati, Rice, Sambar, Dal & Urid Pappad' },
+      Snacks: { name: 'Fruits Seasonal & TCM', time: '5:00 PM - 6:00 PM', img: '/menu/22.png', desc: 'Includes Tea, Coffee & Milk' },
+      Dinner: { name: 'Chicken Biryani + Kebab + Veg biryani & Paneer Gravy', time: '8:00 PM - 9:30 PM', img: '/menu/23.png', desc: 'Includes Chapati, Salad, Pickle, Curd, Ghee, Rice & Sambar' }
+    }
+  };
+
+  const rawWeekly = (cmsData?.menu && (cmsData.menu.Monday || cmsData.menu.Tuesday)) 
     ? cmsData.menu 
     : (cmsData?.Monday ? cmsData : (cmsData?.menu?.menu || cmsData?.menu || {}));
-  const dayMenu = weeklyMenu[activeDay] || { Breakfast: { name: '', desc: '', img: '', time: '' }, Lunch: { name: '', desc: '', img: '', time: '' }, Snacks: { name: '', desc: '', img: '', time: '' }, Dinner: { name: '', desc: '', img: '', time: '' } };
+  const weeklyMenu = (rawWeekly && Object.keys(rawWeekly).length > 0) ? rawWeekly : defaultFallbackMenu;
+  const dayMenu = weeklyMenu[activeDay] || defaultFallbackMenu[activeDay] || {};
 
   useEffect(() => {
     try {

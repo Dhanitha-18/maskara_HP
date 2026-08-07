@@ -14,7 +14,7 @@ export default function AllocatedStudentsTable({ onReallocate }: AllocatedStuden
   const { data: allocations, isLoading } = useQuery({
     queryKey: ['allocations'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/allocations');
+      const res = await fetch('/api/allocations');
       if (!res.ok) throw new Error('Network response was not ok');
       return res.json();
     }

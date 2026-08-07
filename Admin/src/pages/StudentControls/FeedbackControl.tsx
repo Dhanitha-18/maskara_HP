@@ -35,7 +35,7 @@ export default function FeedbackControl() {
 
   // Fetch Google Form Config
   useEffect(() => {
-    fetch('http://localhost:5000/api/feedback/config')
+    fetch('/api/feedback/config')
       .then(res => res.json())
       .then(data => {
         if (data.googleFormUrl) setGoogleFormUrl(data.googleFormUrl);
@@ -48,7 +48,7 @@ export default function FeedbackControl() {
     setIsSavingConfig(true);
     setSaveSuccessMsg(null);
     try {
-      const res = await fetch('http://localhost:5000/api/feedback/config', {
+      const res = await fetch('/api/feedback/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,7 +71,7 @@ export default function FeedbackControl() {
   const { data: feedbackList, isLoading: isFeedbackLoading } = useQuery({
     queryKey: ['feedback'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/feedback');
+      const res = await fetch('/api/feedback');
       if (!res.ok) throw new Error('Failed to fetch feedback');
       return res.json();
     },
@@ -82,7 +82,7 @@ export default function FeedbackControl() {
   const { data: applicationsList, isLoading: isAppsLoading } = useQuery({
     queryKey: ['applications_all'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/applications');
+      const res = await fetch('/api/applications');
       if (!res.ok) return [];
       return res.json();
     },
@@ -93,7 +93,7 @@ export default function FeedbackControl() {
   const { data: blocksData } = useQuery({
     queryKey: ['blocks'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/blocks');
+      const res = await fetch('/api/blocks');
       if (!res.ok) return [];
       return res.json();
     },

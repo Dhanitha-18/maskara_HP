@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { COMPLAINTS_HERO_IMAGE } from '../../assets/heroBanners';
 import { usePayment } from '../../context/PaymentContext';
-import { io } from 'socket.io-client';
+import { socket } from '../../lib/socket';
 import { 
   Send, ThumbsUp, CheckCircle, Clock, Filter, Search, 
   PhoneCall, ShieldAlert, FileText, ChevronRight, CheckCircle2,
@@ -87,7 +87,7 @@ export const Complaints: React.FC = () => {
 
   // Fetch admin-created blocks from backend
   useEffect(() => {
-    fetch('http://localhost:5000/api/blocks')
+    fetch('/api/blocks')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
@@ -102,24 +102,41 @@ export const Complaints: React.FC = () => {
       })
       .catch(err => console.error("Error fetching blocks:", err));
   }, []);
+  const detailSectionRef = useRef<HTMLDivElement>(null);
+
+  const studentBlock = 
+    (student as any)?.allocatedBlock || 
+    (student as any)?.block || 
+    (student as any)?.applicationData?.block || 
+    (student as any)?.applicationData?.hostelBlock || 
+    (student as any)?.applicationData?.roomBlock || 
+    hostel?.block || 
+    blockName || 
+    'Block A';
+
+  const isSameBlock = (cBlockRaw: string, sBlockRaw: string) => {
+    if (!cBlockRaw || !sBlockRaw) return false;
+    const cb = String(cBlockRaw).toLowerCase().replace(/hostel|block|\s+|-|_/g, '');
+    const sb = String(sBlockRaw).toLowerCase().replace(/hostel|block|\s+|-|_/g, '');
+    if (!cb || !sb) return false;
+    return cb === sb || cb.includes(sb) || sb.includes(cb);
+  };
 
   // Load complaints on mount
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetch('http://localhost:5000/api/complaints')
+    fetch('/api/complaints')
       .then(res => res.json())
       .then(data => {
         if (active) {
-          // Filter to show complaints for this student's allocated block or their own tickets
-          const studentBlock = (student as any)?.allocatedBlock || (student as any)?.block || '';
+          // Filter to show ONLY complaints for this student's allocated block or their own tickets
           const studentComplaints = data
             .filter((c: any) => {
-              if (c.usn === student.usn) return true;
-              if (!studentBlock) return true;
-              const cBlock = (c.block || '').trim().toLowerCase();
-              const sBlock = studentBlock.trim().toLowerCase();
-              return cBlock.includes(sBlock) || sBlock.includes(cBlock);
+              if (c.usn && student.usn && String(c.usn).trim().toUpperCase() === String(student.usn).trim().toUpperCase()) {
+                return true;
+              }
+              return isSameBlock(c.block, studentBlock);
             })
             .map((c: any) => ({
               ...c,
@@ -141,14 +158,14 @@ export const Complaints: React.FC = () => {
       });
 
     return () => { active = false; };
-  }, [student.usn]);
+  }, [student.usn, studentBlock]);
 
   // Socket.IO Listener Setup for instant synchronization
   useEffect(() => {
-    const socket = io('http://localhost:5000');
-
-    socket.on('complaint_created', (newCmp: any) => {
-      if (newCmp.usn === student.usn) {
+    const handleCreated = (newCmp: any) => {
+      const isMine = newCmp.usn && student.usn && String(newCmp.usn).trim().toUpperCase() === String(student.usn).trim().toUpperCase();
+      const isSame = isSameBlock(newCmp.block, studentBlock);
+      if (isMine || isSame) {
         setComplaints(prev => {
           if (prev.some(c => c.id === newCmp.id)) return prev;
           const mapped = {
@@ -161,31 +178,57 @@ export const Complaints: React.FC = () => {
           return [mapped, ...prev];
         });
       }
-    });
+    };
 
-    socket.on('complaint_updated', (updatedCmp: any) => {
-      if (updatedCmp.usn === student.usn) {
-        const mapped = {
-          ...updatedCmp,
-          date: new Date(updatedCmp.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-          location: `${updatedCmp.block || 'Block A'} - Floor ${updatedCmp.floor || 1} - Room ${updatedCmp.roomNo}`,
-          upvotes: updatedCmp.upvotes || 1,
-          comments: updatedCmp.comments || []
-        };
-        setComplaints(prev => prev.map(c => c.id === updatedCmp.id ? mapped : c));
-        setActiveTrackingComplaint(prev => {
-          if (prev && prev.id === updatedCmp.id) {
-            return mapped;
-          }
-          return prev;
-        });
-      }
+    const handleUpdated = (updatedCmp: any) => {
+      const mapped = {
+        ...updatedCmp,
+        date: new Date(updatedCmp.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+        location: `${updatedCmp.block || 'Block A'} - Floor ${updatedCmp.floor || 1} - Room ${updatedCmp.roomNo}`,
+        upvotes: updatedCmp.upvotes || 1,
+        comments: updatedCmp.comments || []
+      };
+      setComplaints(prev => prev.map(c => c.id === updatedCmp.id ? mapped : c));
+      setActiveTrackingComplaint(prev => (prev && prev.id === updatedCmp.id ? mapped : prev));
+    };
+
+    const handleDeleted = (deletedId: string) => {
+      setComplaints(prev => prev.filter(c => c.id !== deletedId));
+      setActiveTrackingComplaint(prev => (prev && prev.id === deletedId ? null : prev));
+    };
+
+    socket.on('complaint_created', handleCreated);
+    socket.on('complaint_updated', handleUpdated);
+    socket.on('complaint_deleted', handleDeleted);
+    socket.on('data_updated', () => {
+      fetch('/api/complaints')
+        .then(res => res.json())
+        .then(data => {
+          const studentComplaints = data
+            .filter((c: any) => {
+              if (c.usn && student.usn && String(c.usn).trim().toUpperCase() === String(student.usn).trim().toUpperCase()) {
+                return true;
+              }
+              return isSameBlock(c.block, studentBlock);
+            })
+            .map((c: any) => ({
+              ...c,
+              date: new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+              location: `${c.block || 'Block A'} - Floor ${c.floor || 1} - Room ${c.roomNo}`,
+              upvotes: c.upvotes || 1,
+              comments: c.comments || []
+            }));
+          setComplaints(studentComplaints);
+        })
+        .catch(() => {});
     });
 
     return () => {
-      socket.disconnect();
+      socket.off('complaint_created', handleCreated);
+      socket.off('complaint_updated', handleUpdated);
+      socket.off('complaint_deleted', handleDeleted);
     };
-  }, [student.usn]);
+  }, [student.usn, studentBlock]);
 
   // Set default location based on context
   useEffect(() => {
@@ -208,7 +251,7 @@ export const Complaints: React.FC = () => {
     setComplaints(prev => prev.map(c => c.id === id ? { ...c, upvotes: c.upvotes + 1, upvotedByMe: true } : c));
 
     try {
-      const res = await fetch(`http://localhost:5000/api/complaints/${id}/like`, {
+      const res = await fetch(`/api/complaints/${id}/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usn: student.usn })
@@ -239,7 +282,7 @@ export const Complaints: React.FC = () => {
       studentName: student.name,
       usn: student.usn,
       roomNo: location.replace(/Room\s+/gi, '') || hostel?.room || '304',
-      block: blockName || hostel?.block || 'Block A',
+      block: blockName || studentBlock || hostel?.block || 'Block A',
       floor: hostel?.floor?.toString() || '1',
       category: finalCategory,
       priority,
@@ -249,7 +292,7 @@ export const Complaints: React.FC = () => {
     };
 
     try {
-      const res = await fetch('http://localhost:5000/api/complaints', {
+      const res = await fetch('/api/complaints', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

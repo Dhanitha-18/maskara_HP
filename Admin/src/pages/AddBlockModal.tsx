@@ -120,7 +120,7 @@ export default function AddBlockModal({ isOpen, onClose }: AddBlockModalProps) {
       if (imageFile) {
         const formData = new FormData();
         formData.append('photo', imageFile);
-        const uploadRes = await fetch('http://localhost:5000/api/upload', {
+        const uploadRes = await fetch('/api/upload', {
           method: 'POST',
           body: formData
         });
@@ -136,7 +136,7 @@ export default function AddBlockModal({ isOpen, onClose }: AddBlockModalProps) {
         roomNumbers: parseRoomRanges(c.roomInput)
       })).filter(c => c.roomNumbers.length > 0);
       
-      const res = await fetch('http://localhost:5000/api/blocks', {
+      const res = await fetch('/api/blocks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, gender, floorConfigs: sanitizedConfigs, imageUrl })

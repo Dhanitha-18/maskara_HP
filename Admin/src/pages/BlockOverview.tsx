@@ -21,7 +21,7 @@ export default function BlockOverview() {
   const { data: rawBlocks, isLoading } = useQuery({
     queryKey: ['blocks-overview'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/blocks');
+      const res = await fetch('/api/blocks');
       if (!res.ok) throw new Error('Failed to fetch blocks');
       return res.json();
     }
@@ -33,7 +33,7 @@ export default function BlockOverview() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`http://localhost:5000/api/blocks/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/blocks/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || 'Failed to delete block');
@@ -51,7 +51,7 @@ export default function BlockOverview() {
 
   const updateRoomCapacityMutation = useMutation({
     mutationFn: async ({ roomId, newCapacity }: { roomId: string, newCapacity: number }) => {
-      const res = await fetch(`http://localhost:5000/api/rooms/${roomId}/capacity`, {
+      const res = await fetch(`/api/rooms/${roomId}/capacity`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newCapacity })
@@ -73,7 +73,7 @@ export default function BlockOverview() {
 
   const deleteRoomMutation = useMutation({
     mutationFn: async (roomId: string) => {
-      const res = await fetch(`http://localhost:5000/api/rooms/${roomId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/rooms/${roomId}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to delete room');
@@ -90,7 +90,7 @@ export default function BlockOverview() {
   const deleteFloorMutation = useMutation({
     mutationFn: async (floorNum: number) => {
       if (!selectedBlock) return;
-      const res = await fetch(`http://localhost:5000/api/blocks/${selectedBlock.id}/floors/${floorNum}`, {
+      const res = await fetch(`/api/blocks/${selectedBlock.id}/floors/${floorNum}`, {
         method: 'DELETE'
       });
       if (!res.ok) {
@@ -111,14 +111,14 @@ export default function BlockOverview() {
       const formData = new FormData();
       formData.append('photo', file);
       
-      const uploadRes = await fetch('http://localhost:5000/api/upload', {
+      const uploadRes = await fetch('/api/upload', {
         method: 'POST',
         body: formData
       });
       if (!uploadRes.ok) throw new Error('Failed to upload image');
       const { imageUrl } = await uploadRes.json();
       
-      const res = await fetch(`http://localhost:5000/api/blocks/${blockId}/photo`, {
+      const res = await fetch(`/api/blocks/${blockId}/photo`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageUrl })

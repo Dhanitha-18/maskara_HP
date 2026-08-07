@@ -1,24 +1,49 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Building, Users, Bed, DoorOpen, Search, Hash, Fingerprint, GraduationCap, Loader2, BedDouble, CheckCircle, Filter, RefreshCw, LayoutGrid, List, User as UserIcon } from 'lucide-react';
 import ReallocationModal from './ReallocationModal';
 import AllocatedStudentsTable from './AllocatedStudentsTable';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-
 import { useAuthStore } from '../store/useAuthStore';
+import { socket } from '../lib/socket';
 
 export default function RoomOccupancy() {
   const { role, allowedBlocks } = useAuthStore();
   const [viewMode, setViewMode] = useState<'VISUAL' | 'LIST'>('VISUAL');
-  const { data: rawBlocks = [], isLoading } = useQuery({
+  const queryClient = useQueryClient();
+
+  const { data: rawBlocks = [], isLoading, refetch } = useQuery({
     queryKey: ['occupancy'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/occupancy');
+      const res = await fetch('/api/occupancy');
       if (!res.ok) throw new Error('Failed to fetch occupancy data');
       return res.json();
-    }
+    },
+    refetchInterval: 3000 // Realtime polling fallback
   });
+
+  // Real-time Socket Listener
+  useEffect(() => {
+    const handleUpdate = () => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['occupancy'] });
+      queryClient.invalidateQueries({ queryKey: ['allocations'] });
+      queryClient.invalidateQueries({ queryKey: ['blocks'] });
+    };
+
+    socket.on('data_updated', handleUpdate);
+    socket.on('BED_ALLOCATED', handleUpdate);
+    socket.on('BED_DEALLOCATED', handleUpdate);
+    socket.on('REALLOCATED', handleUpdate);
+
+    return () => {
+      socket.off('data_updated', handleUpdate);
+      socket.off('BED_ALLOCATED', handleUpdate);
+      socket.off('BED_DEALLOCATED', handleUpdate);
+      socket.off('REALLOCATED', handleUpdate);
+    };
+  }, [refetch, queryClient]);
 
   const blocks = (Array.isArray(rawBlocks) ? rawBlocks : rawBlocks?.blocks || []).filter((b: any) => 
     role === 'CHIEF' || !allowedBlocks || allowedBlocks.includes('ALL') || allowedBlocks.includes(b.name)
@@ -123,14 +148,39 @@ export default function RoomOccupancy() {
       if (occupancyFilter === 'FULLY_OCCUPIED' && room.occupiedBedsInRoom !== room.capacity) return false;
       if (occupancyFilter === 'FULLY_VACANT' && room.occupiedBedsInRoom !== 0) return false;
       if (occupancyFilter === 'PARTIALLY_VACANT' && (room.occupiedBedsInRoom === 0 || room.occupiedBedsInRoom === room.capacity)) return false;
-      if (roomSearch && !room.roomNo.toLowerCase().includes(roomSearch.toLowerCase())) return false;
+      if (roomSearch) {
+        const q = roomSearch.toLowerCase().trim();
+        const matchRoom = String(room.roomNo || '').toLowerCase().includes(q);
+        const matchBlock = String(room.blockName || '').toLowerCase().includes(q);
+        if (!matchRoom && !matchBlock) return false;
+      }
 
       if (studentSearch || idSearch || deptSearch || yearSearch !== 'ALL') {
         const hasMatchingStudent = room.studentsInRoom.some((s: any) => {
-          if (studentSearch && !s.studentName?.toLowerCase().includes(studentSearch.toLowerCase())) return false;
-          if (idSearch && !s.usn?.toLowerCase().includes(idSearch.toLowerCase())) return false;
-          if (deptSearch && !s.department?.toLowerCase().includes(deptSearch.toLowerCase())) return false;
-          if (yearSearch !== 'ALL' && s.yearSem !== yearSearch) return false;
+          if (studentSearch) {
+            const q = studentSearch.toLowerCase().trim();
+            const matchName = String(s.studentName || '').toLowerCase().includes(q);
+            if (!matchName) return false;
+          }
+          if (idSearch) {
+            const q = idSearch.toLowerCase().trim();
+            const matchUsn = String(s.usn || '').toLowerCase().includes(q);
+            const matchPhone = String(s.phoneNumber || '').toLowerCase().includes(q);
+            const matchAadhaar = String(s.aadhaarNumber || '').toLowerCase().includes(q);
+            if (!matchUsn && !matchPhone && !matchAadhaar) return false;
+          }
+          if (deptSearch) {
+            const q = deptSearch.toLowerCase().trim();
+            const matchDept = String(s.department || '').toLowerCase().includes(q);
+            const matchBranch = String(s.branch || '').toLowerCase().includes(q);
+            const matchProg = String(s.program || '').toLowerCase().includes(q);
+            if (!matchDept && !matchBranch && !matchProg) return false;
+          }
+          if (yearSearch !== 'ALL') {
+            const q = yearSearch.toLowerCase().trim();
+            const matchYear = String(s.yearSem || s.semester || '').toLowerCase().includes(q);
+            if (!matchYear) return false;
+          }
           return true;
         });
         if (!hasMatchingStudent) return false;

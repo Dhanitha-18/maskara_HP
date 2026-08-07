@@ -12,7 +12,7 @@ export default function AddFloorModal({ isOpen, onClose, blockId }: { isOpen: bo
 
   const addFloorMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch(`http://localhost:5000/api/blocks/${blockId}/floors`, {
+      const res = await fetch(`/api/blocks/${blockId}/floors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

@@ -16,9 +16,6 @@ import {
 const isValidGoogleUrl = (raw: string): boolean => {
   if (!raw || !raw.trim()) return false;
   const u = raw.trim();
-  if (u.includes('Cjjjj') || u.includes('-default') || u.includes('1FAIpQLSeGj_HFh1FvceJCVuQhY7L4dY74CjjjjHccehN69MDOg6-Egw')) {
-    return false;
-  }
   try {
     const parsed = new URL(u);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
@@ -26,6 +23,7 @@ const isValidGoogleUrl = (raw: string): boolean => {
     return false;
   }
 };
+
 
 /**
  * Convert any Google Form URL to the proper embeddable format.
@@ -132,7 +130,7 @@ export const Feedback: React.FC = () => {
   const handleConfirmResponse = async () => {
     setIsSubmitting(true);
     try {
-      await fetch('http://localhost:5000/api/feedback', {
+      await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

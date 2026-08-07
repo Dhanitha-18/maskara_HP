@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
+import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import multer from 'multer';
 import bcrypt from 'bcryptjs';
@@ -93,6 +94,9 @@ async function seedDefaultChiefAdmin() {
   }
 }
 seedDefaultChiefAdmin();
+
+// Serve static menu images
+app.use('/menu', express.static(path.join(__dirname, '../public/menu')));
 
 // Health Check
 app.get('/health', (req, res) => {
@@ -323,6 +327,67 @@ app.get('/api/auth/me', authenticateJWT, async (req: AuthenticatedRequest, res) 
   return res.json({ success: true, user: req.user });
 });
 
+// Student Profile Update
+app.put('/api/student/profile', async (req, res) => {
+  try {
+    const { usn, newUsn, email, year, yearSem } = req.body;
+
+    if (!usn) {
+      return res.status(400).json({ error: 'Current USN or identifier is required.' });
+    }
+
+    // Find the application by usn or phone (phone used as fallback usn)
+    const application = await prisma.application.findFirst({
+      where: {
+        OR: [
+          { usn: usn },
+          { phoneNumber: usn },
+          { bmsitId: usn }
+        ]
+      }
+    });
+
+    if (!application) {
+      return res.status(404).json({ error: 'Student application not found.' });
+    }
+
+    const updatedYear = yearSem || year;
+
+    // Update Application record
+    const updatedApp = await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        ...(newUsn && newUsn !== usn ? { usn: newUsn } : {}),
+        ...(email ? { email } : {}),
+        ...(updatedYear ? { yearSem: updatedYear, year: updatedYear } : {})
+      }
+    });
+
+    // Also sync usn on StudentAccount so Admin's Student Database reflects the change
+    const effectiveNewUsn = newUsn || usn;
+    const studentAccount = await prisma.studentAccount.findFirst({
+      where: {
+        OR: [
+          { usn: usn },
+          { applicationId: application.id }
+        ]
+      }
+    });
+
+    if (studentAccount && newUsn && newUsn !== usn) {
+      await prisma.studentAccount.update({
+        where: { id: studentAccount.id },
+        data: { usn: effectiveNewUsn }
+      });
+    }
+
+    return res.json({ success: true, application: updatedApp });
+  } catch (err: any) {
+    console.error('Profile update error:', err);
+    res.status(500).json({ error: err.message || 'Failed to update profile.' });
+  }
+});
+
 // ==================== APPLICATIONS ROUTES ====================
 app.post('/api/applications/check-duplicate', async (req, res) => {
   try {
@@ -494,37 +559,67 @@ app.get('/api/blocks', async (req, res) => {
 
 app.post('/api/blocks', async (req, res) => {
   try {
-    const { name, gender, imageUrl, floors, roomsPerFloor, bedsPerRoom, roomType } = req.body;
+    const { name, gender, imageUrl, floors, roomsPerFloor, bedsPerRoom, roomType, floorConfigs } = req.body;
 
     const block = await prisma.block.create({
       data: { name, gender, imageUrl }
     });
 
-    const totalFloors = Number(floors) || 1;
-    const rpf = Number(roomsPerFloor) || 5;
-    const bpr = Number(bedsPerRoom) || 2;
+    if (Array.isArray(floorConfigs) && floorConfigs.length > 0) {
+      for (const config of floorConfigs) {
+        const f = Number(config.floor) || 1;
+        const cap = Number(config.capacity) || 2;
+        const roomNumbers = config.roomNumbers || [];
 
-    for (let f = 1; f <= totalFloors; f++) {
-      for (let r = 1; r <= rpf; r++) {
-        const roomNo = `${f}${r < 10 ? '0' + r : r}`;
-        const room = await prisma.room.create({
-          data: {
-            blockId: block.id,
-            roomNo,
-            floor: f,
-            capacity: bpr,
-            type: roomType || '2-Sharing'
-          }
-        });
-
-        for (let b = 1; b <= bpr; b++) {
-          await prisma.bed.create({
+        for (const roomNo of roomNumbers) {
+          const room = await prisma.room.create({
             data: {
-              roomId: room.id,
-              bedNo: b,
-              status: 'AVAILABLE'
+              blockId: block.id,
+              roomNo: String(roomNo),
+              floor: f,
+              capacity: cap,
+              type: `${cap}-Sharing`
             }
           });
+
+          for (let b = 1; b <= cap; b++) {
+            await prisma.bed.create({
+              data: {
+                roomId: room.id,
+                bedNo: b,
+                status: 'AVAILABLE'
+              }
+            });
+          }
+        }
+      }
+    } else {
+      const totalFloors = Number(floors) || 1;
+      const rpf = Number(roomsPerFloor) || 5;
+      const bpr = Number(bedsPerRoom) || 2;
+
+      for (let f = 1; f <= totalFloors; f++) {
+        for (let r = 1; r <= rpf; r++) {
+          const roomNo = `${f}${r < 10 ? '0' + r : r}`;
+          const room = await prisma.room.create({
+            data: {
+              blockId: block.id,
+              roomNo,
+              floor: f,
+              capacity: bpr,
+              type: roomType || `${bpr}-Sharing`
+            }
+          });
+
+          for (let b = 1; b <= bpr; b++) {
+            await prisma.bed.create({
+              data: {
+                roomId: room.id,
+                bedNo: b,
+                status: 'AVAILABLE'
+              }
+            });
+          }
         }
       }
     }
@@ -535,9 +630,238 @@ app.post('/api/blocks', async (req, res) => {
   }
 });
 
+// Add floor to block
+app.post('/api/blocks/:id/floors', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { floor, numberOfRooms, capacityPerRoom } = req.body;
+
+    const block = await prisma.block.findUnique({ where: { id } });
+    if (!block) return res.status(404).json({ error: 'Block not found' });
+
+    const fl = Number(floor) || 1;
+    const numRooms = Number(numberOfRooms) || 10;
+    const cap = Number(capacityPerRoom) || 4;
+
+    const createdRooms = [];
+    for (let r = 1; r <= numRooms; r++) {
+      const roomNo = `${fl}${r < 10 ? '0' + r : r}`;
+      const existing = await prisma.room.findFirst({ where: { blockId: id, roomNo } });
+      if (existing) continue;
+
+      const room = await prisma.room.create({
+        data: {
+          blockId: id,
+          roomNo,
+          floor: fl,
+          capacity: cap,
+          type: `${cap}-Sharing`
+        }
+      });
+
+      for (let b = 1; b <= cap; b++) {
+        await prisma.bed.create({
+          data: {
+            roomId: room.id,
+            bedNo: b,
+            status: 'AVAILABLE'
+          }
+        });
+      }
+      createdRooms.push(room);
+    }
+
+    return res.json({ success: true, count: createdRooms.length });
+  } catch (err: any) {
+    console.error('Error adding floor:', err);
+    res.status(500).json({ error: err.message || 'Failed to add floor' });
+  }
+});
+
+// Delete floor from block
+app.delete('/api/blocks/:id/floors/:floorNum', async (req, res) => {
+  try {
+    const { id, floorNum } = req.params;
+    const fl = Number(floorNum);
+
+    const roomsOnFloor = await prisma.room.findMany({
+      where: { blockId: id, floor: fl },
+      include: { beds: true }
+    });
+
+    const occupiedBeds = roomsOnFloor.flatMap(r => r.beds).filter(b => b.status === 'OCCUPIED');
+    if (occupiedBeds.length > 0) {
+      return res.status(400).json({ error: `Cannot delete Floor ${fl}. There are ${occupiedBeds.length} occupied bed(s) on this floor.` });
+    }
+
+    const roomIds = roomsOnFloor.map(r => r.id);
+    await prisma.bed.deleteMany({ where: { roomId: { in: roomIds } } });
+    await prisma.room.deleteMany({ where: { id: { in: roomIds } } });
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add rooms to block floor
+app.post('/api/blocks/:id/rooms', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { floor, roomNos, capacity } = req.body;
+
+    const fl = Number(floor) || 1;
+    const cap = Number(capacity) || 4;
+    const roomsToCreate: string[] = Array.isArray(roomNos) ? roomNos : [String(roomNos)];
+
+    let addedCount = 0;
+    for (const roomNo of roomsToCreate) {
+      const trimmed = String(roomNo).trim();
+      if (!trimmed) continue;
+
+      const existing = await prisma.room.findFirst({ where: { blockId: id, roomNo: trimmed } });
+      if (existing) continue;
+
+      const room = await prisma.room.create({
+        data: {
+          blockId: id,
+          roomNo: trimmed,
+          floor: fl,
+          capacity: cap,
+          type: `${cap}-Sharing`
+        }
+      });
+
+      for (let b = 1; b <= cap; b++) {
+        await prisma.bed.create({
+          data: {
+            roomId: room.id,
+            bedNo: b,
+            status: 'AVAILABLE'
+          }
+        });
+      }
+      addedCount++;
+    }
+
+    return res.json({ success: true, count: addedCount });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update room capacity
+app.put('/api/rooms/:id/capacity', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newCapacity } = req.body;
+    const cap = Number(newCapacity);
+
+    if (!cap || cap < 1 || cap > 10) {
+      return res.status(400).json({ error: 'Capacity must be between 1 and 10' });
+    }
+
+    const room = await prisma.room.findUnique({
+      where: { id },
+      include: { beds: true }
+    });
+
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+
+    const occupiedBeds = room.beds.filter(b => b.status === 'OCCUPIED');
+    if (cap < occupiedBeds.length) {
+      return res.status(400).json({ error: `Cannot reduce capacity below ${occupiedBeds.length} (currently occupied beds)` });
+    }
+
+    const currentCap = room.capacity;
+    if (cap > currentCap) {
+      for (let b = currentCap + 1; b <= cap; b++) {
+        await prisma.bed.create({
+          data: {
+            roomId: room.id,
+            bedNo: b,
+            status: 'AVAILABLE'
+          }
+        });
+      }
+    } else if (cap < currentCap) {
+      const availableBeds = room.beds
+        .filter(b => b.status === 'AVAILABLE')
+        .sort((a, b) => b.bedNo - a.bedNo);
+      
+      const toDeleteCount = currentCap - cap;
+      const bedsToDelete = availableBeds.slice(0, toDeleteCount);
+      const bedIdsToDelete = bedsToDelete.map(b => b.id);
+
+      await prisma.bed.deleteMany({ where: { id: { in: bedIdsToDelete } } });
+    }
+
+    const updatedRoom = await prisma.room.update({
+      where: { id },
+      data: {
+        capacity: cap,
+        type: `${cap}-Sharing`
+      },
+      include: { beds: true }
+    });
+
+    return res.json({ success: true, room: updatedRoom });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete room
+app.delete('/api/rooms/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const room = await prisma.room.findUnique({
+      where: { id },
+      include: { beds: true }
+    });
+
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+
+    const occupied = room.beds.some(b => b.status === 'OCCUPIED');
+    if (occupied) {
+      return res.status(400).json({ error: 'Cannot delete room with occupied beds' });
+    }
+
+    await prisma.bed.deleteMany({ where: { roomId: id } });
+    await prisma.room.delete({ where: { id } });
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update block photo
+app.put('/api/blocks/:id/photo', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { imageUrl } = req.body;
+
+    const block = await prisma.block.update({
+      where: { id },
+      data: { imageUrl }
+    });
+
+    return res.json({ success: true, block });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/blocks/:id', async (req, res) => {
   try {
-    await prisma.block.delete({ where: { id: req.params.id } });
+    const { id } = req.params;
+    const rooms = await prisma.room.findMany({ where: { blockId: id } });
+    const roomIds = rooms.map(r => r.id);
+    await prisma.bed.deleteMany({ where: { roomId: { in: roomIds } } });
+    await prisma.room.deleteMany({ where: { blockId: id } });
+    await prisma.block.delete({ where: { id } });
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -546,10 +870,25 @@ app.delete('/api/blocks/:id', async (req, res) => {
 
 app.get('/api/occupancy', async (req, res) => {
   try {
+    const blocks = await prisma.block.findMany({
+      include: {
+        rooms: {
+          include: {
+            beds: {
+              include: {
+                allocation: {
+                  include: { application: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
     const totalBeds = await prisma.bed.count();
     const occupiedBeds = await prisma.bed.count({ where: { status: 'OCCUPIED' } });
     const availableBeds = totalBeds - occupiedBeds;
-    res.json({ totalBeds, occupiedBeds, availableBeds, occupancyRate: totalBeds ? ((occupiedBeds / totalBeds) * 100).toFixed(1) : 0 });
+    res.json({ blocks, totalBeds, occupiedBeds, availableBeds, occupancyRate: totalBeds ? ((occupiedBeds / totalBeds) * 100).toFixed(1) : 0 });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1214,15 +1553,70 @@ app.post('/api/complaints/:id/like', async (req, res) => {
   }
 });
 
-app.put('/api/complaints/:id/status', async (req, res) => {
+app.put('/api/complaints/:id', async (req, res) => {
   try {
+    const { status, assignedTo, resolutionNotes, category, priority } = req.body;
+    const updateData: any = {};
+    if (status !== undefined) updateData.status = status;
+    if (assignedTo !== undefined) updateData.assignedTo = assignedTo;
+    if (resolutionNotes !== undefined) updateData.resolutionNotes = resolutionNotes;
+    if (category !== undefined) updateData.category = category;
+    if (priority !== undefined) updateData.priority = priority;
+
+    if (status === 'Resolved' || status === 'Closed') {
+      updateData.resolvedAt = new Date();
+    } else if (status === 'Pending' || status === 'In Progress') {
+      updateData.resolvedAt = null;
+    }
+
     const updated = await prisma.complaint.update({
       where: { id: req.params.id },
-      data: { status: req.body.status, resolutionNotes: req.body.resolutionNotes }
+      data: updateData
     });
     io.emit('complaint_updated', updated);
+    io.emit('data_updated');
     res.json({ success: true, complaint: updated });
   } catch (err: any) {
+    console.error('Error updating complaint:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/complaints/:id/status', async (req, res) => {
+  try {
+    const { status, resolutionNotes } = req.body;
+    const updateData: any = {};
+    if (status !== undefined) updateData.status = status;
+    if (resolutionNotes !== undefined) updateData.resolutionNotes = resolutionNotes;
+    if (status === 'Resolved' || status === 'Closed') {
+      updateData.resolvedAt = new Date();
+    } else if (status === 'Pending' || status === 'In Progress') {
+      updateData.resolvedAt = null;
+    }
+
+    const updated = await prisma.complaint.update({
+      where: { id: req.params.id },
+      data: updateData
+    });
+    io.emit('complaint_updated', updated);
+    io.emit('data_updated');
+    res.json({ success: true, complaint: updated });
+  } catch (err: any) {
+    console.error('Error updating complaint status:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/complaints/:id', async (req, res) => {
+  try {
+    await prisma.complaint.delete({
+      where: { id: req.params.id }
+    });
+    io.emit('complaint_deleted', req.params.id);
+    io.emit('data_updated');
+    res.json({ success: true, id: req.params.id });
+  } catch (err: any) {
+    console.error('Error deleting complaint:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1300,7 +1694,33 @@ app.post('/api/feedback', submitFeedback);
 
 app.get('/api/feedback/status', getFeedbackStatus);
 app.get('/api/feedback/config', getFeedbackConfig);
-app.post('/api/feedback/config', saveFeedbackConfig);
+app.post('/api/feedback/config', async (req, res) => {
+  try {
+    const { googleFormUrl, enabled } = req.body;
+    const existing = await prisma.feedbackConfig.findFirst();
+    let config;
+    if (existing) {
+      config = await prisma.feedbackConfig.update({
+        where: { id: existing.id },
+        data: { googleFormUrl: googleFormUrl || '', enabled: enabled !== false },
+      });
+    } else {
+      config = await prisma.feedbackConfig.create({
+        data: { googleFormUrl: googleFormUrl || '', enabled: enabled !== false },
+      });
+    }
+    // Emit real-time event so Student portal updates immediately
+    io.emit('feedback_config_updated', {
+      googleFormUrl: config.googleFormUrl || '',
+      enabled: config.enabled,
+    });
+    io.emit('data_updated');
+    return res.json({ success: true, config });
+  } catch (err: any) {
+    console.error('Error saving feedback config:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ==================== CHAT & COMMUNITY ====================
 app.get('/api/chat/channels', async (req, res) => {

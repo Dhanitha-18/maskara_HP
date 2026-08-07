@@ -56,7 +56,7 @@ export default function ComplaintsControl() {
   const { data: serverComplaints, isLoading } = useQuery({
     queryKey: ['complaints'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/complaints');
+      const res = await fetch('/api/complaints');
       if (!res.ok) throw new Error('Failed to fetch complaints');
       return res.json();
     }
@@ -102,7 +102,7 @@ export default function ComplaintsControl() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
-      const res = await fetch(`http://localhost:5000/api/complaints/${id}`, {
+      const res = await fetch(`/api/complaints/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -112,17 +112,19 @@ export default function ComplaintsControl() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['complaints'] });
-      toast.success(`Complaint ${formatTicketId(data.id)} updated successfully`);
+      const updatedId = data.complaint?.id || data.id || '';
+      toast.success(`Complaint ${updatedId ? formatTicketId(updatedId) : ''} updated successfully`);
       setSelectedComplaint(null);
     },
     onError: (err: any) => {
+      queryClient.invalidateQueries({ queryKey: ['complaints'] });
       toast.error(err.message || 'Failed to save changes');
     }
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`http://localhost:5000/api/complaints/${id}`, {
+      const res = await fetch(`/api/complaints/${id}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to delete complaint');
@@ -139,6 +141,7 @@ export default function ComplaintsControl() {
   });
 
   const handleQuickStatusChange = (id: string, newStatus: string) => {
+    setComplaints(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
     updateMutation.mutate({
       id,
       payload: { status: newStatus }

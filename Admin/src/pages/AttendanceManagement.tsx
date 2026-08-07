@@ -146,7 +146,7 @@ export default function AttendanceManagement() {
       return { ...a, status };
     }));
     setHasUnsavedChanges(true);
-    toast.info(`Marked residents in ${selectedBlock} as ${status} locally. Click "Save Attendance Changes" to update!`);
+    toast.info(`Marked all residents in ${selectedBlock} as ${status === 'PRESENT' ? 'Present' : 'Absent'}! Click "Save Attendance Changes" to submit.`);
   };
 
   // Toggle individual student status
@@ -490,7 +490,7 @@ export default function AttendanceManagement() {
                   className="px-3.5 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>Mark All Present</span>
+                  <span>Mark All as Present</span>
                 </button>
 
                 <button
@@ -498,7 +498,7 @@ export default function AttendanceManagement() {
                   className="px-3.5 py-2.5 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                 >
                   <XCircle className="w-4 h-4 text-rose-600" />
-                  <span>Mark All Absent</span>
+                  <span>Mark All as Absent</span>
                 </button>
 
                 <button
@@ -542,9 +542,7 @@ export default function AttendanceManagement() {
                       <th className="p-4">USN</th>
                       <th className="p-4">Block & Room</th>
                       <th className="p-4">Date</th>
-                      <th className="p-4 text-center rounded-tr-xl">
-                        {activeTab === 'EDIT' ? 'Edit Attendance Status' : 'Toggle Action'}
-                      </th>
+                      <th className="p-4 text-center rounded-tr-xl">Toggle Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
