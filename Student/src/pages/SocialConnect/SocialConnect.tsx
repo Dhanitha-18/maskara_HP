@@ -327,8 +327,9 @@ export const SocialConnect: React.FC = () => {
 
   // Filtered resident list
   const filteredResidents = residents.filter((r: any) => 
-    r.studentName.toLowerCase().includes(directorySearch.toLowerCase()) ||
-    r.usn.toLowerCase().includes(directorySearch.toLowerCase())
+    (r.studentName || '').toLowerCase().includes(directorySearch.toLowerCase()) ||
+    (r.phoneNumber || '').toLowerCase().includes(directorySearch.toLowerCase()) ||
+    (r.usn || '').toLowerCase().includes(directorySearch.toLowerCase())
   );
 
   return (

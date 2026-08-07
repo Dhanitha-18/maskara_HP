@@ -150,7 +150,7 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Update student info from real application data
       if (data.application) {
         const app = data.application;
-        const formattedAppId = app.id ? (app.id.startsWith('APP-') ? app.id : `APP-2026-${app.id.slice(0, 6).toUpperCase()}`) : `APP-2026-${app.usn}`;
+        const formattedAppId = app.id ? (app.id.startsWith('APP-') ? app.id : `APP-2026-${app.id.slice(0, 6).toUpperCase()}`) : (app.phoneNumber ? `APP-2026-${app.phoneNumber}` : 'APP-2026-STUDENT');
         setStudent(prev => ({
           ...prev,
           id: formattedAppId,

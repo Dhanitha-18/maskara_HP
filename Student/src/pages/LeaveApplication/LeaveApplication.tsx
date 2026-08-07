@@ -8,7 +8,7 @@ import {
   ArrowLeft, ArrowRight, X, 
   Sparkles, Bell
 } from 'lucide-react';
-import { socket } from '../../lib/socket';
+import { API_BASE_URL } from '../../services/api';
 
 export interface LeaveRequest {
   id: string;
@@ -88,18 +88,16 @@ export const LeaveApplication: React.FC = () => {
   // Fetch leaves for logged-in student & connect WebSockets for real-time updates
   const fetchBackendLeaves = async () => {
     try {
-      const currentUsn = (studentUsn || student?.usn || '').trim().toUpperCase();
-      const url = currentUsn 
-        ? `http://localhost:5000/api/leaves?studentUsn=${encodeURIComponent(currentUsn)}`
-        : 'http://localhost:5000/api/leaves';
+      const currentIdentifier = (studentUsn || student?.phone || student?.usn || '').trim();
+      const url = `${API_BASE_URL}/api/leaves`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          if (currentUsn) {
+          if (currentIdentifier) {
             const myLeaves = data.filter((item: any) => {
-              const u = String(item.studentUsn || item.usn || '').trim().toUpperCase();
-              return u === currentUsn;
+              const u = String(item.studentUsn || item.usn || item.phoneNumber || item.phone || '').trim();
+              return u === currentIdentifier || u.includes(currentIdentifier) || currentIdentifier.includes(u);
             });
             setLeaves(myLeaves);
           } else {
