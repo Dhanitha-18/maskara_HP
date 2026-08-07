@@ -111,15 +111,14 @@ export const Complaints: React.FC = () => {
     (student as any)?.applicationData?.hostelBlock || 
     (student as any)?.applicationData?.roomBlock || 
     hostel?.block || 
-    blockName || 
     'Block A';
 
   const isSameBlock = (cBlockRaw: string, sBlockRaw: string) => {
     if (!cBlockRaw || !sBlockRaw) return false;
-    const cb = String(cBlockRaw).toLowerCase().replace(/hostel|block|\s+|-|_/g, '');
-    const sb = String(sBlockRaw).toLowerCase().replace(/hostel|block|\s+|-|_/g, '');
+    const cb = String(cBlockRaw).trim().toLowerCase().replace(/hostel|block|\s+|-|_/g, '');
+    const sb = String(sBlockRaw).trim().toLowerCase().replace(/hostel|block|\s+|-|_/g, '');
     if (!cb || !sb) return false;
-    return cb === sb || cb.includes(sb) || sb.includes(cb);
+    return cb === sb;
   };
 
   // Load complaints on mount
@@ -130,14 +129,9 @@ export const Complaints: React.FC = () => {
       .then(res => res.json())
       .then(data => {
         if (active) {
-          // Filter to show ONLY complaints for this student's allocated block or their own tickets
+          // Filter to show ONLY complaints belonging to the same block as the student's own block
           const studentComplaints = data
-            .filter((c: any) => {
-              if (c.usn && student.usn && String(c.usn).trim().toUpperCase() === String(student.usn).trim().toUpperCase()) {
-                return true;
-              }
-              return isSameBlock(c.block, studentBlock);
-            })
+            .filter((c: any) => isSameBlock(c.block, studentBlock))
             .map((c: any) => ({
               ...c,
               date: new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -158,14 +152,13 @@ export const Complaints: React.FC = () => {
       });
 
     return () => { active = false; };
-  }, [student.usn, studentBlock]);
+  }, [studentBlock]);
 
   // Socket.IO Listener Setup for instant synchronization
   useEffect(() => {
     const handleCreated = (newCmp: any) => {
-      const isMine = newCmp.usn && student.usn && String(newCmp.usn).trim().toUpperCase() === String(student.usn).trim().toUpperCase();
       const isSame = isSameBlock(newCmp.block, studentBlock);
-      if (isMine || isSame) {
+      if (isSame) {
         setComplaints(prev => {
           if (prev.some(c => c.id === newCmp.id)) return prev;
           const mapped = {
@@ -181,6 +174,7 @@ export const Complaints: React.FC = () => {
     };
 
     const handleUpdated = (updatedCmp: any) => {
+      const isSame = isSameBlock(updatedCmp.block, studentBlock);
       const mapped = {
         ...updatedCmp,
         date: new Date(updatedCmp.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -188,8 +182,17 @@ export const Complaints: React.FC = () => {
         upvotes: updatedCmp.upvotes || 1,
         comments: updatedCmp.comments || []
       };
-      setComplaints(prev => prev.map(c => c.id === updatedCmp.id ? mapped : c));
-      setActiveTrackingComplaint(prev => (prev && prev.id === updatedCmp.id ? mapped : prev));
+      setComplaints(prev => {
+        const exists = prev.some(c => c.id === updatedCmp.id);
+        if (isSame) {
+          return exists ? prev.map(c => c.id === updatedCmp.id ? mapped : c) : [mapped, ...prev];
+        } else {
+          return prev.filter(c => c.id !== updatedCmp.id);
+        }
+      });
+      if (!isSame) {
+        setActiveTrackingComplaint(prev => (prev && prev.id === updatedCmp.id ? null : prev));
+      }
     };
 
     const handleDeleted = (deletedId: string) => {
@@ -205,12 +208,7 @@ export const Complaints: React.FC = () => {
         .then(res => res.json())
         .then(data => {
           const studentComplaints = data
-            .filter((c: any) => {
-              if (c.usn && student.usn && String(c.usn).trim().toUpperCase() === String(student.usn).trim().toUpperCase()) {
-                return true;
-              }
-              return isSameBlock(c.block, studentBlock);
-            })
+            .filter((c: any) => isSameBlock(c.block, studentBlock))
             .map((c: any) => ({
               ...c,
               date: new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -228,7 +226,7 @@ export const Complaints: React.FC = () => {
       socket.off('complaint_updated', handleUpdated);
       socket.off('complaint_deleted', handleDeleted);
     };
-  }, [student.usn, studentBlock]);
+  }, [studentBlock]);
 
   // Set default location based on context
   useEffect(() => {
