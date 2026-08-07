@@ -29,7 +29,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }
+  limits: { fileSize: 100 * 1024 * 1024 }
 });
 
 // Socket.IO Connections
@@ -97,19 +97,21 @@ app.get('/health', (req, res) => {
 });
 
 // ==================== FILE UPLOAD ====================
-app.post('/api/upload', upload.single('file'), async (req, res) => {
+app.post('/api/upload', upload.any(), async (req, res) => {
   try {
-    if (!req.file) {
+    const files = req.files as Express.Multer.File[];
+    const file = files && files.length > 0 ? files[0] : req.file;
+    if (!file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const publicUrl = await uploadToSupabaseStorage(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
+      file.buffer,
+      file.originalname,
+      file.mimetype
     );
 
-    return res.json({ success: true, url: publicUrl, fileUrl: publicUrl });
+    return res.json({ success: true, url: publicUrl, fileUrl: publicUrl, imageUrl: publicUrl });
   } catch (error: any) {
     console.error('Upload endpoint error:', error);
     return res.status(500).json({ error: error.message || 'File upload failed' });

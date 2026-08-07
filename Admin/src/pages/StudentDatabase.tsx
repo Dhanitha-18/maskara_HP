@@ -153,6 +153,19 @@ const handleDownloadPDF = async (app: any) => {
   const formattedAppId = app.id ? (app.id.startsWith('APP-') ? app.id : `APP-2026-${app.id.slice(0, 6).toUpperCase()}`) : 'N/A';
   const subDate = formatSubmissionDate(app.createdAt || app.appliedAt);
   
+  // Embed Student Passport Photo on top right of PDF if available
+  const photoUrl = getPhotoUrl(app.photoUrl || app.passportPhoto || app.photo);
+  if (photoUrl) {
+    try {
+      const base64Img = await getBase64ImageFromUrl(photoUrl);
+      if (base64Img) {
+        doc.addImage(base64Img, 'JPEG', 155, 42, 35, 45);
+      }
+    } catch (err) {
+      console.error('Skipping image in PDF generation', err);
+    }
+  }
+
   drawSectionHeader('APPLICATION DETAILS');
   drawFieldRow('Unique Application ID', formattedAppId, 'Submission Date', subDate);
   drawFieldRow('Application Status', app.status || 'N/A', 'BMSIT Reference ID', app.bmsitId || 'N/A');

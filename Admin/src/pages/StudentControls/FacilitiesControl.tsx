@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Image as ImageIcon, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../lib/api';
 
 // Same default facilities that appear in the Student Portal
 const DEFAULT_FACILITIES = [
@@ -96,13 +97,6 @@ export default function FacilitiesControl() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.size > 1 * 1024 * 1024) {
-      e.target.value = '';
-      toast.error("Upload image less than or equal to 1MB");
-      alert("Upload image less than or equal to 1MB");
-      return;
-    }
 
     const uploadData = new FormData();
     uploadData.append('photo', file);

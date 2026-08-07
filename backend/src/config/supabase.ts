@@ -14,27 +14,35 @@ export async function uploadToSupabaseStorage(
   mimeType: string,
   bucketName = 'uploads'
 ): Promise<string> {
-  const filePath = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  try {
+    const filePath = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 
-  // Ensure bucket exists or handle error silently
-  const { data: bucketData, error: bucketError } = await supabase.storage.getBucket(bucketName);
-  if (bucketError && bucketError.message.includes('not found')) {
-    await supabase.storage.createBucket(bucketName, { public: true });
+    // Ensure bucket exists or handle error silently
+    const { error: bucketError } = await supabase.storage.getBucket(bucketName);
+    if (bucketError && bucketError.message.includes('not found')) {
+      await supabase.storage.createBucket(bucketName, { public: true });
+    }
+
+    const { error } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, fileBuffer, {
+        contentType: mimeType,
+        upsert: true
+      });
+
+    if (!error) {
+      const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+      if (publicUrlData?.publicUrl) {
+        return publicUrlData.publicUrl;
+      }
+    } else {
+      console.warn('Supabase storage upload warning:', error.message);
+    }
+  } catch (err) {
+    console.warn('Supabase Storage exception, using data URL fallback:', err);
   }
 
-  const { data, error } = await supabase.storage
-    .from(bucketName)
-    .upload(filePath, fileBuffer, {
-      contentType: mimeType,
-      upsert: true
-    });
-
-  if (error) {
-    console.error('Supabase upload error:', error);
-    throw new Error(`Supabase storage upload failed: ${error.message}`);
-  }
-
-  const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-
-  return publicUrlData.publicUrl;
+  // Fallback to data URL if Supabase storage bucket is unconfigured
+  const base64 = fileBuffer.toString('base64');
+  return `data:${mimeType || 'image/jpeg'};base64,${base64}`;
 }

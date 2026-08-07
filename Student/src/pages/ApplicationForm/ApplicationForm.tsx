@@ -241,17 +241,17 @@ export const ApplicationForm: React.FC = () => {
       if (photoFile) {
         try {
           const formData = new FormData();
-          formData.append('photo', photoFile);
+          formData.append('file', photoFile);
           const uploadResponse = await fetch(`${API_BASE_URL}/api/upload`, {
             method: 'POST',
             body: formData,
           });
           if (uploadResponse.ok) {
             const uploadResJson = await uploadResponse.json();
-            uploadedPhotoUrl = uploadResJson.imageUrl;
+            uploadedPhotoUrl = uploadResJson.url || uploadResJson.imageUrl || uploadResJson.fileUrl || "";
           } else {
             const uploadErrData = await uploadResponse.json().catch(() => ({}));
-            const errMsg = uploadErrData.error || "Upload image less than or equal to 1MB";
+            const errMsg = uploadErrData.error || "Failed to upload photo. Please try again.";
             setFormErrors(errMsg);
             setIsSubmitting(false);
             submittingRef.current = false;
@@ -631,26 +631,18 @@ export const ApplicationForm: React.FC = () => {
 
               {/* Photo Upload block — MANDATORY */}
               <div className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center transition-colors ${
-                photoFile ? 'border-success bg-success/5' : 'border-danger/40 bg-danger/5'
+                photoFile ? 'border-success bg-success/5' : 'border-slate-200 bg-slate-50/50'
               }`}>
                 <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
                   Upload Student Photo (Passport Size) <span className="text-danger">*</span>
                 </span>
-                <p className="text-[10px] text-amber-700 font-extrabold mt-0.5">Upload image less than or equal to 1MB (Max size: 1 MB)</p>
+                <p className="text-[10px] text-slate-500 font-semibold mt-0.5">JPG, JPEG, PNG, or WEBP image format supported</p>
                 <input 
                   type="file" 
                   id="photo-upload" 
                   accept="image/*" 
                   onChange={e => {
                     const file = e.target.files?.[0] || null;
-                    if (file && file.size > 1 * 1024 * 1024) {
-                      setPhotoFile(null);
-                      setPhotoName('');
-                      e.target.value = '';
-                      setFormErrors("Upload image less than or equal to 1MB");
-                      alert("Upload image less than or equal to 1MB");
-                      return;
-                    }
                     setFormErrors(null);
                     setPhotoFile(file);
                     setPhotoName(file ? file.name : '');
@@ -666,7 +658,7 @@ export const ApplicationForm: React.FC = () => {
                 {photoFile ? (
                   <span className="text-[10px] text-success font-bold mt-1">✓ {photoName} selected</span>
                 ) : (
-                  <span className="text-[10px] text-danger/70 font-bold mt-1">⚠ No photo selected (Max 1MB)</span>
+                  <span className="text-[10px] text-slate-400 font-bold mt-1">⚠ No photo selected</span>
                 )}
               </div>
 

@@ -253,12 +253,6 @@ export default function BlockOverview() {
                             onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (file) {
-                                if (file.size > 1 * 1024 * 1024) {
-                                  e.target.value = '';
-                                  toast.error("Upload image less than or equal to 1MB");
-                                  alert("Upload image less than or equal to 1MB");
-                                  return;
-                                }
                                 updateBlockPhotoMutation.mutate({ blockId: block.id, file });
                               }
                             }}

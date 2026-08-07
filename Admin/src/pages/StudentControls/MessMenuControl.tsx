@@ -102,19 +102,12 @@ export default function MessMenuControl() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    if (file.size > 1 * 1024 * 1024) {
-      e.target.value = '';
-      toast.error("Upload image less than or equal to 1MB");
-      alert("Upload image less than or equal to 1MB");
-      return;
-    }
-    
     const formData = new FormData();
-    formData.append('photo', file);
+    formData.append('file', file);
 
     const toastId = toast.loading('Uploading meal image...');
     try {
-      const res = await fetch('http://localhost:5000/api/upload', {
+      const res = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',
         body: formData,
       });
