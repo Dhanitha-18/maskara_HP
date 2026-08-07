@@ -1,0 +1,68 @@
+#!/bin/sh
+# ============================================================
+# Pre-commit hook: Blocks commits that would break the build.
+# Runs TypeScript type-check + oxlint on Student and Admin.
+# ============================================================
+
+echo ""
+echo "🔍 Running pre-commit checks..."
+echo ""
+
+FAILED=0
+
+# ── Student: TypeScript check ──────────────────────────────
+echo "▶ [Student] TypeScript check..."
+cd Student
+npx tsc --noEmit 2>&1
+TSC_EXIT=$?
+if [ $TSC_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ [Student] TypeScript errors found. Fix them before committing."
+  FAILED=1
+else
+  echo "✅ [Student] TypeScript OK"
+fi
+
+# ── Student: oxlint (catches import/first violations) ──────
+# Note: We only fail on ERROR-level lint rules (not warnings)
+# The import/first rule is set to "error" so mid-file imports will block commits
+echo ""
+echo "▶ [Student] oxlint check (errors only)..."
+npx oxlint src 2>&1
+LINT_EXIT=$?
+if [ $LINT_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ [Student] Lint errors found. Fix them before committing."
+  FAILED=1
+else
+  echo "✅ [Student] Lint OK"
+fi
+
+cd ..
+
+# ── Admin: TypeScript check ────────────────────────────────
+echo ""
+echo "▶ [Admin] TypeScript check..."
+cd Admin
+npx tsc --noEmit 2>&1
+TSC_EXIT=$?
+if [ $TSC_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ [Admin] TypeScript errors found. Fix them before committing."
+  FAILED=1
+else
+  echo "✅ [Admin] TypeScript OK"
+fi
+cd ..
+
+echo ""
+if [ $FAILED -ne 0 ]; then
+  echo "🚫 Commit BLOCKED. Fix the errors above and try again."
+  echo "   (To skip checks in an emergency: git commit --no-verify)"
+  echo ""
+  exit 1
+fi
+
+echo "✅ All checks passed! Proceeding with commit."
+echo ""
+exit 0
