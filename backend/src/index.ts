@@ -299,6 +299,7 @@ app.post('/api/student/login', async (req, res) => {
 
     const studentPayload = {
       id: account.id,
+      studentAccountId: account.id,  // permanent identity — same as id
       usn: effectiveUsn,
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
@@ -310,6 +311,7 @@ app.post('/api/student/login', async (req, res) => {
     return res.json({
       success: true,
       token,
+      studentAccountId: account.id,
       usn: effectiveUsn,
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
@@ -1594,8 +1596,47 @@ app.delete('/api/notices/:id', async (req, res) => {
 });
 
 // ==================== COMPLAINTS ====================
+
+// GET /api/complaints
+// - Student (Bearer token present, userType=STUDENT): returns only complaints in student's own block (DB-level filter)
+// - Admin / No token: returns all complaints (admin path unchanged)
 app.get('/api/complaints', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      // Attempt to decode to identify student vs admin
+      try {
+        const jwt = await import('jsonwebtoken');
+        const JWT_SECRET = process.env.JWT_SECRET || 'maskara_jwt_secret_key_2026_super_secure';
+        const decoded: any = jwt.default.verify(authHeader.split(' ')[1], JWT_SECRET);
+
+        if (decoded.userType === 'STUDENT' && decoded.studentAccountId) {
+          // Fetch the student's block from their Allocation → Room → Block chain
+          const allocation = await prisma.allocation.findFirst({
+            where: { application: { studentAccountId: decoded.studentAccountId } },
+            include: { bed: { include: { room: { include: { block: true } } } } }
+          });
+
+          const studentBlock = allocation?.bed?.room?.block?.name || null;
+
+          if (!studentBlock) {
+            // Student has no allocated block — return empty list (not their block data)
+            return res.json([]);
+          }
+
+          // DB-level filter: only complaints in this block
+          const complaints = await prisma.complaint.findMany({
+            where: { block: studentBlock },
+            orderBy: { createdAt: 'desc' }
+          });
+          return res.json(complaints);
+        }
+      } catch (_) {
+        // Token invalid or expired — fall through to return all (admin path)
+      }
+    }
+
+    // Admin path: no token or admin token — return all complaints
     const complaints = await prisma.complaint.findMany({ orderBy: { createdAt: 'desc' } });
     res.json(complaints);
   } catch (err: any) {
@@ -1603,16 +1644,62 @@ app.get('/api/complaints', async (req, res) => {
   }
 });
 
+// POST /api/complaints
+// Backend resolves studentAccountId and block from authenticated session — frontend cannot override these
 app.post('/api/complaints', async (req, res) => {
   try {
     const data = req.body;
+    let resolvedStudentAccountId: string | undefined = undefined;
+    let resolvedBlock: string = data.block || 'Block A';
+    let resolvedStudentName: string = data.studentName || 'Unknown';
+    let resolvedUsn: string = data.usn || '';
+    let resolvedRoomNo: string = data.roomNo || 'N/A';
+    let resolvedFloor: string = data.floor || '1';
+
+    // If student token is present, resolve identity and block from the database — do NOT trust frontend values
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const jwt = await import('jsonwebtoken');
+        const JWT_SECRET = process.env.JWT_SECRET || 'maskara_jwt_secret_key_2026_super_secure';
+        const decoded: any = jwt.default.verify(authHeader.split(' ')[1], JWT_SECRET);
+
+        if (decoded.userType === 'STUDENT' && decoded.studentAccountId) {
+          const studentAccount = await prisma.studentAccount.findUnique({
+            where: { id: decoded.studentAccountId }
+          });
+
+          if (studentAccount) {
+            resolvedStudentAccountId = studentAccount.id;
+            resolvedStudentName = studentAccount.studentName;
+            resolvedUsn = studentAccount.usn || '';
+
+            // Resolve block from Allocation chain — backend authority, not frontend
+            const allocation = await prisma.allocation.findFirst({
+              where: { application: { studentAccountId: decoded.studentAccountId } },
+              include: { bed: { include: { room: { include: { block: true } } } } }
+            });
+
+            if (allocation?.bed?.room?.block?.name) {
+              resolvedBlock = allocation.bed.room.block.name;
+              resolvedRoomNo = allocation.bed.room.roomNo || data.roomNo || 'N/A';
+              resolvedFloor = String(allocation.bed.room.floor || data.floor || '1');
+            }
+          }
+        }
+      } catch (_) {
+        // Token invalid — proceed with frontend-provided data (admin or unauthenticated submission)
+      }
+    }
+
     const complaint = await prisma.complaint.create({
       data: {
-        studentName: data.studentName,
-        usn: data.usn,
-        roomNo: data.roomNo || 'N/A',
-        block: data.block || 'Block A',
-        floor: data.floor || '1',
+        ...(resolvedStudentAccountId ? { studentAccountId: resolvedStudentAccountId } : {}),
+        studentName: resolvedStudentName,
+        usn: resolvedUsn,
+        roomNo: resolvedRoomNo,
+        block: resolvedBlock,
+        floor: resolvedFloor,
         category: data.category || 'General',
         priority: data.priority || 'Medium',
         subject: data.subject || 'Hostel Issue',

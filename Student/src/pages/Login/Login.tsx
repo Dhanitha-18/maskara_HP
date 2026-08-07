@@ -36,7 +36,7 @@ export const Login: React.FC = () => {
 
       if (data.success) {
         const usnToUse = data.usn || data.phoneNumber || data.studentName;
-        login(usnToUse, data.studentName || trimmedName, data.phoneNumber || trimmedPhone, data.token);
+        login(usnToUse, data.studentName || trimmedName, data.phoneNumber || trimmedPhone, data.token, data.studentAccountId);
         navigate('/');
       } else {
         setError(data.error || 'No account exists');

@@ -121,7 +121,7 @@ export const Complaints: React.FC = () => {
     return cb === sb;
   };
 
-  // Load complaints on mount
+  // Load complaints on mount — backend enforces block filtering for student tokens at DB level
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -129,16 +129,13 @@ export const Complaints: React.FC = () => {
       .then(res => res.json())
       .then(data => {
         if (active) {
-          // Filter to show ONLY complaints belonging to the same block as the student's own block
-          const studentComplaints = data
-            .filter((c: any) => isSameBlock(c.block, studentBlock))
-            .map((c: any) => ({
-              ...c,
-              date: new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-              location: `${c.block || 'Block A'} - Floor ${c.floor || 1} - Room ${c.roomNo}`,
-              upvotes: c.upvotes || 1,
-              comments: c.comments || []
-            }));
+          const studentComplaints = Array.isArray(data) ? data.map((c: any) => ({
+            ...c,
+            date: new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+            location: `${c.block || 'Block A'} - Floor ${c.floor || 1} - Room ${c.roomNo}`,
+            upvotes: c.upvotes || 1,
+            comments: c.comments || []
+          })) : [];
           setComplaints(studentComplaints);
           setLoading(false);
         }
@@ -152,7 +149,7 @@ export const Complaints: React.FC = () => {
       });
 
     return () => { active = false; };
-  }, [studentBlock]);
+  }, []);
 
   // Socket.IO Listener Setup for instant synchronization
   useEffect(() => {
@@ -204,18 +201,18 @@ export const Complaints: React.FC = () => {
     socket.on('complaint_updated', handleUpdated);
     socket.on('complaint_deleted', handleDeleted);
     socket.on('data_updated', () => {
+      // Backend already block-filters the response for student tokens — just refresh
       fetch('/api/complaints')
         .then(res => res.json())
         .then(data => {
-          const studentComplaints = data
-            .filter((c: any) => isSameBlock(c.block, studentBlock))
-            .map((c: any) => ({
-              ...c,
-              date: new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-              location: `${c.block || 'Block A'} - Floor ${c.floor || 1} - Room ${c.roomNo}`,
-              upvotes: c.upvotes || 1,
-              comments: c.comments || []
-            }));
+          if (!Array.isArray(data)) return;
+          const studentComplaints = data.map((c: any) => ({
+            ...c,
+            date: new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+            location: `${c.block || 'Block A'} - Floor ${c.floor || 1} - Room ${c.roomNo}`,
+            upvotes: c.upvotes || 1,
+            comments: c.comments || []
+          }));
           setComplaints(studentComplaints);
         })
         .catch(() => {});
@@ -276,6 +273,8 @@ export const Complaints: React.FC = () => {
 
     const finalCategory = category === 'Other' ? otherCategory.trim() : category;
 
+    // Backend resolves studentAccountId, block, floor, usn from the authenticated session token
+    // Frontend only provides the complaint-specific fields
     const payload = {
       studentName: student.name,
       usn: student.usn,

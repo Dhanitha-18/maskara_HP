@@ -9,7 +9,9 @@ datasource db {
 }
 
 model Application {
-  id                   String       @id @default(uuid())
+  id                   String          @id @default(uuid())
+  studentAccountId     String?         @unique
+  studentAccount       StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
   usn                  String?
   studentName          String
   gender               String
@@ -50,11 +52,11 @@ model Application {
   remarks              String?
   status               String
   holdReason           String?
-  appliedAt            DateTime     @default(now())
+  appliedAt            DateTime        @default(now())
   guardianEmail        String?
-  studentEmailSent     Boolean?     @default(false)
-  fatherEmailSent      Boolean?     @default(false)
-  motherEmailSent      Boolean?     @default(false)
+  studentEmailSent     Boolean?        @default(false)
+  fatherEmailSent      Boolean?        @default(false)
+  motherEmailSent      Boolean?        @default(false)
   studentEmailSentAt   DateTime?
   fatherEmailSentAt    DateTime?
   motherEmailSentAt    DateTime?
@@ -143,23 +145,25 @@ model AllocationHistory {
 }
 
 model Payment {
-  id                    String    @id @default(uuid())
+  id                    String          @id @default(uuid())
+  studentAccountId      String?
+  studentAccount        StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
   studentName           String
   studentUsn            String
   hostelName            String
   block                 String
   floor                 String?
   roomNumber            String
-  utrNumber             String    @unique
+  utrNumber             String          @unique
   paymentDate           DateTime
   screenshotUrl         String?
-  status                String    @default("PENDING_REVIEW")
-  emailStatus           String    @default("PENDING")
+  status                String          @default("PENDING_REVIEW")
+  emailStatus           String          @default("PENDING")
   reviewedBy            String?
   reviewedAt            DateTime?
   remarks               String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
   amount                Float?
   paymentTitle          String?
   accountHolderContact  String?
@@ -167,6 +171,8 @@ model Payment {
   accountHolderRelation String?
   semester              String?
   transferBank          String?
+
+  @@index([studentAccountId])
 }
 
 model EmailTemplate {
@@ -193,44 +199,51 @@ model Facility {
 }
 
 model Feedback {
-  id          String   @id @default(uuid())
-  studentName String
-  usn         String
-  message     String
-  rating      Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
-  month       Int      @default(0)
-  year        Int      @default(0)
+  id               String          @id @default(uuid())
+  studentAccountId String?
+  studentAccount   StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
+  studentName      String
+  usn              String
+  message          String
+  rating           Int
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @default(now()) @updatedAt
+  month            Int             @default(0)
+  year             Int             @default(0)
 
   @@index([usn, month, year])
+  @@index([studentAccountId])
 }
 
 model FeedbackConfig {
-  id            String @id @default(uuid())
+  id            String   @id @default(uuid())
   googleFormUrl String?
-  enabled       Boolean @default(false)
-  month         Int    @default(0)
+  enabled       Boolean  @default(false)
+  month         Int      @default(0)
   updatedAt     DateTime @default(now()) @updatedAt
 }
 
 model Complaint {
-  id              String    @id @default(uuid())
+  id              String          @id @default(uuid())
+  studentAccountId String?
+  studentAccount   StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
   studentName     String
   usn             String
   roomNo          String
-  block           String    @default("Block A")
-  floor           String    @default("1")
+  block           String          @default("Block A")
+  floor           String          @default("1")
   category        String
-  priority        String    @default("Medium")
-  subject         String    @default("Hostel Issue")
+  priority        String          @default("Medium")
+  subject         String          @default("Hostel Issue")
   description     String
-  status          String    @default("Pending")
+  status          String          @default("Pending")
   assignedTo      String?
   resolutionNotes String?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime        @default(now())
   resolvedAt      DateTime?
-  upvotes         Int       @default(1)
+  upvotes         Int             @default(1)
+
+  @@index([studentAccountId])
 }
 
 model SocialPost {
@@ -244,32 +257,36 @@ model SocialPost {
 }
 
 model LeaveApplication {
-  id                  String   @id @default(uuid())
-  studentName         String
-  usn                 String
-  roomNo              String?
-  block               String?
-  leaveType           String?
-  fromDate            DateTime
-  toDate              DateTime
-  totalDays           Int?
-  destination         String?
-  reason              String
-  emergencyContact    String?
-  expectedReturnTime  String?
-  parentName          String?
-  relationship        String?
-  parentPhone         String?
-  parentEmail         String?
-  parentAddress       String?
-  bankName            String?
-  accountHolder       String?
-  accountNumber       String?
-  ifscCode            String?
-  depositAmount       Float?
-  signatureDataUrl    String?
-  status              String   @default("Pending")
-  appliedAt           DateTime @default(now())
+  id                 String          @id @default(uuid())
+  studentAccountId   String?
+  studentAccount     StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
+  studentName        String
+  usn                String
+  roomNo             String?
+  block              String?
+  leaveType          String?
+  fromDate           DateTime
+  toDate             DateTime
+  totalDays          Int?
+  destination        String?
+  reason             String
+  emergencyContact   String?
+  expectedReturnTime String?
+  parentName         String?
+  relationship       String?
+  parentPhone        String?
+  parentEmail        String?
+  parentAddress      String?
+  bankName           String?
+  accountHolder      String?
+  accountNumber      String?
+  ifscCode           String?
+  depositAmount      Float?
+  signatureDataUrl   String?
+  status             String          @default("Pending")
+  appliedAt          DateTime        @default(now())
+
+  @@index([studentAccountId])
 }
 
 model Notice {
@@ -288,20 +305,24 @@ model Notice {
 }
 
 model EmailHistory {
-  id          String   @id @default(uuid())
-  studentId   String
-  studentName String
-  usn         String
-  email       String
-  workflow    String
-  subject     String
-  body        String
-  status      String
-  mode        String
-  studentSent Boolean? @default(false)
-  fatherSent  Boolean? @default(false)
-  motherSent  Boolean? @default(false)
-  createdAt   DateTime @default(now())
+  id               String          @id @default(uuid())
+  studentAccountId String?
+  studentAccount   StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
+  studentId        String
+  studentName      String
+  usn              String
+  email            String
+  workflow         String
+  subject          String
+  body             String
+  status           String
+  mode             String
+  studentSent      Boolean?        @default(false)
+  fatherSent       Boolean?        @default(false)
+  motherSent       Boolean?        @default(false)
+  createdAt        DateTime        @default(now())
+
+  @@index([studentAccountId])
 }
 
 model ChatChannel {
@@ -316,32 +337,43 @@ model ChatChannel {
 }
 
 model ChatMessage {
-  id          String      @id @default(uuid())
-  channelId   String
-  senderName  String
-  usn         String
-  roomNo      String
-  message     String
-  time        String
-  likes       Int         @default(0)
-  price       String?
-  categoryTag String?
-  imgUrl      String?
-  createdAt   DateTime    @default(now())
-  channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  id               String          @id @default(uuid())
+  studentAccountId String?
+  studentAccount   StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
+  channelId        String
+  senderName       String
+  usn              String
+  roomNo           String
+  message          String
+  time             String
+  likes            Int             @default(0)
+  price            String?
+  categoryTag      String?
+  imgUrl           String?
+  createdAt        DateTime        @default(now())
+  channel          ChatChannel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([channelId])
+  @@index([studentAccountId])
 }
 
 model StudentAccount {
-  id            String   @id @default(uuid())
-  studentName   String
-  phoneNumber   String
-  usn           String?
-  applicationId String?  @unique
-  status        String   @default("ACTIVE")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String             @id @default(uuid())
+  studentName       String
+  phoneNumber       String
+  usn               String?
+  applicationId     String?            @unique
+  status            String             @default("ACTIVE")
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  application       Application?
+  payments          Payment[]
+  complaints        Complaint[]
+  leaveApplications LeaveApplication[]
+  feedbacks         Feedback[]
+  chatMessages      ChatMessage[]
+  attendanceRecords AttendanceRecord[]
+  emailHistories    EmailHistory[]
 
   @@index([phoneNumber])
   @@index([studentName])
@@ -364,17 +396,20 @@ model AdminAccount {
 }
 
 model AttendanceRecord {
-  id          String   @id @default(uuid())
-  studentUsn  String
-  studentName String
-  block       String
-  date        String
-  status      String
-  remarks     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String          @id @default(uuid())
+  studentAccountId String?
+  studentAccount   StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
+  studentUsn       String
+  studentName      String
+  block            String
+  date             String
+  status           String
+  remarks          String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@unique([studentUsn, date])
   @@index([date])
   @@index([block])
+  @@index([studentAccountId])
 }
