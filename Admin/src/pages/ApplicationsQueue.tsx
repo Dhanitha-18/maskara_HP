@@ -220,7 +220,6 @@ export default function ApplicationsQueue() {
   const [selectCount, setSelectCount] = useState('');
   const [activeTab, setActiveTab] = useState<'FEMALE' | 'MALE'>('FEMALE');
   const [activeView, setActiveView] = useState<'PENDING' | 'ALLOCATED' | 'REJECTED'>('PENDING');
-  const [sharingFilter, setSharingFilter] = useState('ALL');
 
   const { data: applications, isLoading } = useQuery({
     queryKey: ['applications'],
@@ -333,9 +332,6 @@ export default function ApplicationsQueue() {
     if (activeView === 'ALLOCATED' && app.status !== 'ALLOCATED') return false;
     if (activeView === 'REJECTED' && app.status !== 'REJECTED') return false;
 
-    // Sharing preference filtering
-    if (sharingFilter !== 'ALL' && app.hostelPref !== sharingFilter) return false;
-
     // Search filtering
     return app.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
            app.usn.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -426,20 +422,7 @@ export default function ApplicationsQueue() {
               />
             </div>
 
-            <div className="bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm flex items-center space-x-2">
-              <span className="text-sm font-medium text-slate-500">Pref:</span>
-              <select 
-                value={sharingFilter} 
-                onChange={(e) => setSharingFilter(e.target.value)}
-                className="bg-transparent border-none outline-none text-sm text-slate-700 font-medium cursor-pointer"
-              >
-                <option value="ALL">All Options</option>
-                <option value="2 Sharing">2 Sharing</option>
-                <option value="3 Sharing">3 Sharing</option>
-                <option value="4 Sharing">4 Sharing</option>
-              </select>
-            </div>
-            
+
             <div className="flex items-center space-x-2 bg-indigo-50 px-2 py-1.5 rounded-full border border-indigo-100 shadow-sm" title="Select the top N students from the queue">
             <span className="text-xs font-bold text-indigo-700 pl-2 uppercase tracking-wide">Select N</span>
             <input 
