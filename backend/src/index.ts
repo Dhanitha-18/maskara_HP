@@ -205,44 +205,62 @@ app.post('/api/student/login', async (req, res) => {
     }
 
     const cleanName = String(studentName).trim();
-    const cleanPhone = String(phoneNumber).trim();
+    const rawPhone = String(phoneNumber).trim();
+    const cleanPhone = rawPhone.replace(/\D/g, '') || rawPhone;
 
     // 1. Check StudentAccount
     const accounts = await prisma.studentAccount.findMany({
-      where: { phoneNumber: cleanPhone, status: 'ACTIVE' }
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { phoneNumber: cleanPhone },
+          { phoneNumber: rawPhone }
+        ]
+      }
     });
 
     let account = accounts.find(
       (a) => a.studentName && a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
-    );
+    ) || accounts[0];
 
     // Fallback: Check Application table
     if (!account) {
       const pendingApps = await prisma.application.findMany({
         where: {
-          phoneNumber: cleanPhone,
-          status: { not: 'REJECTED' }
+          status: { not: 'REJECTED' },
+          OR: [
+            { phoneNumber: cleanPhone },
+            { phoneNumber: rawPhone }
+          ]
         }
       });
+
       const matchingApp = pendingApps.find(
         (a) => a.studentName && a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
-      );
+      ) || pendingApps[0];
 
       if (matchingApp) {
-        account = await prisma.studentAccount.upsert({
-          where: { usn: matchingApp.usn },
-          update: {
-            studentName: matchingApp.studentName,
-            phoneNumber: matchingApp.phoneNumber,
-            status: 'ACTIVE'
-          },
-          create: {
-            usn: matchingApp.usn,
-            studentName: matchingApp.studentName,
-            phoneNumber: matchingApp.phoneNumber,
-            status: 'ACTIVE'
+        account = await prisma.studentAccount.findFirst({
+          where: {
+            OR: [
+              { applicationId: matchingApp.id },
+              ...(matchingApp.usn ? [{ usn: matchingApp.usn }] : []),
+              { phoneNumber: matchingApp.phoneNumber }
+            ]
           }
         });
+
+        if (!account) {
+          account = await prisma.studentAccount.create({
+            data: {
+              applicationId: matchingApp.id,
+              usn: matchingApp.usn || null,
+              studentName: matchingApp.studentName,
+              phoneNumber: matchingApp.phoneNumber,
+              status: 'ACTIVE'
+            }
+          });
+        }
       }
     }
 
@@ -257,9 +275,9 @@ app.post('/api/student/login', async (req, res) => {
     const application = await prisma.application.findFirst({
       where: {
         OR: [
-          { usn: account.usn },
+          ...(account.usn ? [{ usn: account.usn }] : []),
           account.applicationId ? { id: account.applicationId } : {},
-          { phoneNumber: cleanPhone }
+          { phoneNumber: account.phoneNumber }
         ]
       }
     });
@@ -270,7 +288,7 @@ app.post('/api/student/login', async (req, res) => {
 
     const studentPayload = {
       id: account.id,
-      usn: account.usn,
+      usn: account.usn || application?.usn || account.phoneNumber,
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
       userType: 'STUDENT'
@@ -281,15 +299,14 @@ app.post('/api/student/login', async (req, res) => {
     return res.json({
       success: true,
       token,
-      usn: account.usn,
+      usn: account.usn || application?.usn || account.phoneNumber,
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
-      application
+      applicationId: application?.id || account.applicationId
     });
-
-  } catch (error: any) {
-    console.error('Student login error:', error);
-    res.status(500).json({ error: error.message || 'Server error during student login' });
+  } catch (err: any) {
+    console.error('Error during student login:', err);
+    res.status(500).json({ error: err.message || 'Login failed' });
   }
 });
 
