@@ -53,6 +53,19 @@ if [ $TSC_EXIT -ne 0 ]; then
 else
   echo "✅ [Admin] TypeScript OK"
 fi
+# ── Backend: TypeScript check ──────────────────────────────
+echo ""
+echo "▶ [Backend] TypeScript check..."
+cd backend
+npx tsc --noEmit 2>&1
+TSC_EXIT=$?
+if [ $TSC_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ [Backend] TypeScript errors found. Fix them before committing."
+  FAILED=1
+else
+  echo "✅ [Backend] TypeScript OK"
+fi
 cd ..
 
 echo ""
