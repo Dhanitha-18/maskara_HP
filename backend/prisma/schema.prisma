@@ -199,6 +199,19 @@ model Feedback {
   message     String
   rating      Int
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  month       Int      @default(0)
+  year        Int      @default(0)
+
+  @@index([usn, month, year])
+}
+
+model FeedbackConfig {
+  id            String @id @default(uuid())
+  googleFormUrl String?
+  enabled       Boolean @default(false)
+  month         Int    @default(0)
+  updatedAt     DateTime @default(now()) @updatedAt
 }
 
 model Complaint {

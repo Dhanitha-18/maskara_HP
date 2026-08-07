@@ -283,7 +283,7 @@ export default function RoomOccupancy() {
           </div>
           <div className="relative">
             <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input placeholder="Search name or application ID..." className="pl-9 w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none" value={idSearch} onChange={e => setIdSearch(e.target.value)} />
+            <input placeholder="Search USN / ID..." className="pl-9 w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none" value={idSearch} onChange={e => setIdSearch(e.target.value)} />
           </div>
           <div className="relative">
             <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

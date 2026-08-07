@@ -16,8 +16,7 @@ import { Attendance } from '../pages/Attendance/Attendance';
 import { LeaveApplication } from '../pages/LeaveApplication/LeaveApplication';
 import { Profile } from '../pages/Profile/Profile';
 import { Feedback } from '../pages/Feedback/Feedback';
-import { ErrorBoundary } from '../components/common/ErrorBoundary';
-import { Lock, ArrowRight } from 'lucide-react';
+import { Lock, ArrowRight, ShieldAlert } from 'lucide-react';
 
 // Guard: requires student login AND completed room allocation for protected tabs.
 const RequireApplicationGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -91,6 +90,8 @@ const RequireApplicationGuard: React.FC<{ children: React.ReactNode }> = ({ chil
 
   return <>{children}</>;
 };
+
+import { ErrorBoundary } from '../components/common/ErrorBoundary';
 
 export const AppRouter: React.FC = () => {
   return (

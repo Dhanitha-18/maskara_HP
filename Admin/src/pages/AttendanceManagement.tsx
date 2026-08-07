@@ -44,7 +44,7 @@ export default function AttendanceManagement() {
   const fetchHistory = async () => {
     setIsHistoryLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/attendance/history');
+      const res = await fetch('/api/attendance/history');
       const data = await res.json();
       if (res.ok && data.history) {
         setHistoryList(data.history);
@@ -66,7 +66,7 @@ export default function AttendanceManagement() {
   useEffect(() => {
     if (selectedCalendarStudent) {
       setIsCalendarLoading(true);
-      fetch(`http://localhost:5000/api/attendance/student/${encodeURIComponent(selectedCalendarStudent.usn)}`)
+      fetch(`/api/attendance/student/${encodeURIComponent(selectedCalendarStudent.usn)}`)
         .then(res => res.json())
         .then(data => {
           if (data && data.history) {
@@ -80,7 +80,7 @@ export default function AttendanceManagement() {
 
   // Fetch available blocks
   useEffect(() => {
-    fetch('http://localhost:5000/api/blocks')
+    fetch('/api/blocks')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -101,7 +101,7 @@ export default function AttendanceManagement() {
   const fetchAttendance = async () => {
     if (attendanceList.length === 0) setIsLoading(true);
     try {
-      const url = `http://localhost:5000/api/attendance?date=${selectedDate}&block=ALL`;
+      const url = `/api/attendance?date=${selectedDate}&block=ALL`;
       const res = await fetch(url);
       const data = await res.json();
       if (res.ok && data.attendance) {
@@ -168,7 +168,7 @@ export default function AttendanceManagement() {
 
     setIsSubmitting(true);
     try {
-      await fetch('http://localhost:5000/api/attendance/bulk', {
+      await fetch('/api/attendance/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -383,6 +383,7 @@ export default function AttendanceManagement() {
                 <thead>
                   <tr className="bg-slate-950 text-white font-bold uppercase text-[10px] tracking-wider">
                     <th className="p-3.5 rounded-tl-xl">Student Details</th>
+                    <th className="p-3.5">USN</th>
                     <th className="p-3.5">Block & Room</th>
                     <th className="p-3.5 text-center rounded-tr-xl">Attendance Status</th>
                   </tr>
@@ -402,6 +403,7 @@ export default function AttendanceManagement() {
                             </div>
                           </div>
                         </td>
+                        <td className="p-3.5 font-mono font-bold text-indigo-600">{rec.studentUsn}</td>
                         <td className="p-3.5 text-slate-700 font-semibold">{rec.block || 'Main Block'} • Room {rec.roomNo || 'N/A'}</td>
                         <td className="p-3.5 text-center">
                           <button
@@ -537,6 +539,7 @@ export default function AttendanceManagement() {
                   <thead>
                     <tr className="bg-slate-100/70 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
                       <th className="p-4 rounded-tl-xl">Student Details</th>
+                      <th className="p-4">USN</th>
                       <th className="p-4">Block & Room</th>
                       <th className="p-4">Date</th>
                       <th className="p-4 text-center rounded-tr-xl">
@@ -561,6 +564,10 @@ export default function AttendanceManagement() {
                                 <p className="text-[10px] text-slate-400">{item.phoneNumber || 'No phone'}</p>
                               </div>
                             </div>
+                          </td>
+
+                          <td className="p-4 font-mono font-bold text-slate-800 uppercase">
+                            {item.studentUsn}
                           </td>
 
                           <td className="p-4">
@@ -627,7 +634,7 @@ export default function AttendanceManagement() {
                   <h3 className="text-base font-black text-slate-900">{selectedCalendarStudent.name}</h3>
                 </div>
                 <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                  {selectedCalendarStudent.block} Room {selectedCalendarStudent.roomNo || 'N/A'}
+                  USN: <span className="font-mono text-indigo-600 font-bold">{selectedCalendarStudent.usn}</span> • {selectedCalendarStudent.block} Room {selectedCalendarStudent.roomNo || 'N/A'}
                 </p>
               </div>
               <button

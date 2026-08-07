@@ -89,6 +89,17 @@ export default function FeedbackControl() {
     refetchInterval: 5000
   });
 
+  // Fetch Real-Time Blocks from Block Overview API
+  const { data: blocksData } = useQuery({
+    queryKey: ['blocks'],
+    queryFn: async () => {
+      const res = await fetch('http://localhost:5000/api/blocks');
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 3000
+  });
+
   const isLoading = isFeedbackLoading || isAppsLoading;
 
   const { role, allowedBlocks } = useAuthStore();
@@ -104,21 +115,41 @@ export default function FeedbackControl() {
     });
   };
 
-  // Extract unique blocks from applications and feedback list
+  // Extract unique blocks from Block Overview (real-time DB), applications, and feedback list
   const availableBlocks = useMemo(() => {
+    const blocksList = Array.isArray(blocksData) ? blocksData : [];
     const apps = Array.isArray(applicationsList) ? applicationsList : [];
     const fbs = Array.isArray(feedbackList) ? feedbackList : [];
-    const blocks = new Set<string>();
+    const blocksSet = new Set<string>();
+
+    // 1. Blocks from Block Overview API
+    blocksList.forEach((b: any) => {
+      const name = typeof b === 'string' ? b : b?.name;
+      if (name && String(name).trim() !== '') {
+        blocksSet.add(String(name).trim());
+      }
+    });
+
+    // 2. Blocks from Student Applications / Allocations
     apps.forEach((app: any) => {
       const b = app.block || app.hostelBlock || app.roomBlock || (app.allocations && app.allocations[0]?.bed?.room?.block?.name);
-      if (b && String(b).trim() !== '') blocks.add(String(b).trim());
+      if (b && String(b).trim() !== '') {
+        blocksSet.add(String(b).trim());
+      }
     });
+
+    // 3. Blocks from Feedback list
     fbs.forEach((fb: any) => {
       const b = fb.block || fb.hostelBlock;
-      if (b && String(b).trim() !== '') blocks.add(String(b).trim());
+      if (b && String(b).trim() !== '') {
+        blocksSet.add(String(b).trim());
+      }
     });
-    return Array.from(blocks).sort();
-  }, [applicationsList, feedbackList]);
+
+    return Array.from(blocksSet)
+      .filter(b => isBlockAllowed(b))
+      .sort();
+  }, [blocksData, applicationsList, feedbackList, role, allowedBlocks]);
 
   // Map students with feedback response status (Responded / Not Responded)
   const studentFeedbackStatuses = useMemo(() => {

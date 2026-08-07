@@ -9,8 +9,6 @@ import {
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { useNavigate } from 'react-router-dom';
 
-import { API_BASE_URL } from '../../services/api';
-
 export const Profile: React.FC = () => {
   const { student, hostel, paymentStatus, applicationState, backendPayments, updateStudent } = usePayment();
   const { isLoggedIn, studentUsn: authUsn, login } = useAuth();
@@ -42,12 +40,11 @@ export const Profile: React.FC = () => {
     setSaveSuccessMsg(null);
     try {
       const currentUsnToUse = student.usn || authUsn;
-      const res = await fetch(`${API_BASE_URL}/api/student/profile`, {
+      const res = await fetch('http://localhost:5000/api/student/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           usn: currentUsnToUse,
-          phoneNumber: student.phone || appData.phoneNumber,
           newUsn: editedUsn,
           email: editedEmail,
           year: selectedYear,
@@ -55,10 +52,7 @@ export const Profile: React.FC = () => {
         })
       });
 
-      const resData = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(resData.error || 'Failed to update profile');
-      }
+      if (!res.ok) throw new Error('Failed to update profile');
 
       // Update AuthContext session so USN stays synced across all tabs
       if (editedUsn && editedUsn !== authUsn) {
@@ -75,8 +69,8 @@ export const Profile: React.FC = () => {
       setSaveSuccessMsg('Profile updated successfully! Saved permanently in database.');
       setIsEditing(false);
       setTimeout(() => setSaveSuccessMsg(null), 4000);
-    } catch (err: any) {
-      alert(err.message || 'Failed to save profile changes. Please try again.');
+    } catch {
+      alert('Failed to save profile changes. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -158,6 +152,9 @@ export const Profile: React.FC = () => {
               </div>
 
               <h3 className="text-lg font-black text-slate-800 tracking-tight leading-snug">{student.name}</h3>
+              {student.usn && !student.usn.startsWith('APP-') && (
+                <p className="text-xs text-text-muted font-bold font-mono mt-1">{student.usn}</p>
+              )}
 
               {/* Status Badge */}
               <div className="mt-3">
@@ -224,7 +221,7 @@ export const Profile: React.FC = () => {
                       onClick={() => setIsEditing(true)}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0 cursor-pointer"
                     >
-                      <span>Edit Profile (Email / Year)</span>
+                      <span>Edit Profile (USN / Email / Year)</span>
                     </button>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -263,6 +260,19 @@ export const Profile: React.FC = () => {
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-100 p-4 rounded-xl">
+                  <div>
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">1. USN</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editedUsn}
+                        onChange={e => setEditedUsn(e.target.value)}
+                        className="w-full mt-1 bg-white border border-indigo-300 rounded-lg p-1.5 text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    ) : (
+                      <span className="text-slate-900 font-bold block mt-0.5 font-mono">{displayVal(editedUsn || appData.bmsitId || appData.usn || student.usn)}</span>
+                    )}
+                  </div>
                   <div>
                     <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">2. Full Name</span>
                     <span className="text-slate-900 font-bold block mt-0.5">{displayVal(appData.studentName || student.name)}</span>

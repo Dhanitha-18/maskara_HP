@@ -8,6 +8,9 @@ import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { uploadToSupabaseStorage } from './config/supabase';
 import { authenticateJWT, generateToken, AuthenticatedRequest } from './middleware/auth';
+import { getFeedbackStatus } from './routes/feedbackStatus';
+import { submitFeedback } from './routes/feedbackSubmit';
+import { getFeedbackConfig, saveFeedbackConfig } from './routes/feedbackConfig';
 
 dotenv.config();
 
@@ -124,19 +127,23 @@ app.post('/api/upload', upload.any(), async (req, res) => {
 app.post('/api/admin/login', async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    const inputEmail = (email || username || '').trim().toLowerCase();
+    const inputIdentifier = (email || username || '').trim();
     const cleanPassword = (password || '').trim();
 
-    if (!inputEmail || !cleanPassword) {
+    if (!inputIdentifier || !cleanPassword) {
       return res.status(400).json({ error: 'Email/Username and Password are required.' });
     }
 
     await seedDefaultChiefAdmin();
 
+    // Search by email OR name (case-insensitive) so admins can log in with either
     const admin = await prisma.adminAccount.findFirst({
       where: {
-        email: { equals: inputEmail, mode: 'insensitive' },
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        OR: [
+          { email: { equals: inputIdentifier, mode: 'insensitive' } },
+          { name: { equals: inputIdentifier, mode: 'insensitive' } }
+        ]
       }
     });
 
@@ -145,10 +152,8 @@ app.post('/api/admin/login', async (req, res) => {
     }
 
     const passwordMatches = await bcrypt.compare(cleanPassword, admin.password);
-    // Support fallback plain text comparison if legacy seed
-    const isLegacyPass = admin.password === cleanPassword || cleanPassword === 'admin123';
 
-    if (!passwordMatches && !isLegacyPass) {
+    if (!passwordMatches) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
 
@@ -205,56 +210,44 @@ app.post('/api/student/login', async (req, res) => {
     }
 
     const cleanName = String(studentName).trim();
-    const rawPhone = String(phoneNumber).trim();
-    const cleanPhone = rawPhone.replace(/\D/g, '') || rawPhone;
+    const cleanPhone = String(phoneNumber).trim();
 
     // 1. Check StudentAccount
     const accounts = await prisma.studentAccount.findMany({
-      where: {
-        status: 'ACTIVE',
-        OR: [
-          { phoneNumber: cleanPhone },
-          { phoneNumber: rawPhone }
-        ]
-      }
+      where: { phoneNumber: cleanPhone, status: 'ACTIVE' }
     });
 
     let account = accounts.find(
       (a) => a.studentName && a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
-    ) || accounts[0];
+    );
 
     // Fallback: Check Application table
     if (!account) {
       const pendingApps = await prisma.application.findMany({
         where: {
-          status: { not: 'REJECTED' },
-          OR: [
-            { phoneNumber: cleanPhone },
-            { phoneNumber: rawPhone }
-          ]
+          phoneNumber: cleanPhone,
+          status: { not: 'REJECTED' }
         }
       });
-
       const matchingApp = pendingApps.find(
         (a) => a.studentName && a.studentName.trim().toLowerCase() === cleanName.toLowerCase()
-      ) || pendingApps[0];
+      );
 
       if (matchingApp) {
-        account = await prisma.studentAccount.findFirst({
-          where: {
-            OR: [
-              { applicationId: matchingApp.id },
-              ...(matchingApp.usn ? [{ usn: matchingApp.usn }] : []),
-              { phoneNumber: matchingApp.phoneNumber }
-            ]
-          }
-        });
-
-        if (!account) {
+        const existingAcc = matchingApp.usn ? await prisma.studentAccount.findFirst({ where: { usn: matchingApp.usn } }) : null;
+        if (existingAcc) {
+          account = await prisma.studentAccount.update({
+            where: { id: existingAcc.id },
+            data: {
+              studentName: matchingApp.studentName,
+              phoneNumber: matchingApp.phoneNumber,
+              status: 'ACTIVE'
+            }
+          });
+        } else {
           account = await prisma.studentAccount.create({
             data: {
-              applicationId: matchingApp.id,
-              usn: matchingApp.usn || null,
+              usn: matchingApp.usn || '',
               studentName: matchingApp.studentName,
               phoneNumber: matchingApp.phoneNumber,
               status: 'ACTIVE'
@@ -275,9 +268,9 @@ app.post('/api/student/login', async (req, res) => {
     const application = await prisma.application.findFirst({
       where: {
         OR: [
-          ...(account.usn ? [{ usn: account.usn }] : []),
+          { usn: account.usn },
           account.applicationId ? { id: account.applicationId } : {},
-          { phoneNumber: account.phoneNumber }
+          { phoneNumber: cleanPhone }
         ]
       }
     });
@@ -288,7 +281,7 @@ app.post('/api/student/login', async (req, res) => {
 
     const studentPayload = {
       id: account.id,
-      usn: account.usn || application?.usn || account.phoneNumber,
+      usn: account.usn,
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
       userType: 'STUDENT'
@@ -299,14 +292,15 @@ app.post('/api/student/login', async (req, res) => {
     return res.json({
       success: true,
       token,
-      usn: account.usn || application?.usn || account.phoneNumber,
+      usn: account.usn,
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
-      applicationId: application?.id || account.applicationId
+      application
     });
-  } catch (err: any) {
-    console.error('Error during student login:', err);
-    res.status(500).json({ error: err.message || 'Login failed' });
+
+  } catch (error: any) {
+    console.error('Student login error:', error);
+    res.status(500).json({ error: error.message || 'Server error during student login' });
   }
 });
 
@@ -318,15 +312,18 @@ app.get('/api/auth/me', authenticateJWT, async (req: AuthenticatedRequest, res) 
 // ==================== APPLICATIONS ROUTES ====================
 app.post('/api/applications/check-duplicate', async (req, res) => {
   try {
-    const { aadhaarNumber } = req.body;
+    const { usn, aadhaarNumber } = req.body;
     let existing = null;
 
-    if (aadhaarNumber) {
+    if (usn) {
+      existing = await prisma.application.findFirst({ where: { usn } });
+    }
+    if (!existing && aadhaarNumber) {
       existing = await prisma.application.findFirst({ where: { aadhaarNumber } });
     }
 
     if (existing) {
-      return res.json({ duplicate: true, message: 'Application with this Aadhaar number already exists.' });
+      return res.json({ duplicate: true, message: 'Application with this USN or Aadhaar already exists.' });
     }
     return res.json({ duplicate: false });
   } catch (err: any) {
@@ -337,12 +334,9 @@ app.post('/api/applications/check-duplicate', async (req, res) => {
 app.post('/api/applications', async (req, res) => {
   try {
     const data = req.body;
-    const rawUsn = (data.usn || '').trim();
-    const cleanUsn = (rawUsn && rawUsn !== '-' && rawUsn !== 'null' && rawUsn !== 'undefined') ? rawUsn.toUpperCase() : null;
-
     const newApp = await prisma.application.create({
       data: {
-        usn: cleanUsn,
+        usn: data.usn,
         studentName: data.studentName,
         gender: data.gender || 'Male',
         phoneNumber: data.phoneNumber,
@@ -385,83 +379,24 @@ app.post('/api/applications', async (req, res) => {
       }
     });
 
-    // Create Student Account entry linked to Application
-    await prisma.studentAccount.create({
-      data: {
-        applicationId: newApp.id,
-        usn: cleanUsn,
-        studentName: newApp.studentName,
-        phoneNumber: newApp.phoneNumber,
-        status: 'ACTIVE'
+    // Create Student Account entry
+    if (newApp.usn) {
+      const existingAcc = await prisma.studentAccount.findFirst({ where: { usn: newApp.usn } });
+      if (existingAcc) {
+        await prisma.studentAccount.update({
+          where: { id: existingAcc.id },
+          data: { studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id }
+        });
+      } else {
+        await prisma.studentAccount.create({
+          data: { usn: newApp.usn, studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id }
+        });
       }
-    });
-
-    io.emit('APPLICATION_UPDATED', newApp);
-    io.emit('data_updated');
+    }
 
     return res.status(201).json({ success: true, application: newApp });
   } catch (err: any) {
     console.error('Error creating application:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Update Student Profile (USN / Email / Year)
-app.put('/api/student/profile', async (req, res) => {
-  try {
-    const { usn, phoneNumber, newUsn, email, year, yearSem } = req.body;
-    const cleanNewUsn = (newUsn || '').trim() ? newUsn.trim().toUpperCase() : null;
-
-    // Find target application by USN or phone
-    const application = await prisma.application.findFirst({
-      where: {
-        OR: [
-          ...(usn && usn !== '-' ? [{ usn: String(usn).trim() }] : []),
-          ...(phoneNumber ? [{ phoneNumber: String(phoneNumber).trim() }] : [])
-        ]
-      }
-    });
-
-    if (!application) {
-      return res.status(404).json({ error: 'Student application record not found.' });
-    }
-
-    // Update Application record
-    const updatedApp = await prisma.application.update({
-      where: { id: application.id },
-      data: {
-        usn: cleanNewUsn,
-        email: email || application.email,
-        year: year || yearSem || application.year,
-        yearSem: yearSem || year || application.yearSem
-      }
-    });
-
-    // Update StudentAccount record
-    const account = await prisma.studentAccount.findFirst({
-      where: {
-        OR: [
-          { applicationId: application.id },
-          ...(application.usn ? [{ usn: application.usn }] : []),
-          { phoneNumber: application.phoneNumber }
-        ]
-      }
-    });
-
-    if (account) {
-      await prisma.studentAccount.update({
-        where: { id: account.id },
-        data: { usn: cleanNewUsn }
-      });
-    }
-
-    io.emit('STUDENT_UPDATED', updatedApp);
-    io.emit('APPLICATION_UPDATED', updatedApp);
-    io.emit('data_updated');
-
-    return res.json({ success: true, application: updatedApp });
-  } catch (err: any) {
-    console.error('Error updating student profile:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -787,12 +722,62 @@ app.put('/api/payments/:id/reject', async (req, res) => {
 app.get('/api/attendance', async (req, res) => {
   try {
     const { date, block } = req.query;
-    const where: any = {};
-    if (date) where.date = String(date);
-    if (block && block !== 'ALL') where.block = String(block);
+    const targetDate = String(date || new Date().toISOString().split('T')[0]);
 
-    const records = await prisma.attendanceRecord.findMany({ where });
-    res.json(records);
+    // Fetch all active allocations with student info
+    const allocations = await prisma.allocation.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        application: true,
+        bed: {
+          include: {
+            room: {
+              include: { block: true }
+            }
+          }
+        }
+      }
+    });
+
+    // Fetch existing attendance records for the date
+    const existingRecordsWhere: any = { date: targetDate };
+    if (block && block !== 'ALL') existingRecordsWhere.block = String(block);
+    const existingRecords = await prisma.attendanceRecord.findMany({ where: existingRecordsWhere });
+    const existingMap = new Map<string, any>();
+    existingRecords.forEach(r => existingMap.set(r.studentUsn, r));
+
+    // Build attendance list from all allocated students
+    const attendance = allocations
+      .filter(alloc => {
+        if (block && block !== 'ALL') {
+          const blockName = alloc.bed?.room?.block?.name || '';
+          return blockName.toLowerCase().includes(String(block).toLowerCase()) ||
+                 String(block).toLowerCase().includes(blockName.toLowerCase());
+        }
+        return true;
+      })
+      .map(alloc => {
+        const app = alloc.application;
+        const blockName = alloc.bed?.room?.block?.name || 'Main Block';
+        const roomNo = alloc.bed?.room?.roomNo || 'N/A';
+        const existing = existingMap.get(app.usn);
+        return existing
+          ? { ...existing, block: blockName, roomNo, phoneNumber: app.phoneNumber, gender: app.gender }
+          : {
+              id: `pending-${app.usn}-${targetDate}`,
+              studentUsn: app.usn,
+              studentName: app.studentName,
+              phoneNumber: app.phoneNumber,
+              gender: app.gender,
+              block: blockName,
+              roomNo,
+              date: targetDate,
+              status: 'ABSENT',
+              remarks: null
+            };
+      });
+
+    res.json({ attendance });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -800,8 +785,8 @@ app.get('/api/attendance', async (req, res) => {
 
 app.get('/api/attendance/history', async (req, res) => {
   try {
-    const records = await prisma.attendanceRecord.findMany({ orderBy: { date: 'desc' }, take: 100 });
-    res.json(records);
+    const records = await prisma.attendanceRecord.findMany({ orderBy: { date: 'desc' }, take: 500 });
+    res.json({ history: records });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -809,23 +794,31 @@ app.get('/api/attendance/history', async (req, res) => {
 
 app.post('/api/attendance/bulk', async (req, res) => {
   try {
-    const { records } = req.body;
+    const { records, date } = req.body;
     if (!Array.isArray(records)) return res.status(400).json({ error: 'records array required' });
 
-    for (const rec of records) {
+    // Only save real records (skip pending- prefixed ids)
+    const realRecords = records.filter(rec => rec.studentUsn && !String(rec.id || '').startsWith('pending-'));
+    const pendingRecords = records.filter(rec => rec.studentUsn && String(rec.id || '').startsWith('pending-'));
+
+    // Upsert all records
+    for (const rec of [...realRecords, ...pendingRecords]) {
       await prisma.attendanceRecord.upsert({
         where: { studentUsn_date: { studentUsn: rec.studentUsn, date: rec.date } },
-        update: { status: rec.status, remarks: rec.remarks, block: rec.block || 'Block A' },
+        update: { status: rec.status, remarks: rec.remarks, block: rec.block || 'Main Block' },
         create: {
           studentUsn: rec.studentUsn,
           studentName: rec.studentName || 'Student',
-          block: rec.block || 'Block A',
+          block: rec.block || 'Main Block',
           date: rec.date,
           status: rec.status,
-          remarks: rec.remarks
+          remarks: rec.remarks || null
         }
       });
     }
+
+    // Emit real-time update to both admin and student portals
+    io.emit('ATTENDANCE_UPDATED', { date: date || records[0]?.date });
 
     res.json({ success: true });
   } catch (err: any) {
@@ -839,7 +832,7 @@ app.get('/api/attendance/student/:usn', async (req, res) => {
       where: { studentUsn: req.params.usn },
       orderBy: { date: 'desc' }
     });
-    res.json(records);
+    res.json({ history: records });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -891,18 +884,14 @@ app.delete('/api/admin/accounts/:id', async (req, res) => {
 });
 
 // ==================== STUDENT PORTAL ROUTES ====================
-app.get('/api/student/status/:identifier', async (req, res) => {
+app.get('/api/student/status/:usn', async (req, res) => {
   try {
-    const rawInput = (req.params.identifier || req.params.usn || '').trim();
-    const cleanPhone = rawInput.replace(/\D/g, '') || rawInput;
-
+    const inputUsn = (req.params.usn || '').trim();
     const application = await prisma.application.findFirst({
       where: {
         OR: [
-          { id: rawInput },
-          { phoneNumber: rawInput },
-          { phoneNumber: cleanPhone },
-          ...(rawInput.length > 3 ? [{ usn: rawInput }] : [])
+          { usn: inputUsn },
+          { phoneNumber: inputUsn }
         ]
       },
       include: {
@@ -919,7 +908,7 @@ app.get('/api/student/status/:identifier', async (req, res) => {
     }
 
     const allocation = application.allocations[0] || null;
-    const isAllocated = !!allocation || application.status === 'ALLOCATED' || application.status === 'APPROVED' || application.status === 'ROOM_ALLOTTED';
+    const isAllocated = !!allocation || application.status === 'ALLOCATED' || application.status === 'APPROVED';
 
     const hostelInfo = allocation?.bed?.room ? {
       hostel: allocation.bed.room.block.gender === 'FEMALE' ? 'Girls Hostel' : 'Boys Hostel',
@@ -932,13 +921,7 @@ app.get('/api/student/status/:identifier', async (req, res) => {
     } : null;
 
     const payments = await prisma.payment.findMany({
-      where: {
-        OR: [
-          { applicationId: application.id },
-          { phoneNumber: application.phoneNumber },
-          ...(application.usn ? [{ studentUsn: application.usn }] : [])
-        ]
-      },
+      where: { studentUsn: application.usn },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -1151,22 +1134,11 @@ app.get('/api/feedback', async (req, res) => {
   }
 });
 
-app.post('/api/feedback', async (req, res) => {
-  try {
-    const data = req.body;
-    const feedback = await prisma.feedback.create({
-      data: {
-        studentName: data.studentName,
-        usn: data.usn,
-        message: data.message,
-        rating: Number(data.rating) || 5
-      }
-    });
-    res.status(201).json({ success: true, feedback });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+app.post('/api/feedback', submitFeedback);
+
+app.get('/api/feedback/status', getFeedbackStatus);
+app.get('/api/feedback/config', getFeedbackConfig);
+app.post('/api/feedback/config', saveFeedbackConfig);
 
 // ==================== CHAT & COMMUNITY ====================
 app.get('/api/chat/channels', async (req, res) => {

@@ -482,7 +482,7 @@ export default function PaymentDashboard() {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th className="p-4">Student Details</th>
+                  <th className="p-4">Student & USN</th>
                   <th className="p-4">Semester</th>
                   <th className="p-4">Amount</th>
                   <th className="p-4">Date & UTR No.</th>
@@ -495,9 +495,10 @@ export default function PaymentDashboard() {
                 {filteredPayments.map(p => (
                   <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
                     
-                    {/* Student Details */}
+                    {/* Student & USN */}
                     <td className="p-4">
                       <p className="font-extrabold text-slate-900 text-sm">{p.studentName}</p>
+                      <p className="text-[10px] font-mono text-indigo-600 font-bold mt-0.5">{p.studentUsn}</p>
                     </td>
 
                     {/* Semester */}

@@ -82,7 +82,7 @@ export const Feedback: React.FC = () => {
   // Fetch Google Form config from Admin backend with real-time socket sync
   useEffect(() => {
     const fetchConfig = () => {
-      fetch('http://localhost:5000/api/feedback/config')
+      fetch('/api/feedback/config')
         .then(res => res.json())
         .then(data => {
           if (data) {
@@ -111,11 +111,17 @@ export const Feedback: React.FC = () => {
     socket.on('feedback_config_updated', handleConfigUpdated);
     socket.on('data_updated', fetchConfig);
 
-    // Check if student already responded in localStorage
-    const saved = localStorage.getItem(`feedback_responded_${studentUsn}`);
-    if (saved === 'true') {
-      setHasResponded(true);
-    }
+    // Check if student already responded via API
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`/api/feedback/status?usn=${studentUsn}`);
+        const data = await res.json();
+        if (data.submitted) setHasResponded(true);
+      } catch (_) {
+        // fail-closed, do nothing
+      }
+    };
+    fetchStatus();
 
     return () => {
       socket.off('feedback_config_updated', handleConfigUpdated);

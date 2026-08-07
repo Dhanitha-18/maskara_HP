@@ -16,8 +16,8 @@ export const PortalGateKeeper: React.FC<GateKeeperProps> = ({ children, allowRoo
 
   if (
     applicationState === 'paid' || 
-    applicationState === 'room_allotted' ||
-    (isPaymentPage && applicationState === 'applied')
+    (isPaymentPage && (applicationState === 'applied' || applicationState === 'room_allotted')) ||
+    (allowRoomAllotted && applicationState === 'room_allotted')
   ) {
     return <>{children}</>;
   }

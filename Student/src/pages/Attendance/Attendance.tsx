@@ -34,7 +34,7 @@ export const Attendance: React.FC = () => {
     if (!usnToUse) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/attendance/student/${encodeURIComponent(usnToUse)}`);
+      const res = await fetch(`/api/attendance/student/${encodeURIComponent(usnToUse)}`);
       const data = await res.json();
       if (res.ok && data.history) {
         setHistory(data.history);
