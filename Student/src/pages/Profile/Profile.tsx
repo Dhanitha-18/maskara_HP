@@ -3,7 +3,7 @@ import { usePayment } from '../../context/PaymentContext';
 import { useAuth } from '../../context/AuthContext';
 import { 
   User, Phone, MapPin, Building, FileText, CheckCircle2, Clock, 
-  XCircle, CreditCard, ArrowRight, ShieldAlert, X, Eye, HeartPulse, 
+  XCircle, ShieldAlert, X, Eye, HeartPulse, 
   Users, Mail, GraduationCap, ShieldCheck, Lock
 } from 'lucide-react';
 import { HeroBanner } from '../../components/layout/HeroBanner';
@@ -15,7 +15,6 @@ export const Profile: React.FC = () => {
   const navigate = useNavigate();
   const [showAppFormModal, setShowAppFormModal] = useState(false);
 
-  const isRoomAllotted = applicationState === 'room_allotted' || applicationState === 'paid';
   const appData = student.applicationData || {};
 
   // Profile Edit state
@@ -91,35 +90,6 @@ export const Profile: React.FC = () => {
     if (val === null || val === undefined || val === '' || val === 'null') return 'Not Available';
     return String(val);
   };
-
-  // Determine payment status badge info
-  const getPaymentStatusInfo = () => {
-    if (backendPayments && backendPayments.length > 0) {
-      const latest = backendPayments[0];
-      if (latest.status === 'APPROVED') {
-        return { label: 'Paid & Verified by Admin', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 };
-      }
-      if (latest.status === 'PENDING_REVIEW') {
-        return { label: 'Paid & Under Verification', bg: 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse', icon: Clock };
-      }
-      if (latest.status === 'REJECTED') {
-        return { label: 'Payment Submission Rejected', bg: 'bg-rose-50 text-rose-700 border-rose-200', icon: XCircle };
-      }
-    }
-
-    switch (paymentStatus) {
-      case 'Verified':
-      case 'Bed Confirmed':
-        return { label: 'Fee Paid & Verified', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 };
-      case 'Waiting for Admin Verification':
-        return { label: 'Waiting for Admin Verification', bg: 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse', icon: Clock };
-      default:
-        return { label: 'Fee Pending / Unpaid', bg: 'bg-rose-50 text-rose-700 border-rose-200', icon: XCircle };
-    }
-  };
-
-  const paymentInfo = getPaymentStatusInfo();
-  const PaymentIcon = paymentInfo.icon;
 
   return (
     <div className="space-y-6 sm:space-y-8 font-sans pb-12">
@@ -435,64 +405,6 @@ export const Profile: React.FC = () => {
                   <div>
                     <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold text-rose-600">29. Emergency Contact Number</span>
                     <span className="text-slate-900 font-bold block mt-0.5">{displayVal(appData.emergencyContact)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 5. Room Allotment & Hostel Status */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                  <Building className="w-4 h-4 text-primary" />
-                  5. Room Allotment & Hostel Status
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-100 p-4 rounded-xl">
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider block">Hostel Residence</span>
-                    <span className="text-slate-900 font-bold block text-sm">OM SAI PG</span>
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider block">Block & Floor</span>
-                    <span className="text-slate-900 font-bold block text-sm">Block {hostel.block} • Floor {hostel.floor}</span>
-                  </div>
-                  <div className="space-y-1 border-t border-slate-200/60 pt-2.5">
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider block">Room Number & Bed</span>
-                    <span className="text-slate-900 font-bold block font-mono text-sm">Room {hostel.room} • Bed {hostel.bed}</span>
-                  </div>
-                  <div className="space-y-1 border-t border-slate-200/60 pt-2.5">
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider block">Sharing Type</span>
-                    <span className="text-slate-900 font-bold block text-sm">{hostel.sharing}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 6. Fee Payment Verification Status */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-primary" />
-                    6. Fee Payment Verification Status
-                  </h4>
-                  <button
-                    onClick={() => navigate('/payment')}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1.5 px-3 rounded-lg text-[10px] flex items-center gap-1 border border-slate-200 transition-all"
-                  >
-                    <span>Payment Hub</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold">
-                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
-                    <span className="text-[9px] text-text-muted uppercase tracking-wider block">Verification Status</span>
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-1 rounded-full border mt-1.5 ${paymentInfo.bg}`}>
-                      <PaymentIcon className="w-3 h-3" />
-                      {paymentInfo.label}
-                    </span>
-                  </div>
-                  <div className="bg-primary/5 border border-primary/20 p-3 rounded-xl">
-                    <span className="text-[9px] text-primary uppercase tracking-wider block font-bold">Amount to be paid</span>
-                    <span className="text-base font-black text-primary mt-1 block">₹1,43,000</span>
                   </div>
                 </div>
               </div>
