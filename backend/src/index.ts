@@ -533,6 +533,93 @@ app.post('/api/applications/batch-status', async (req, res) => {
   }
 });
 
+app.delete('/api/applications/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find application by ID or USN
+    const application = await prisma.application.findFirst({
+      where: {
+        OR: [
+          { id },
+          { usn: id }
+        ]
+      },
+      include: {
+        allocations: true
+      }
+    });
+
+    if (!application) {
+      return res.status(404).json({ error: 'Student application record not found' });
+    }
+
+    const appId = application.id;
+    const usn = application.usn;
+
+    // 1. Free up any allocated beds & delete allocations
+    for (const alloc of application.allocations) {
+      if (alloc.bedId) {
+        await prisma.bed.update({
+          where: { id: alloc.bedId },
+          data: { status: 'AVAILABLE' }
+        });
+      }
+      await prisma.allocation.delete({ where: { id: alloc.id } }).catch(() => {});
+    }
+
+    // Double check any remaining allocations tied to this applicationId
+    const extraAllocations = await prisma.allocation.findMany({
+      where: { applicationId: appId }
+    });
+    for (const alloc of extraAllocations) {
+      if (alloc.bedId) {
+        await prisma.bed.update({
+          where: { id: alloc.bedId },
+          data: { status: 'AVAILABLE' }
+        }).catch(() => {});
+      }
+      await prisma.allocation.delete({ where: { id: alloc.id } }).catch(() => {});
+    }
+
+    // 2. Delete related documents
+    await prisma.document.deleteMany({ where: { applicationId: appId } }).catch(() => {});
+
+    // 3. Delete related student account
+    await prisma.studentAccount.deleteMany({
+      where: {
+        OR: [
+          { applicationId: appId },
+          ...(usn ? [{ usn }] : [])
+        ]
+      }
+    }).catch(() => {});
+
+    // 4. Delete related payments if any
+    if (usn) {
+      await prisma.payment.deleteMany({ where: { studentUsn: usn } }).catch(() => {});
+    }
+
+    // 5. Delete application record
+    await prisma.application.delete({ where: { id: appId } });
+
+    // 6. Broadcast socket events to update Live Occupancy and Student Database immediately
+    io.emit('BED_DEALLOCATED');
+    io.emit('BED_ALLOCATED');
+    io.emit('APPLICATION_UPDATED', { applicationId: appId, status: 'DELETED' });
+    io.emit('STUDENT_UPDATED');
+    if (usn) {
+      io.emit('student_account_deleted', { usns: [usn] });
+    }
+    io.emit('data_updated');
+
+    res.json({ success: true, message: 'Student record deleted and bed vacated successfully', id: appId, usn });
+  } catch (err: any) {
+    console.error('Error deleting student application:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== BLOCKS & ROOMS ROUTES ====================
 app.get('/api/blocks', async (req, res) => {
   try {
