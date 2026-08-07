@@ -174,7 +174,12 @@ export default function SocialControl() {
   }, [serverChannels]);
 
   useEffect(() => {
-    if (serverMessages) setMessages(serverMessages);
+    if (serverMessages) {
+      setMessages(serverMessages.map((msg: any) => ({
+        ...msg,
+        isSelf: msg.usn === 'ADMIN-01'
+      })));
+    }
   }, [serverMessages]);
 
   useEffect(() => {

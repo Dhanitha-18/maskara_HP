@@ -21,10 +21,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedUsn = sessionStorage.getItem('student_usn') || localStorage.getItem('student_usn');
-    const savedName = sessionStorage.getItem('student_name') || localStorage.getItem('student_name');
-    const savedPhone = sessionStorage.getItem('student_phone') || localStorage.getItem('student_phone');
-    const savedToken = sessionStorage.getItem('student_token') || localStorage.getItem('student_token');
+    // Use sessionStorage only — clears when the tab/window is closed, preventing auto-login on fresh link opens
+    const savedUsn = sessionStorage.getItem('student_usn');
+    const savedName = sessionStorage.getItem('student_name');
+    const savedPhone = sessionStorage.getItem('student_phone');
+    const savedToken = sessionStorage.getItem('student_token');
 
     if (savedToken && (savedUsn || savedName)) {
       setStudentUsn(savedUsn);
@@ -32,18 +33,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setStudentPhone(savedPhone);
       setToken(savedToken);
       setIsLoggedIn(true);
-
-      // Verify against backend database
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
-      fetch(`${apiUrl}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${savedToken}` }
-      })
-        .then(res => {
-          if (!res.ok) {
-            logout();
-          }
-        })
-        .catch(() => {});
     } else {
       setIsLoggedIn(false);
     }
@@ -53,23 +42,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const normalizedUsn = usn ? usn.trim().toUpperCase() : `STD-${Date.now()}`;
     setStudentUsn(normalizedUsn);
     setIsLoggedIn(true);
+    // Use sessionStorage only — data persists only for the current browser tab/session
     sessionStorage.setItem('student_usn', normalizedUsn);
-    localStorage.setItem('student_usn', normalizedUsn);
 
     if (name) {
       setStudentName(name);
       sessionStorage.setItem('student_name', name);
-      localStorage.setItem('student_name', name);
     }
     if (phone) {
       setStudentPhone(phone);
       sessionStorage.setItem('student_phone', phone);
-      localStorage.setItem('student_phone', phone);
     }
     if (authToken) {
       setToken(authToken);
       sessionStorage.setItem('student_token', authToken);
-      localStorage.setItem('student_token', authToken);
     }
   };
 
@@ -83,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.removeItem('student_name');
     sessionStorage.removeItem('student_phone');
     sessionStorage.removeItem('student_token');
+    // Also clear legacy localStorage keys in case any were set before
     localStorage.removeItem('student_usn');
     localStorage.removeItem('student_name');
     localStorage.removeItem('student_phone');

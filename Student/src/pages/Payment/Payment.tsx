@@ -482,8 +482,8 @@ export const Payment: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleOpenCollegeForm(item)}
-                          disabled={isAlreadySubmitted}
-                          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                          disabled={isAlreadySubmitted || isBothChecked}
+                          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                         >
                           <span>College Form</span>
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -491,7 +491,7 @@ export const Payment: React.FC = () => {
                         <label className="flex items-center gap-1.5 cursor-pointer">
                           <input 
                             type="checkbox"
-                            disabled={isAlreadySubmitted}
+                            disabled={isAlreadySubmitted || isBothChecked}
                             checked={itemState.college}
                             onChange={(e) => {
                               const val = e.target.checked;
@@ -513,8 +513,8 @@ export const Payment: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleOpenPgModal(item)}
-                          disabled={isAlreadySubmitted}
-                          className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                          disabled={isAlreadySubmitted || isBothChecked}
+                          className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                         >
                           <FileText className="w-3.5 h-3.5" />
                           <span>PG Form Popup</span>
