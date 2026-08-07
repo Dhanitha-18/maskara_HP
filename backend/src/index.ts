@@ -318,18 +318,15 @@ app.get('/api/auth/me', authenticateJWT, async (req: AuthenticatedRequest, res) 
 // ==================== APPLICATIONS ROUTES ====================
 app.post('/api/applications/check-duplicate', async (req, res) => {
   try {
-    const { usn, aadhaarNumber } = req.body;
+    const { aadhaarNumber } = req.body;
     let existing = null;
 
-    if (usn) {
-      existing = await prisma.application.findUnique({ where: { usn } });
-    }
-    if (!existing && aadhaarNumber) {
+    if (aadhaarNumber) {
       existing = await prisma.application.findFirst({ where: { aadhaarNumber } });
     }
 
     if (existing) {
-      return res.json({ duplicate: true, message: 'Application with this USN or Aadhaar already exists.' });
+      return res.json({ duplicate: true, message: 'Application with this Aadhaar number already exists.' });
     }
     return res.json({ duplicate: false });
   } catch (err: any) {
@@ -342,14 +339,6 @@ app.post('/api/applications', async (req, res) => {
     const data = req.body;
     const rawUsn = (data.usn || '').trim();
     const cleanUsn = (rawUsn && rawUsn !== '-' && rawUsn !== 'null' && rawUsn !== 'undefined') ? rawUsn.toUpperCase() : null;
-
-    // If student provided a non-blank USN, check that it is unique across applications
-    if (cleanUsn) {
-      const existingApp = await prisma.application.findFirst({ where: { usn: cleanUsn } });
-      if (existingApp) {
-        return res.status(400).json({ error: `An application with USN '${cleanUsn}' already exists. Please check your USN.` });
-      }
-    }
 
     const newApp = await prisma.application.create({
       data: {
@@ -396,18 +385,16 @@ app.post('/api/applications', async (req, res) => {
       }
     });
 
-    // Create or update Student Account entry
-    if (cleanUsn) {
-      await prisma.studentAccount.upsert({
-        where: { usn: cleanUsn },
-        update: { studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id },
-        create: { usn: cleanUsn, studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id }
-      });
-    } else {
-      await prisma.studentAccount.create({
-        data: { usn: null, studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id }
-      });
-    }
+    // Create Student Account entry linked to Application
+    await prisma.studentAccount.create({
+      data: {
+        applicationId: newApp.id,
+        usn: cleanUsn,
+        studentName: newApp.studentName,
+        phoneNumber: newApp.phoneNumber,
+        status: 'ACTIVE'
+      }
+    });
 
     io.emit('APPLICATION_UPDATED', newApp);
     io.emit('data_updated');
@@ -437,14 +424,6 @@ app.put('/api/student/profile', async (req, res) => {
 
     if (!application) {
       return res.status(404).json({ error: 'Student application record not found.' });
-    }
-
-    // Check USN uniqueness if new USN is specified and changed
-    if (cleanNewUsn && cleanNewUsn !== application.usn) {
-      const existingApp = await prisma.application.findFirst({ where: { usn: cleanNewUsn } });
-      if (existingApp && existingApp.id !== application.id) {
-        return res.status(400).json({ error: `USN '${cleanNewUsn}' is already taken by another student.` });
-      }
     }
 
     // Update Application record

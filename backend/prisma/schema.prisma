@@ -10,7 +10,7 @@ datasource db {
 
 model Application {
   id                   String       @id @default(uuid())
-  usn                  String?      @unique
+  usn                  String?
   studentName          String
   gender               String
   phoneNumber          String
@@ -324,7 +324,7 @@ model StudentAccount {
   id            String   @id @default(uuid())
   studentName   String
   phoneNumber   String
-  usn           String?  @unique
+  usn           String?
   applicationId String?  @unique
   status        String   @default("ACTIVE")
   createdAt     DateTime @default(now())
