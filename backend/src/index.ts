@@ -781,9 +781,11 @@ app.get('/api/attendance', async (req, res) => {
     const { date, block } = req.query;
     const targetDate = String(date || new Date().toISOString().split('T')[0]);
 
-    // Fetch all active allocations with student info
+    // Fetch all active or allocated bed allotments along with application & bed details
     const allocations = await prisma.allocation.findMany({
-      where: { status: 'ACTIVE' },
+      where: {
+        status: { in: ['ALLOCATED', 'ACTIVE'] }
+      },
       include: {
         application: true,
         bed: {
@@ -796,33 +798,71 @@ app.get('/api/attendance', async (req, res) => {
       }
     });
 
-    // Fetch existing attendance records for the date
+    // Also fetch any Applications marked as ALLOCATED directly
+    const allocatedApps = await prisma.application.findMany({
+      where: { status: 'ALLOCATED' },
+      include: {
+        allocations: {
+          include: {
+            bed: { include: { room: { include: { block: true } } } }
+          }
+        }
+      }
+    });
+
+    // Combine allocation items into a map keyed by applicationId to avoid duplicates
+    const combinedAllocMap = new Map<string, { app: any; bed: any }>();
+    allocations.forEach(alloc => {
+      if (alloc.application) {
+        combinedAllocMap.set(alloc.applicationId, { app: alloc.application, bed: alloc.bed });
+      }
+    });
+
+    allocatedApps.forEach(app => {
+      if (!combinedAllocMap.has(app.id)) {
+        const alloc = app.allocations && app.allocations[0] ? app.allocations[0] : null;
+        combinedAllocMap.set(app.id, { app, bed: alloc?.bed || null });
+      }
+    });
+
+    // Fetch existing attendance records for target date
     const existingRecordsWhere: any = { date: targetDate };
     if (block && block !== 'ALL') existingRecordsWhere.block = String(block);
     const existingRecords = await prisma.attendanceRecord.findMany({ where: existingRecordsWhere });
     const existingMap = new Map<string, any>();
     existingRecords.forEach(r => existingMap.set(r.studentUsn, r));
 
-    // Build attendance list from all allocated students
-    const attendance = allocations
-      .filter(alloc => {
+    // Build attendance list from all allocated residents
+    const attendance = Array.from(combinedAllocMap.values())
+      .filter(({ bed }) => {
         if (block && block !== 'ALL') {
-          const blockName = alloc.bed?.room?.block?.name || '';
-          return blockName.toLowerCase().includes(String(block).toLowerCase()) ||
-                 String(block).toLowerCase().includes(blockName.toLowerCase());
+          const blockName = bed?.room?.block?.name || '';
+          const targetBlock = String(block).toLowerCase();
+          return blockName.toLowerCase().includes(targetBlock) || targetBlock.includes(blockName.toLowerCase());
         }
         return true;
       })
-      .map(alloc => {
-        const app = alloc.application;
-        const blockName = alloc.bed?.room?.block?.name || 'Main Block';
-        const roomNo = alloc.bed?.room?.roomNo || 'N/A';
-        const existing = existingMap.get(app.usn);
+      .map(({ app, bed }) => {
+        const studentUsn = (app.usn && app.usn !== '-' ? app.usn : (app.phoneNumber || app.id)).trim();
+        const blockName = bed?.room?.block?.name || 'Main Block';
+        const roomNo = bed?.room?.roomNo ? `Room ${bed.room.roomNo}` : '101';
+        
+        // Find existing record by USN or phone
+        const existing = existingMap.get(studentUsn) || existingMap.get(app.usn) || existingMap.get(app.phoneNumber);
+
         return existing
-          ? { ...existing, block: blockName, roomNo, phoneNumber: app.phoneNumber, gender: app.gender }
+          ? {
+              ...existing,
+              studentUsn,
+              studentName: app.studentName,
+              block: blockName,
+              roomNo,
+              phoneNumber: app.phoneNumber,
+              gender: app.gender
+            }
           : {
-              id: `pending-${app.usn}-${targetDate}`,
-              studentUsn: app.usn,
+              id: `pending-${studentUsn}-${targetDate}`,
+              studentUsn,
               studentName: app.studentName,
               phoneNumber: app.phoneNumber,
               gender: app.gender,
@@ -836,6 +876,7 @@ app.get('/api/attendance', async (req, res) => {
 
     res.json({ attendance });
   } catch (err: any) {
+    console.error('Get attendance error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -854,20 +895,26 @@ app.post('/api/attendance/bulk', async (req, res) => {
     const { records, date } = req.body;
     if (!Array.isArray(records)) return res.status(400).json({ error: 'records array required' });
 
-    // Only save real records (skip pending- prefixed ids)
-    const realRecords = records.filter(rec => rec.studentUsn && !String(rec.id || '').startsWith('pending-'));
-    const pendingRecords = records.filter(rec => rec.studentUsn && String(rec.id || '').startsWith('pending-'));
+    for (const rec of records) {
+      if (!rec.studentUsn) continue;
+      const targetUsn = String(rec.studentUsn).trim();
+      const targetDate = String(rec.date || date || new Date().toISOString().split('T')[0]);
 
-    // Upsert all records
-    for (const rec of [...realRecords, ...pendingRecords]) {
       await prisma.attendanceRecord.upsert({
-        where: { studentUsn_date: { studentUsn: rec.studentUsn, date: rec.date } },
-        update: { status: rec.status, remarks: rec.remarks, block: rec.block || 'Main Block' },
+        where: {
+          studentUsn_date: { studentUsn: targetUsn, date: targetDate }
+        },
+        update: {
+          status: rec.status,
+          remarks: rec.remarks || null,
+          block: rec.block || 'Main Block',
+          studentName: rec.studentName || 'Student'
+        },
         create: {
-          studentUsn: rec.studentUsn,
+          studentUsn: targetUsn,
           studentName: rec.studentName || 'Student',
           block: rec.block || 'Main Block',
-          date: rec.date,
+          date: targetDate,
           status: rec.status,
           remarks: rec.remarks || null
         }
@@ -876,21 +923,45 @@ app.post('/api/attendance/bulk', async (req, res) => {
 
     // Emit real-time update to both admin and student portals
     io.emit('ATTENDANCE_UPDATED', { date: date || records[0]?.date });
+    io.emit('data_updated');
 
     res.json({ success: true });
   } catch (err: any) {
+    console.error('Bulk attendance error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.get('/api/attendance/student/:usn', async (req, res) => {
   try {
+    const rawUsn = decodeURIComponent(req.params.usn || '').trim();
+
+    // Find student app by USN or phone number to catch any aliases
+    const studentApp = await prisma.application.findFirst({
+      where: {
+        OR: [
+          { usn: rawUsn },
+          { phoneNumber: rawUsn },
+          { id: rawUsn }
+        ]
+      }
+    });
+
+    const usnSet = new Set<string>();
+    if (rawUsn) usnSet.add(rawUsn);
+    if (studentApp?.usn && studentApp.usn !== '-') usnSet.add(studentApp.usn);
+    if (studentApp?.phoneNumber) usnSet.add(studentApp.phoneNumber);
+
     const records = await prisma.attendanceRecord.findMany({
-      where: { studentUsn: req.params.usn },
+      where: {
+        studentUsn: { in: Array.from(usnSet) }
+      },
       orderBy: { date: 'desc' }
     });
+
     res.json({ history: records });
   } catch (err: any) {
+    console.error('Student attendance error:', err);
     res.status(500).json({ error: err.message });
   }
 });
