@@ -171,7 +171,7 @@ export default function FacilitiesControl() {
                     <ImageIcon className="w-12 h-12" />
                   </div>
                 )}
-                <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                <div className="absolute top-2 right-2 flex gap-2 opacity-100 z-10 transition">
                   <button
                     onClick={() => {
                       setEditId(facility.id);
