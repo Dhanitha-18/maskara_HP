@@ -346,11 +346,23 @@ export default function ApplicationsQueue() {
   const handleSelectTopN = () => {
     const n = parseInt(selectCount);
     if (isNaN(n) || n <= 0) return;
-    
-    // Select top N applications that are eligible (PENDING or APPROVED)
-    const eligible = filteredApplications?.filter((app: any) => app.status === 'PENDING' || app.status === 'APPROVED') || [];
-    const topN = eligible.slice(0, n).map((app: any) => app.id);
+
+    // Always operate on PENDING apps for the current gender tab, in strict FCFS order
+    const pendingFCFS = (applications || [])
+      .filter((app: any) =>
+        app.gender.toUpperCase() === activeTab &&
+        (app.status === 'PENDING' || app.status === 'APPROVED')
+      )
+      .sort((a: any, b: any) => {
+        const dateA = new Date(a.appliedAt || a.createdAt || 0).getTime();
+        const dateB = new Date(b.appliedAt || b.createdAt || 0).getTime();
+        return dateA - dateB;
+      });
+
+    const topN = pendingFCFS.slice(0, n).map((app: any) => app.id);
     setSelectedIds(topN);
+    // Switch to Pending view so the selected apps are visible
+    if (topN.length > 0) setActiveView('PENDING');
   };
 
   if (isLoading) {
