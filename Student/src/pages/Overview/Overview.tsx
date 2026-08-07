@@ -407,8 +407,8 @@ export const Overview: React.FC = () => {
                    <p className="font-bold text-slate-800 truncate">{student.name || '-'}</p>
                  </div>
                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">USN</p>
-                   <p className="font-bold text-slate-800 uppercase truncate">{student.usn || studentUsn || '-'}</p>
+                   <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Application ID</p>
+                   <p className="font-bold text-slate-800 uppercase truncate">{student.id || student.applicationId || '-'}</p>
                  </div>
                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Department</p>
