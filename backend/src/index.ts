@@ -323,9 +323,20 @@ app.post('/api/applications/check-duplicate', async (req, res) => {
 app.post('/api/applications', async (req, res) => {
   try {
     const data = req.body;
+    const rawUsn = (data.usn || '').trim();
+    const cleanUsn = (rawUsn && rawUsn !== '-' && rawUsn !== 'null' && rawUsn !== 'undefined') ? rawUsn.toUpperCase() : null;
+
+    // If student provided a non-blank USN, check that it is unique across applications
+    if (cleanUsn) {
+      const existingApp = await prisma.application.findFirst({ where: { usn: cleanUsn } });
+      if (existingApp) {
+        return res.status(400).json({ error: `An application with USN '${cleanUsn}' already exists. Please check your USN.` });
+      }
+    }
+
     const newApp = await prisma.application.create({
       data: {
-        usn: data.usn,
+        usn: cleanUsn,
         studentName: data.studentName,
         gender: data.gender || 'Male',
         phoneNumber: data.phoneNumber,
@@ -368,16 +379,93 @@ app.post('/api/applications', async (req, res) => {
       }
     });
 
-    // Create Student Account entry
-    await prisma.studentAccount.upsert({
-      where: { usn: newApp.usn },
-      update: { studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id },
-      create: { usn: newApp.usn, studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id }
-    });
+    // Create or update Student Account entry
+    if (cleanUsn) {
+      await prisma.studentAccount.upsert({
+        where: { usn: cleanUsn },
+        update: { studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id },
+        create: { usn: cleanUsn, studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id }
+      });
+    } else {
+      await prisma.studentAccount.create({
+        data: { usn: null, studentName: newApp.studentName, phoneNumber: newApp.phoneNumber, applicationId: newApp.id }
+      });
+    }
+
+    io.emit('APPLICATION_UPDATED', newApp);
+    io.emit('data_updated');
 
     return res.status(201).json({ success: true, application: newApp });
   } catch (err: any) {
     console.error('Error creating application:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update Student Profile (USN / Email / Year)
+app.put('/api/student/profile', async (req, res) => {
+  try {
+    const { usn, phoneNumber, newUsn, email, year, yearSem } = req.body;
+    const cleanNewUsn = (newUsn || '').trim() ? newUsn.trim().toUpperCase() : null;
+
+    // Find target application by USN or phone
+    const application = await prisma.application.findFirst({
+      where: {
+        OR: [
+          ...(usn && usn !== '-' ? [{ usn: String(usn).trim() }] : []),
+          ...(phoneNumber ? [{ phoneNumber: String(phoneNumber).trim() }] : [])
+        ]
+      }
+    });
+
+    if (!application) {
+      return res.status(404).json({ error: 'Student application record not found.' });
+    }
+
+    // Check USN uniqueness if new USN is specified and changed
+    if (cleanNewUsn && cleanNewUsn !== application.usn) {
+      const existingApp = await prisma.application.findFirst({ where: { usn: cleanNewUsn } });
+      if (existingApp && existingApp.id !== application.id) {
+        return res.status(400).json({ error: `USN '${cleanNewUsn}' is already taken by another student.` });
+      }
+    }
+
+    // Update Application record
+    const updatedApp = await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        usn: cleanNewUsn,
+        email: email || application.email,
+        year: year || yearSem || application.year,
+        yearSem: yearSem || year || application.yearSem
+      }
+    });
+
+    // Update StudentAccount record
+    const account = await prisma.studentAccount.findFirst({
+      where: {
+        OR: [
+          { applicationId: application.id },
+          ...(application.usn ? [{ usn: application.usn }] : []),
+          { phoneNumber: application.phoneNumber }
+        ]
+      }
+    });
+
+    if (account) {
+      await prisma.studentAccount.update({
+        where: { id: account.id },
+        data: { usn: cleanNewUsn }
+      });
+    }
+
+    io.emit('STUDENT_UPDATED', updatedApp);
+    io.emit('APPLICATION_UPDATED', updatedApp);
+    io.emit('data_updated');
+
+    return res.json({ success: true, application: updatedApp });
+  } catch (err: any) {
+    console.error('Error updating student profile:', err);
     res.status(500).json({ error: err.message });
   }
 });

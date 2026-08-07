@@ -234,7 +234,7 @@ export const ApplicationForm: React.FC = () => {
 
     const finalCourse = program && branch ? `${program} - ${branch}` : course || branch;
     const userEnteredUsn = (usn || bmsitId || '').trim();
-    const finalUsn = userEnteredUsn ? userEnteredUsn.toUpperCase() : '-';
+    const finalUsn = userEnteredUsn ? userEnteredUsn.toUpperCase() : null;
 
     try {
       let uploadedPhotoUrl = "";

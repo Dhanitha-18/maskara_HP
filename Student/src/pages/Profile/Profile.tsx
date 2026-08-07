@@ -9,6 +9,8 @@ import {
 import { HeroBanner } from '../../components/layout/HeroBanner';
 import { useNavigate } from 'react-router-dom';
 
+import { API_BASE_URL } from '../../services/api';
+
 export const Profile: React.FC = () => {
   const { student, hostel, paymentStatus, applicationState, backendPayments, updateStudent } = usePayment();
   const { isLoggedIn, studentUsn: authUsn, login } = useAuth();
@@ -40,11 +42,12 @@ export const Profile: React.FC = () => {
     setSaveSuccessMsg(null);
     try {
       const currentUsnToUse = student.usn || authUsn;
-      const res = await fetch('http://localhost:5000/api/student/profile', {
+      const res = await fetch(`${API_BASE_URL}/api/student/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           usn: currentUsnToUse,
+          phoneNumber: student.phone || appData.phoneNumber,
           newUsn: editedUsn,
           email: editedEmail,
           year: selectedYear,
@@ -52,7 +55,10 @@ export const Profile: React.FC = () => {
         })
       });
 
-      if (!res.ok) throw new Error('Failed to update profile');
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || 'Failed to update profile');
+      }
 
       // Update AuthContext session so USN stays synced across all tabs
       if (editedUsn && editedUsn !== authUsn) {
@@ -69,8 +75,8 @@ export const Profile: React.FC = () => {
       setSaveSuccessMsg('Profile updated successfully! Saved permanently in database.');
       setIsEditing(false);
       setTimeout(() => setSaveSuccessMsg(null), 4000);
-    } catch {
-      alert('Failed to save profile changes. Please try again.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to save profile changes. Please try again.');
     } finally {
       setIsSaving(false);
     }
