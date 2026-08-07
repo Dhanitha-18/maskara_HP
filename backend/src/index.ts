@@ -1247,7 +1247,41 @@ app.post('/api/facilities', async (req, res) => {
         imageUrl: data.imageUrl
       }
     });
+    io.emit('facilities_updated');
+    io.emit('data_updated');
     res.status(201).json({ success: true, facility });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/facilities/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    const facility = await prisma.facility.update({
+      where: { id },
+      data: {
+        title: data.title,
+        description: data.description,
+        imageUrl: data.imageUrl
+      }
+    });
+    io.emit('facilities_updated');
+    io.emit('data_updated');
+    res.json({ success: true, facility });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/facilities/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.facility.delete({ where: { id } });
+    io.emit('facilities_updated');
+    io.emit('data_updated');
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
