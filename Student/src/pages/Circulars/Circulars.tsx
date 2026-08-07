@@ -231,21 +231,30 @@ export const Circulars: React.FC = () => {
       try {
         const res = await fetch('http://localhost:5000/api/notices');
         if (res.ok) {
+          // Backend returns a raw array directly, not { notices: [...] }
           const data = await res.json();
-          if (Array.isArray(data.notices) && data.notices.length > 0) {
-            const mapped = data.notices.map((n: any) => ({
+          const rawList = Array.isArray(data) ? data : (Array.isArray(data.notices) ? data.notices : null);
+          if (rawList && rawList.length > 0) {
+            const mapped: Notice[] = rawList.map((n: any) => ({
               id: n.id,
               title: n.title,
               date: n.date,
-              category: n.category || 'Events',
-              priority: n.priority || 'Normal',
-              desc: n.desc,
-              author: n.author || 'Admin',
+              time: n.time || '09:00 AM',
+              category: (n.category || 'Events') as Notice['category'],
+              priority: (n.priority || 'Normal') as Notice['priority'],
+              desc: n.desc || '',
+              author: n.author || 'Administration',
               fileSize: n.fileSize || '150 KB',
-              attachments: n.documentUrl ? [{ name: n.documentName || 'Document Attachment', type: n.documentType?.toLowerCase() || 'pdf', url: n.documentUrl, size: n.fileSize || '150 KB' }] : [],
-              reactions: { going: 0, useful: 12, thanks: 8, clarification: 0 },
+              isRead: false,
+              isArchived: false,
+              // Map uploaded document as attachment if present
+              attachments: n.documentUrl
+                ? [{ name: n.documentName || 'Attachment', type: (n.documentType?.toLowerCase() || 'pdf') as Attachment['type'], url: n.documentUrl, size: n.fileSize || '150 KB' }]
+                : [],
+              reactions: { going: 0, useful: 0, thanks: 0, clarification: 0 },
               comments: []
             }));
+            // Replace static notices entirely with real backend data
             setNotices(mapped);
           }
         }
@@ -449,8 +458,10 @@ export const Circulars: React.FC = () => {
     return { total, unread, archived };
   }, [notices]);
 
-  const handleDownloadAttachment = async (att: Attachment) => {
+  const handleDownloadAttachment = async (att: Attachment, notice?: Notice) => {
     showToast(`Downloading ${att.name || 'document'}...`);
+
+    // Case 1: Real uploaded document from backend — fetch & download
     if (att.url) {
       const fullUrl = att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`;
       try {
@@ -465,9 +476,11 @@ export const Circulars: React.FC = () => {
         document.body.removeChild(link);
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         return;
-      } catch (err) {
+      } catch {
+        // fallback: open directly
         const link = document.createElement('a');
         link.href = fullUrl;
+        link.target = '_blank';
         link.download = att.name || 'document';
         document.body.appendChild(link);
         link.click();
@@ -475,14 +488,55 @@ export const Circulars: React.FC = () => {
         return;
       }
     }
-    const content = `Official Notice Attachment: ${att.name}\nType: ${att.type}\nSize: ${att.size || 'Unknown'}\n\nThank you.`;
-    const blob = new Blob([content], { type: att.type === 'pdf' ? 'application/pdf' : 'text/plain' });
+
+    // Case 2: Static/placeholder notice — generate a proper formatted document to download
+    const noticeTitle = notice?.title || att.name;
+    const noticeDesc = notice?.desc || 'Please refer to the hostel administration for the full content of this circular.';
+    const noticeAuthor = notice?.author || 'Administration';
+    const noticeDate = notice?.date || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const noticeCategory = notice?.category || 'General';
+
+    const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${noticeTitle}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 48px 56px; color: #0f172a; line-height: 1.7; max-width: 800px; margin: 0 auto; }
+    .header { border-bottom: 3px solid #1e40af; padding-bottom: 18px; margin-bottom: 28px; }
+    .header h2 { margin: 0; color: #1e40af; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; }
+    .header p { margin: 6px 0 0; color: #64748b; font-size: 12px; }
+    .badge { display: inline-block; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-bottom: 14px; }
+    h1 { font-size: 22px; color: #0f172a; margin-bottom: 10px; }
+    .meta { background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0; color: #475569; margin-bottom: 24px; font-size: 13px; }
+    .content { font-size: 14px; color: #334155; margin-bottom: 30px; }
+    .footer { margin-top: 50px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>OM SAI PG ADMINISTRATION</h2>
+    <p>Official Hostel Circular / Public Notice</p>
+  </div>
+  <div class="badge">${noticeCategory}</div>
+  <h1>${noticeTitle}</h1>
+  <div class="meta">
+    <strong>Date:</strong> ${noticeDate} &nbsp;|&nbsp;
+    <strong>Issued By:</strong> ${noticeAuthor}
+  </div>
+  <div class="content"><p>${noticeDesc}</p></div>
+  <div class="footer">OM SAI PG Hostel &nbsp;|&nbsp; System-generated Official Notice</div>
+</body>
+</html>`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = att.name;
+    link.download = att.name.endsWith('.pdf') || att.name.endsWith('.html') ? att.name : `${att.name}.html`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
 
   return (
@@ -605,7 +659,7 @@ export const Circulars: React.FC = () => {
                       {notice.attachments.map((att, idx) => (
                         <div 
                           key={idx}
-                          onClick={() => handleDownloadAttachment(att)}
+                          onClick={() => handleDownloadAttachment(att, notice)}
                           className="bg-slate-100/80 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2 hover:border-primary hover:text-primary hover:shadow-xs transition-all cursor-pointer group/att"
                         >
                           <span>{att.name}</span>
@@ -788,7 +842,16 @@ export const Circulars: React.FC = () => {
                   Close
                 </button>
                 <button
-                  onClick={() => handlePrintPDF(selectedNotice)}
+                  onClick={() => {
+                    const firstAtt = selectedNotice.attachments[0];
+                    if (firstAtt?.url) {
+                      handleDownloadAttachment(firstAtt, selectedNotice);
+                    } else if (firstAtt) {
+                      handleDownloadAttachment(firstAtt, selectedNotice);
+                    } else {
+                      handlePrintPDF(selectedNotice);
+                    }
+                  }}
                   className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
                 >
                   <Download className="w-4 h-4" /> Download PDF File

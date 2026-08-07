@@ -59,8 +59,9 @@ export default function CircularsControl() {
     queryFn: async () => {
       const res = await fetch('http://localhost:5000/api/notices');
       if (!res.ok) throw new Error('Failed to fetch notices');
+      // Backend returns a raw array, not { notices: [...] }
       const data = await res.json();
-      return data.notices;
+      return Array.isArray(data) ? data : [];
     }
   });
 
