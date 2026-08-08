@@ -12,7 +12,8 @@ import { toast } from 'sonner';
 import { socket } from '../lib/socket';
 import { useAuthStore } from '../store/useAuthStore';
 
-const API = '$API_BASE_URL/api';
+const API = `${API_BASE_URL}/api`;
+
 
 // ─── Types ────────────────────────────────────────────────────
 interface Payment {
@@ -85,8 +86,9 @@ function ScreenshotModal({ url, onClose }: { url: string; onClose: () => void })
   const getFullUrl = (rawUrl: string) => {
     if (!rawUrl) return '';
     if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
-    if (rawUrl.startsWith('/')) return `$API_BASE_URL${rawUrl}`;
-    return `$API_BASE_URL/${rawUrl}`;
+    if (rawUrl.startsWith('/')) return `${API_BASE_URL}${rawUrl}`;
+    return `${API_BASE_URL}/${rawUrl}`;
+
   };
 
   const fullUrl = getFullUrl(url);

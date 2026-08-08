@@ -80,16 +80,16 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [receipts, setReceipts] = useState<ReceiptItem[]>(mockReceipts);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [applicationState, setApplicationState] = useState<'not_applied' | 'applied' | 'room_allotted' | 'paid'>(() => {
-    // Restore per-student cached state if available
-    const usn = localStorage.getItem('student_usn');
-    if (usn) {
-      const cached = localStorage.getItem(`cached_application_state_${usn}`);
+    // Restore per-student cached state if available by studentAccountId
+    const accountId = typeof window !== 'undefined' ? (sessionStorage.getItem('student_account_id') || localStorage.getItem('student_account_id')) : null;
+    if (accountId) {
+      const cached = localStorage.getItem(`cached_application_state_${accountId}`);
       if (cached === 'applied' || cached === 'room_allotted' || cached === 'paid') return cached;
     }
     return 'applied';
   });
   const [backendPayments, setBackendPayments] = useState<any[]>([]);
-  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const isRefreshing = useRef(false);
   const hasLoadedOnce = useRef(false);
 
@@ -104,24 +104,27 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [studentName, studentUsn]);
 
-  // Cache applicationState to localStorage per student USN
+  // Cache applicationState to localStorage per studentAccountId
   useEffect(() => {
-    if (studentUsn && applicationState) {
-      localStorage.setItem(`cached_application_state_${studentUsn}`, applicationState);
+    if (studentAccountId && applicationState) {
+      localStorage.setItem(`cached_application_state_${studentAccountId}`, applicationState);
     }
-  }, [applicationState, studentUsn]);
+  }, [applicationState, studentAccountId]);
 
   // ──────────────────────────────────────────────
   // FETCH REAL STATUS FROM BACKEND
   // ──────────────────────────────────────────────
   const refreshStatus = useCallback(async () => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn) {
+      setIsLoadingStatus(false);
+      return;
+    }
     if (isRefreshing.current) return;
     isRefreshing.current = true;
 
     if (!hasLoadedOnce.current) setIsLoadingStatus(true);
     try {
-      const targetParam = studentAccountId || (studentUsn && studentUsn !== '-' ? studentUsn : '');
+      const targetParam = studentAccountId || '';
       const url = targetParam ? `/api/student/status/${targetParam}` : '/api/student/status';
       const data = await apiRequest(url);
 
@@ -144,14 +147,14 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       };
       const mappedState = stateMap[data.applicationState] || 'applied';
       setApplicationState(mappedState);
-      if (studentUsn) {
-        localStorage.setItem(`cached_application_state_${studentUsn}`, mappedState);
+      if (studentAccountId) {
+        localStorage.setItem(`cached_application_state_${studentAccountId}`, mappedState);
       }
 
       // Update student info from real application data
       if (data.application) {
         const app = data.application;
-        const formattedAppId = app.id ? (app.id.startsWith('APP-') ? app.id : `APP-2026-${app.id.slice(0, 6).toUpperCase()}`) : `APP-2026-${app.usn}`;
+        const formattedAppId = app.id ? (app.id.startsWith('APP-') ? app.id : `APP-2026-${app.id.slice(0, 6).toUpperCase()}`) : (app.usn ? `APP-2026-${app.usn}` : `APP-2026-N/A`);
         setStudent(prev => ({
           ...prev,
           id: formattedAppId,
@@ -246,7 +249,7 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       isRefreshing.current = false;
       setIsLoadingStatus(false);
     }
-  }, [studentAccountId, studentUsn, isLoggedIn, setStudentName]);
+  }, [studentAccountId, isLoggedIn, setStudentName]);
 
   // Fetch status on login; poll every 30s for background sync (not 3s)
   useEffect(() => {
@@ -263,8 +266,10 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const handleDataUpdated = () => { refreshStatus(); };
     const handleAccountDeleted = (data: any) => {
-      if ((studentAccountId && data?.accountIds?.includes(studentAccountId)) || (studentUsn && data?.usns?.includes(studentUsn))) {
-        localStorage.removeItem('cached_application_state');
+      if (studentAccountId && data?.accountIds?.includes(studentAccountId)) {
+        if (studentAccountId) {
+          localStorage.removeItem(`cached_application_state_${studentAccountId}`);
+        }
         logout();
       }
     };
@@ -282,7 +287,8 @@ export const PaymentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       socket.off('STUDENT_UPDATED', handleDataUpdated);
       socket.off('student_account_deleted', handleAccountDeleted);
     };
-  }, [studentAccountId, studentUsn, isLoggedIn, refreshStatus, logout]);
+  }, [studentAccountId, isLoggedIn, refreshStatus, logout]);
+
 
   // ──────────────────────────────────────────────
   // EXISTING FUNCTIONS (kept for compatibility)

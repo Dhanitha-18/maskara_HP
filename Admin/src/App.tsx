@@ -233,11 +233,11 @@ function AnimatedRoutes() {
 }
 
 function App() {
-  // Restore auth state from localStorage so page refresh doesn't log the admin out
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('admin_authenticated') === 'true' &&
-           !!localStorage.getItem('admin_token') &&
-           !!localStorage.getItem('admin_user');
+  // Restore auth state from sessionStorage so page refresh doesn't log the admin out
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    // Only persist for the current browser session (cleared automatically when browser/tab is closed)
+    return sessionStorage.getItem('admin_session_active') === 'true' ||
+           !!sessionStorage.getItem('admin_user');
   });
 
   const handleLogin = useCallback(() => {
@@ -245,7 +245,12 @@ function App() {
   }, []);
 
   const handleLogout = useCallback(() => {
+    sessionStorage.removeItem('admin_session_active');
+    sessionStorage.removeItem('admin_user');
+    sessionStorage.removeItem('admin_token');
     localStorage.removeItem('admin_authenticated');
+    localStorage.removeItem('admin_user');
+    localStorage.removeItem('admin_token');
     setIsAuthenticated(false);
   }, []);
 

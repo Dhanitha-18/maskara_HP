@@ -36,7 +36,7 @@ export default function AttendanceManagement() {
   const [historyBlockFilter, setHistoryBlockFilter] = useState('ALL');
 
   // Selected Student for Calendar Popup Modal
-  const [selectedCalendarStudent, setSelectedCalendarStudent] = useState<{ usn: string; name: string; block?: string; roomNo?: string } | null>(null);
+  const [selectedCalendarStudent, setSelectedCalendarStudent] = useState<{ accountId: string; name: string; block?: string; roomNo?: string } | null>(null);
   const [calendarHistory, setCalendarHistory] = useState<any[]>([]);
   const [isCalendarLoading, setIsCalendarLoading] = useState(false);
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
@@ -66,7 +66,7 @@ export default function AttendanceManagement() {
   useEffect(() => {
     if (selectedCalendarStudent) {
       setIsCalendarLoading(true);
-      fetch(`/api/attendance/student/${encodeURIComponent(selectedCalendarStudent.usn)}`)
+      fetch(`/api/attendance/student/${encodeURIComponent(selectedCalendarStudent.accountId)}`)
         .then(res => res.json())
         .then(data => {
           if (data && data.history) {
@@ -183,9 +183,22 @@ export default function AttendanceManagement() {
     }
   };
 
-  // Filtered list for Mark and Edit tabs
+  // Check if attendance for the selected date has already been marked/saved
+  const isAlreadyMarkedForSelectedDate = useMemo(() => {
+    return attendanceList.some(a => a.id && !a.id.startsWith('pending-'));
+  }, [attendanceList]);
+
+  // Filtered list for Mark and Edit tabs (de-duplicated by studentUsn / id)
   const filteredList = useMemo(() => {
-    return attendanceList.filter(item => {
+    const seenMap = new Map<string, AttendanceItem>();
+    attendanceList.forEach(item => {
+      const key = item.studentUsn || item.phoneNumber || item.id;
+      if (!seenMap.has(key)) {
+        seenMap.set(key, item);
+      }
+    });
+
+    return Array.from(seenMap.values()).filter(item => {
       if (role !== 'CHIEF' && allowedBlocks && !allowedBlocks.includes('ALL')) {
         const itemB = (item.block || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const isAllowed = allowedBlocks.some(ab => {
@@ -407,7 +420,7 @@ export default function AttendanceManagement() {
                         <td className="p-3.5 text-slate-700 font-semibold">{rec.block || 'Main Block'} • Room {rec.roomNo || 'N/A'}</td>
                         <td className="p-3.5 text-center">
                           <button
-                            onClick={() => setSelectedCalendarStudent({ usn: rec.studentUsn, name: rec.studentName, block: rec.block, roomNo: rec.roomNo })}
+                            onClick={() => setSelectedCalendarStudent({ accountId: rec.studentAccountId || rec.studentUsn, name: rec.studentName, block: rec.block, roomNo: rec.roomNo })}
                             className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -429,6 +442,21 @@ export default function AttendanceManagement() {
       {/* ========================================================================= */}
       {(activeTab === 'MARK' || activeTab === 'EDIT') && (
         <>
+          {activeTab === 'MARK' && isAlreadyMarkedForSelectedDate && (
+            <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-3 text-indigo-950 text-xs font-bold shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>Attendance for <strong>{selectedDate}</strong> has already been submitted today. Use the <strong>Edit Attendance</strong> tab to make changes.</span>
+              </div>
+              <button
+                onClick={() => setActiveTab('EDIT')}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs shadow-md transition-all shrink-0 cursor-pointer"
+              >
+                Switch to Edit Tab
+              </button>
+            </div>
+          )}
+
           {/* Control Bar & Actions */}
           <div className="bg-white/80 backdrop-blur-2xl border border-white/60 rounded-3xl p-6 shadow-[10px_10px_40px_-10px_rgba(0,0,0,0.05)] space-y-4">
             {hasUnsavedChanges && (

@@ -1,4 +1,4 @@
-﻿import { API_BASE_URL } from '../lib/api';
+import { API_BASE_URL } from '../lib/api';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -38,10 +38,10 @@ const STUDENT_CONTROL_SUBTABS = [
   { id: 'sc_complaints', label: 'Complaints Control' },
   { id: 'sc_mess_menu', label: 'Mess Menu Control' },
   { id: 'sc_circulars', label: 'Circulars Control' },
-  { id: 'sc_social', label: 'Social Connect Control' },
   { id: 'sc_leaves', label: 'Leave Application Control' },
   { id: 'sc_payments', label: 'Payment Gateway Control' },
 ];
+
 
 export default function AdminManagement() {
   const { role, logout } = useAuthStore();

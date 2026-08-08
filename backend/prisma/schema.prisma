@@ -246,17 +246,8 @@ model Complaint {
   @@index([studentAccountId])
 }
 
-model SocialPost {
-  id        String   @id @default(uuid())
-  title     String
-  content   String
-  imageUrl  String?
-  author    String
-  type      String   @default("General")
-  createdAt DateTime @default(now())
-}
-
 model LeaveApplication {
+
   id                 String          @id @default(uuid())
   studentAccountId   String?
   studentAccount     StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
@@ -325,38 +316,6 @@ model EmailHistory {
   @@index([studentAccountId])
 }
 
-model ChatChannel {
-  id          String        @id @default(uuid())
-  name        String        @unique
-  desc        String
-  iconName    String        @default("MessageSquare")
-  badge       String?
-  targetBlock String?
-  createdAt   DateTime      @default(now())
-  messages    ChatMessage[]
-}
-
-model ChatMessage {
-  id               String          @id @default(uuid())
-  studentAccountId String?
-  studentAccount   StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
-  channelId        String
-  senderName       String
-  usn              String
-  roomNo           String
-  message          String
-  time             String
-  likes            Int             @default(0)
-  price            String?
-  categoryTag      String?
-  imgUrl           String?
-  createdAt        DateTime        @default(now())
-  channel          ChatChannel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
-
-  @@index([channelId])
-  @@index([studentAccountId])
-}
-
 model StudentAccount {
   id                String             @id @default(uuid())
   studentName       String
@@ -371,9 +330,9 @@ model StudentAccount {
   complaints        Complaint[]
   leaveApplications LeaveApplication[]
   feedbacks         Feedback[]
-  chatMessages      ChatMessage[]
   attendanceRecords AttendanceRecord[]
   emailHistories    EmailHistory[]
+
 
   @@index([phoneNumber])
   @@index([studentName])
@@ -396,19 +355,19 @@ model AdminAccount {
 }
 
 model AttendanceRecord {
-  id               String          @id @default(uuid())
-  studentAccountId String?
-  studentAccount   StudentAccount? @relation(fields: [studentAccountId], references: [id], onDelete: SetNull)
-  studentUsn       String
+  id               String         @id @default(uuid())
+  studentAccountId String
+  studentAccount   StudentAccount @relation(fields: [studentAccountId], references: [id], onDelete: Cascade)
+  studentUsn       String         @default("-")
   studentName      String
   block            String
   date             String
   status           String
   remarks          String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
-  @@unique([studentUsn, date])
+  @@unique([studentAccountId, date])
   @@index([date])
   @@index([block])
   @@index([studentAccountId])

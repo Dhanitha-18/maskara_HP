@@ -3,13 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import FacilitiesControl from './FacilitiesControl';
 import FeedbackControl from './FeedbackControl';
 import ComplaintsControl from './ComplaintsControl';
-import SocialControl from './SocialControl';
 import LeaveControl from './LeaveControl';
 import MessMenuControl from './MessMenuControl';
 import CircularsControl from './CircularsControl';
 import PaymentsControl from './PaymentsControl';
 import AttendanceManagement from '../AttendanceManagement';
-import { Building2, MessageSquare, AlertTriangle, Users, Calendar, Utensils, FileText, CreditCard, UserCheck, Menu, ChevronDown } from 'lucide-react';
+import { Building2, MessageSquare, AlertTriangle, Calendar, Utensils, FileText, CreditCard, UserCheck, Menu, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 
 export default function StudentControlsIndex() {
@@ -27,10 +26,10 @@ export default function StudentControlsIndex() {
     { id: 'complaints', permKey: 'sc_complaints', label: 'Complaints', icon: AlertTriangle },
     { id: 'mess_menu', permKey: 'sc_mess_menu', label: 'Mess Menu', icon: Utensils },
     { id: 'circulars', permKey: 'sc_circulars', label: 'Circulars', icon: FileText },
-    { id: 'social', permKey: 'sc_social', label: 'Social Connect', icon: Users },
     { id: 'leaves', permKey: 'sc_leaves', label: 'Leave Applications', icon: Calendar },
     { id: 'payments', permKey: 'sc_payments', label: 'Payment Gateway', icon: CreditCard },
   ];
+
 
   // Dynamic real-time tab filtering based on Chief Admin permissions
   const tabs = useMemo(() => {
@@ -142,9 +141,9 @@ export default function StudentControlsIndex() {
             {activeTab === 'complaints' && <ComplaintsControl />}
             {activeTab === 'mess_menu' && <MessMenuControl />}
             {activeTab === 'circulars' && <CircularsControl />}
-            {activeTab === 'social' && <SocialControl />}
             {activeTab === 'leaves' && <LeaveControl />}
             {activeTab === 'payments' && <PaymentsControl />}
+
           </motion.div>
         </AnimatePresence>
       </div>

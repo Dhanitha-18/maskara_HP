@@ -18,9 +18,9 @@ interface StudentAttendanceRecord {
 }
 
 export const Attendance: React.FC = () => {
-  const { studentUsn } = useAuth();
+  const { studentAccountId, studentUsn } = useAuth();
   const { student } = usePayment();
-  const usnToUse = studentUsn || student?.usn || '';
+  const targetId = studentAccountId || studentUsn || student?.usn || '';
 
   const [history, setHistory] = useState<StudentAttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,10 +31,10 @@ export const Attendance: React.FC = () => {
   const [selectedDayRecord, setSelectedDayRecord] = useState<StudentAttendanceRecord | null>(null);
 
   const fetchAttendanceHistory = async () => {
-    if (!usnToUse) return;
+    if (!targetId) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/attendance/student/${encodeURIComponent(usnToUse)}`);
+      const res = await fetch(`/api/attendance/student/${encodeURIComponent(targetId)}`);
       const data = await res.json();
       if (res.ok && data.history) {
         setHistory(data.history);
@@ -48,7 +48,7 @@ export const Attendance: React.FC = () => {
 
   useEffect(() => {
     fetchAttendanceHistory();
-  }, [usnToUse]);
+  }, [targetId]);
 
   // Real-time updates via Socket.IO
   useEffect(() => {
@@ -59,7 +59,7 @@ export const Attendance: React.FC = () => {
       socket.off('ATTENDANCE_UPDATED', handleUpdate);
       socket.off('data_updated', handleUpdate);
     };
-  }, [usnToUse]);
+  }, [targetId]);
 
   const totalDays = history.length;
   const presentDays = history.filter(h => h.status === 'PRESENT').length;

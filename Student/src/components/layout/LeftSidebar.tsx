@@ -43,11 +43,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ isOpen, onClose }) => 
     { name: 'Mess Menu', path: '/mess', icon: Utensils },
     { name: 'Student Feedback', path: '/feedback', icon: Star },
     { name: 'Complaints', path: '/complaints', icon: MessageSquare },
-    { name: 'Social Connect', path: '/social-connect', icon: Users },
     { name: 'Attendance', path: '/attendance', icon: UserCheck },
     { name: 'Leave Application', path: '/leave-application', icon: FileText },
     { name: 'My Profile', path: '/profile', icon: User },
   ];
+
 
   const handleLogoutClick = () => {
     resetPayment();

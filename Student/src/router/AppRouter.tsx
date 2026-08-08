@@ -11,13 +11,13 @@ import { Payment } from '../pages/Payment/Payment';
 import { Circulars } from '../pages/Circulars/Circulars';
 import { Mess } from '../pages/Mess/Mess';
 import { Complaints } from '../pages/Complaints/Complaints';
-import { SocialConnect } from '../pages/SocialConnect/SocialConnect';
 import { Attendance } from '../pages/Attendance/Attendance';
 import { LeaveApplication } from '../pages/LeaveApplication/LeaveApplication';
 import { Profile } from '../pages/Profile/Profile';
 import { Feedback } from '../pages/Feedback/Feedback';
 import { Lock, ArrowRight } from 'lucide-react';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
+
 
 // Guard: requires student login AND completed room allocation for protected tabs.
 const RequireApplicationGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -119,10 +119,8 @@ export const AppRouter: React.FC = () => {
           {/* Protected student features requiring student login and allocation */}
           <Route path="circulars" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Circulars Error"><Circulars /></ErrorBoundary></RequireApplicationGuard>} />
           <Route path="circular" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Circulars Error"><Circulars /></ErrorBoundary></RequireApplicationGuard>} />
-          <Route path="social-connect" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Social Connect Error"><SocialConnect /></ErrorBoundary></RequireApplicationGuard>} />
-          <Route path="social_connect" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Social Connect Error"><SocialConnect /></ErrorBoundary></RequireApplicationGuard>} />
-          <Route path="socialconnect" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Social Connect Error"><SocialConnect /></ErrorBoundary></RequireApplicationGuard>} />
           <Route path="profile" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Profile Error"><Profile /></ErrorBoundary></RequireApplicationGuard>} />
+
           <Route path="payment" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Payment Error"><Payment /></ErrorBoundary></RequireApplicationGuard>} />
           <Route path="complaints" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Complaints Error"><Complaints /></ErrorBoundary></RequireApplicationGuard>} />
           <Route path="attendance" element={<RequireApplicationGuard><ErrorBoundary fallbackTitle="Attendance Error"><Attendance /></ErrorBoundary></RequireApplicationGuard>} />

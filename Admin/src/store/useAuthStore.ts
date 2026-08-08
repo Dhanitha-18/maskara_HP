@@ -26,7 +26,7 @@ const DEFAULT_TABS = [
 
 function getInitialUser(): AdminUser {
   try {
-    const saved = localStorage.getItem('admin_user');
+    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('admin_user') : null;
     if (saved) {
       return JSON.parse(saved);
     }
@@ -57,7 +57,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => {
   const initial = getInitialUser();
-  const savedToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+  const savedToken = typeof window !== 'undefined' ? sessionStorage.getItem('admin_token') : null;
 
   return {
     user: initial,
@@ -68,10 +68,10 @@ export const useAuthStore = create<AuthState>((set) => {
     allowedTabs: initial.allowedTabs || DEFAULT_TABS,
     allowedBlocks: initial.allowedBlocks || ['ALL'],
     setAdminUser: (user: AdminUser, token?: string) => {
-      localStorage.setItem('admin_user', JSON.stringify(user));
-      localStorage.setItem('admin_authenticated', 'true');
+      sessionStorage.setItem('admin_user', JSON.stringify(user));
+      sessionStorage.setItem('admin_session_active', 'true');
       if (token) {
-        localStorage.setItem('admin_token', token);
+        sessionStorage.setItem('admin_token', token);
       }
       set({
         user,
@@ -84,6 +84,9 @@ export const useAuthStore = create<AuthState>((set) => {
       });
     },
     logout: () => {
+      sessionStorage.removeItem('admin_session_active');
+      sessionStorage.removeItem('admin_user');
+      sessionStorage.removeItem('admin_token');
       localStorage.removeItem('admin_authenticated');
       localStorage.removeItem('admin_user');
       localStorage.removeItem('admin_token');
@@ -108,3 +111,4 @@ export const useAuthStore = create<AuthState>((set) => {
     }
   };
 });
+

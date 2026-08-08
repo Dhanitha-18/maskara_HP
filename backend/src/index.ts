@@ -71,25 +71,7 @@ async function seedDefaultChiefAdmin() {
         }
       });
       console.log('Auto-seeded default Chief Admin (admin123@gmail.com).');
-    }
-
-    const defaultChannels = [
-      { name: 'general', desc: 'General hostel discussion and announcements', iconName: 'MessageSquare' },
-      { name: 'marketplace', desc: 'Buy and sell items within the hostel community', iconName: 'ShoppingBag' }
-    ];
-
-    for (const channel of defaultChannels) {
-      await prisma.chatChannel.upsert({
-        where: { name: channel.name },
-        update: {},
-        create: {
-          name: channel.name,
-          desc: channel.desc,
-          iconName: channel.iconName
-        }
-      });
-    }
-  } catch (err) {
+    }  } catch (err) {
     console.error('Error seeding chief admin:', err);
   }
 }
@@ -1469,8 +1451,9 @@ app.get('/api/attendance', async (req, res) => {
     const existingRecordsWhere: any = { date: targetDate };
     if (block && block !== 'ALL') existingRecordsWhere.block = String(block);
     const existingRecords = await prisma.attendanceRecord.findMany({ where: existingRecordsWhere });
+    // Key existing records by studentAccountId for O(1) lookup
     const existingMap = new Map<string, any>();
-    existingRecords.forEach(r => existingMap.set(r.studentUsn, r));
+    existingRecords.forEach(r => existingMap.set(r.studentAccountId, r));
 
     // Build attendance list from all allocated residents
     const attendance = Array.from(combinedAllocMap.values())
@@ -1483,17 +1466,21 @@ app.get('/api/attendance', async (req, res) => {
         return true;
       })
       .map(({ app, bed }) => {
-        const studentUsn = (app.usn && app.usn !== '-' ? app.usn : (app.phoneNumber || app.id)).trim();
+        // studentUsn: display-only — real USN or "-", never phone/appId
+        const displayUsn = (app.usn && app.usn.trim() !== '' && app.usn.trim() !== '-') ? app.usn.trim() : '-';
+        // studentAccountId: the real unique identity
+        const accountId = app.studentAccountId || app.id;
         const blockName = bed?.room?.block?.name || 'Main Block';
         const roomNo = bed?.room?.roomNo ? `Room ${bed.room.roomNo}` : '101';
-        
-        // Find existing record by USN or phone
-        const existing = existingMap.get(studentUsn) || existingMap.get(app.usn) || existingMap.get(app.phoneNumber);
+
+        // Find existing record keyed by studentAccountId
+        const existing = existingMap.get(accountId);
 
         return existing
           ? {
               ...existing,
-              studentUsn,
+              studentUsn: displayUsn,
+              studentAccountId: accountId,
               studentName: app.studentName,
               block: blockName,
               roomNo,
@@ -1501,8 +1488,9 @@ app.get('/api/attendance', async (req, res) => {
               gender: app.gender
             }
           : {
-              id: `pending-${studentUsn}-${targetDate}`,
-              studentUsn,
+              id: `pending-${accountId}-${targetDate}`,
+              studentUsn: displayUsn,
+              studentAccountId: accountId,
               studentName: app.studentName,
               phoneNumber: app.phoneNumber,
               gender: app.gender,
@@ -1536,22 +1524,28 @@ app.post('/api/attendance/bulk', async (req, res) => {
     if (!Array.isArray(records)) return res.status(400).json({ error: 'records array required' });
 
     for (const rec of records) {
-      if (!rec.studentUsn) continue;
-      const targetUsn = String(rec.studentUsn).trim();
+      // Must have a studentAccountId — it is the real unique identity
+      const targetAccountId = rec.studentAccountId;
+      if (!targetAccountId) continue;
+
+      // studentUsn: real USN or "-" — never phone/appId
+      const displayUsn = (rec.studentUsn && rec.studentUsn !== '-') ? rec.studentUsn : '-';
       const targetDate = String(rec.date || date || new Date().toISOString().split('T')[0]);
 
       await prisma.attendanceRecord.upsert({
         where: {
-          studentUsn_date: { studentUsn: targetUsn, date: targetDate }
+          studentAccountId_date: { studentAccountId: targetAccountId, date: targetDate }
         },
         update: {
           status: rec.status,
           remarks: rec.remarks || null,
           block: rec.block || 'Main Block',
-          studentName: rec.studentName || 'Student'
+          studentName: rec.studentName || 'Student',
+          studentUsn: displayUsn
         },
         create: {
-          studentUsn: targetUsn,
+          studentAccountId: targetAccountId,
+          studentUsn: displayUsn,
           studentName: rec.studentName || 'Student',
           block: rec.block || 'Main Block',
           date: targetDate,
@@ -1572,29 +1566,31 @@ app.post('/api/attendance/bulk', async (req, res) => {
   }
 });
 
-app.get('/api/attendance/student/:usn', async (req, res) => {
+app.get('/api/attendance/student/:id', async (req, res) => {
   try {
-    const rawUsn = decodeURIComponent(req.params.usn || '').trim();
+    const rawId = decodeURIComponent(req.params.id || '').trim();
 
-    // Find student app by USN or phone number to catch any aliases
+    // Find student app by studentAccountId, id, USN, or phone number
     const studentApp = await prisma.application.findFirst({
       where: {
         OR: [
-          { usn: rawUsn },
-          { phoneNumber: rawUsn },
-          { id: rawUsn }
+          { studentAccountId: rawId },
+          { id: rawId },
+          { usn: rawId },
+          { phoneNumber: rawId }
         ]
       }
     });
 
-    const usnSet = new Set<string>();
-    if (rawUsn) usnSet.add(rawUsn);
-    if (studentApp?.usn && studentApp.usn !== '-') usnSet.add(studentApp.usn);
-    if (studentApp?.phoneNumber) usnSet.add(studentApp.phoneNumber);
+    const idSet = new Set<string>();
+    if (rawId) idSet.add(rawId);
+    if (studentApp?.studentAccountId) idSet.add(studentApp.studentAccountId);
+    if (studentApp?.usn && studentApp.usn !== '-') idSet.add(studentApp.usn);
+    if (studentApp?.phoneNumber) idSet.add(studentApp.phoneNumber);
 
     const records = await prisma.attendanceRecord.findMany({
       where: {
-        studentUsn: { in: Array.from(usnSet) }
+        studentUsn: { in: Array.from(idSet) }
       },
       orderBy: { date: 'desc' }
     });
@@ -1819,12 +1815,89 @@ app.post('/api/leaves', async (req, res) => {
 
 app.put('/api/leaves/:id/status', async (req, res) => {
   try {
+    const leaveApp = await prisma.leaveApplication.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!leaveApp) {
+      return res.status(404).json({ error: 'Leave application not found.' });
+    }
+
+    const newStatus = req.body.status;
     const updated = await prisma.leaveApplication.update({
       where: { id: req.params.id },
-      data: { status: req.body.status }
+      data: { status: newStatus }
     });
+
+    const isPermanent = String(leaveApp.leaveType || '').toUpperCase().includes('PERMANENT') || 
+                        String(leaveApp.leaveType || '').toUpperCase().includes('EXIT');
+
+    if (newStatus === 'APPROVED' && isPermanent) {
+      const targetUsn = leaveApp.usn;
+      const app = await prisma.application.findFirst({
+        where: {
+          OR: [
+            ...(targetUsn && targetUsn !== '-' ? [{ usn: targetUsn }, { phoneNumber: targetUsn }] : []),
+            { studentName: leaveApp.studentName }
+          ]
+        }
+      });
+
+      if (app) {
+        // 1. Deallocate bed (set bed.status = 'AVAILABLE')
+        const allocations = await prisma.allocation.findMany({
+          where: { applicationId: app.id }
+        });
+        const bedIds = allocations.map(a => a.bedId);
+
+        if (bedIds.length > 0) {
+          await prisma.bed.updateMany({
+            where: { id: { in: bedIds } },
+            data: { status: 'AVAILABLE' }
+          });
+        }
+
+        const studentAccountId = app.studentAccountId;
+
+        // 2. Cascade delete all linked student records in atomic transaction
+        await prisma.$transaction([
+          prisma.allocation.deleteMany({ where: { applicationId: app.id } }),
+          prisma.payment.deleteMany({
+            where: {
+              OR: [
+                ...(app.usn ? [{ studentUsn: app.usn }] : []),
+                ...(app.phoneNumber ? [{ studentUsn: app.phoneNumber }] : [])
+              ]
+            }
+          }),
+          prisma.complaint.deleteMany({
+            where: {
+              OR: [
+                ...(app.studentAccountId ? [{ studentAccountId: app.studentAccountId }] : []),
+                ...(app.usn ? [{ usn: app.usn }] : [])
+              ]
+            }
+          }),
+          prisma.leaveApplication.deleteMany({ where: { usn: leaveApp.usn } }),
+          prisma.application.delete({ where: { id: app.id } }),
+          ...(studentAccountId ? [prisma.studentAccount.delete({ where: { id: studentAccountId } })] : [])
+        ]);
+
+        // 3. Emit Socket events for real-time reflection across both portals
+        io.emit('BED_DEALLOCATED');
+        io.emit('STUDENT_UPDATED', { applicationId: app.id, studentAccountId });
+        if (studentAccountId) {
+          io.emit('student_account_deleted', { accountIds: [studentAccountId] });
+        }
+        io.emit('data_updated');
+      }
+    } else {
+      io.emit('data_updated');
+    }
+
     res.json({ success: true, leave: updated });
   } catch (err: any) {
+    console.error('Leave status update error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2173,133 +2246,7 @@ app.post('/api/feedback/config', async (req, res) => {
   }
 });
 
-// ==================== CHAT & COMMUNITY ====================
-app.get('/api/chat/channels', async (req, res) => {
-  try {
-    const channels = await prisma.chatChannel.findMany();
-    res.json(channels);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
-app.post('/api/chat/channels', async (req, res) => {
-  try {
-    const { name, desc, iconName, badge, targetBlock } = req.body;
-    if (!name || !name.trim()) {
-      return res.status(400).json({ error: 'Channel name is required' });
-    }
-
-    const cleanName = name.trim().toLowerCase().replace(/\s+/g, '-');
-    const existing = await prisma.chatChannel.findFirst({
-      where: { name: { equals: cleanName, mode: 'insensitive' } }
-    });
-    if (existing) {
-      return res.status(400).json({ error: 'A channel with this name already exists' });
-    }
-
-    const channel = await prisma.chatChannel.create({
-      data: {
-        name: cleanName,
-        desc: desc ? desc.trim() : `${cleanName} channel`,
-        iconName: iconName || 'MessageSquare',
-        badge: badge ? badge.trim() : null,
-        targetBlock: targetBlock || 'ALL'
-      }
-    });
-
-    io.emit('chat_channel_created', channel);
-    res.status(201).json(channel);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.put('/api/chat/channels/:id', async (req, res) => {
-  try {
-    const { name, desc, iconName, badge, targetBlock } = req.body;
-    const updated = await prisma.chatChannel.update({
-      where: { id: req.params.id },
-      data: {
-        ...(name && { name: name.trim().toLowerCase().replace(/\s+/g, '-') }),
-        ...(desc !== undefined && { desc: desc.trim() }),
-        ...(iconName && { iconName }),
-        ...(badge !== undefined && { badge: badge ? badge.trim() : null }),
-        ...(targetBlock && { targetBlock })
-      }
-    });
-
-    io.emit('chat_channel_updated', updated);
-    res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete('/api/chat/channels/:id', async (req, res) => {
-  try {
-    await prisma.chatMessage.deleteMany({
-      where: { channelId: req.params.id }
-    });
-    await prisma.chatChannel.delete({
-      where: { id: req.params.id }
-    });
-
-    io.emit('chat_channel_deleted', req.params.id);
-    res.json({ success: true, id: req.params.id });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/chat/channels/:id/messages', async (req, res) => {
-  try {
-    const messages = await prisma.chatMessage.findMany({
-      where: { channelId: req.params.id },
-      orderBy: { createdAt: 'asc' }
-    });
-    res.json(messages);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/chat/channels/:id/messages', async (req, res) => {
-  try {
-    const data = req.body;
-    const channelId = req.params.id;
-
-    // Ensure channel exists
-    let channel = await prisma.chatChannel.findUnique({ where: { id: channelId } });
-    if (!channel) {
-      channel = await prisma.chatChannel.findFirst({ where: { name: channelId } });
-    }
-    if (!channel) {
-      channel = await prisma.chatChannel.create({
-        data: { name: channelId, desc: `${channelId} discussion channel` }
-      });
-    }
-
-    const message = await prisma.chatMessage.create({
-      data: {
-        channelId: channel.id,
-        senderName: data.senderName || 'Anonymous',
-        usn: data.usn || 'N/A',
-        roomNo: data.roomNo || 'N/A',
-        message: data.message,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        price: data.price,
-        categoryTag: data.categoryTag,
-        imgUrl: data.imgUrl
-      }
-    });
-
-    io.to(channel.id).emit('new_message', message);
-    res.status(201).json({ success: true, message });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // ==================== SETTINGS & DASHBOARD ====================
 app.get('/api/settings/:key', async (req, res) => {

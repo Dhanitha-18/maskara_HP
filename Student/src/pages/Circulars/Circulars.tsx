@@ -58,136 +58,8 @@ export interface Notice {
   };
 }
 
-const INITIAL_NOTICES: Notice[] = [
-  {
-    id: 'circ-1',
-    title: 'Revised Mess Timings & Exam Week Special Dining Schedule',
-    desc: 'Mess dinner schedules have been extended by 45 minutes to facilitate student arrival during the ongoing mid-semester examinations. Special high-protein snacks will be served during evening hours at Block A cafeteria.',
-    date: '18 July 2026',
-    time: '09:30 AM',
-    category: 'Mess Rules',
-    priority: 'High',
-    isRead: false,
-    isArchived: false,
-    author: 'Chief Warden Dr. R. K. Sharma',
-    fileSize: '240 KB',
-    attachments: [
-      { name: 'Exam_Mess_Schedule_July2026.pdf', type: 'pdf', size: '240 KB' },
-      { name: 'Dietary_Menu_Chart.xlsx', type: 'excel', size: '115 KB' }
-    ],
-    reactions: { going: 45, useful: 89, thanks: 62, clarification: 4 },
-    comments: [
-      { id: 'c1', author: 'Rahul V.', role: 'Student', text: 'Will packed dinner be available for students returning late from lab?', timestamp: '18 Jul, 10:15 AM' },
-      { id: 'c2', author: 'Dr. R. K. Sharma', role: 'Warden', text: 'Yes, please inform the mess supervisor before 5:00 PM for late dinner tokens.', timestamp: '18 Jul, 11:00 AM' }
-    ]
-  },
-  {
-    id: 'circ-2',
-    title: 'Mandatory Biometric Access & Facial Recognition Update Notice',
-    desc: 'All newly admitted residents of Block A and Block B must register their biometrics and updated emergency contacts with the Warden office by Friday. Failure to comply will restrict late-hour gate access.',
-    date: '15 July 2026',
-    time: '02:15 PM',
-    category: 'Security',
-    priority: 'High',
-    isRead: false,
-    isArchived: false,
-    author: 'Head of Hostel Security Capt. M. Singh',
-    fileSize: '150 KB',
-    attachments: [
-      { name: 'Biometric_Registration_Form.pdf', type: 'pdf', size: '150 KB' },
-      { name: 'Security_Guidelines.png', type: 'image', size: '1.2 MB' }
-    ],
-    reactions: { going: 12, useful: 114, thanks: 45, clarification: 8 },
-    comments: [
-      { id: 'c3', author: 'Ananya S.', role: 'Student', text: 'Are the warden office timings open during weekend hours for registration?', timestamp: '15 Jul, 03:00 PM' },
-      { id: 'c4', author: 'Capt. M. Singh', role: 'Warden', text: 'Office is open Saturday 9:00 AM to 1:00 PM strictly.', timestamp: '15 Jul, 04:20 PM' }
-    ]
-  },
-  {
-    id: 'circ-3',
-    title: 'Annual Independence Day Flag Hoisting & Cultural Gala 2026',
-    desc: 'Join all hostel residents and faculty for the Independence Day flag hoisting ceremony at the main administrative lawn followed by a grand breakfast buffet and cultural performances.',
-    date: '14 July 2026',
-    time: '11:00 AM',
-    category: 'Events',
-    priority: 'Normal',
-    isRead: true,
-    readAt: '14 Jul 2026, 04:30 PM',
-    isArchived: false,
-    author: 'Student Cultural Committee',
-    fileSize: '410 KB',
-    eventDetails: {
-      eventDate: '15 August 2026',
-      eventTime: '08:30 AM - 12:30 PM',
-      venue: 'Main Administrative Lawn & Auditorium',
-      rsvpDeadline: '10 August 2026',
-      isRsvped: true,
-      rsvpCount: 142
-    },
-    attachments: [
-      { name: 'Cultural_Event_Itinerary.pdf', type: 'pdf', size: '410 KB' },
-      { name: 'Performance_Registration_Link', type: 'link', url: 'https://college.edu/events/register' }
-    ],
-    reactions: { going: 128, useful: 95, thanks: 76, clarification: 2 },
-    comments: []
-  },
-  {
-    id: 'circ-4',
-    title: 'Block A Elevator Servicing & Solar Heater Electrical Maintenance',
-    desc: 'Elevator servicing in Block A is scheduled for Saturday between 10:00 AM and 1:00 PM. Hot water supply via solar heaters will undergo maintenance between 06:00 AM and 08:30 AM.',
-    date: '12 July 2026',
-    time: '04:00 PM',
-    category: 'Maintenance',
-    priority: 'Normal',
-    isRead: true,
-    readAt: '13 Jul 2026, 09:10 AM',
-    isArchived: false,
-    author: 'Estate Maintenance Division',
-    fileSize: '110 KB',
-    attachments: [
-      { name: 'Maintenance_Schedule.pdf', type: 'pdf', size: '110 KB' }
-    ],
-    reactions: { going: 5, useful: 72, thanks: 30, clarification: 6 },
-    comments: []
-  },
-  {
-    id: 'circ-5',
-    title: 'Revised Guidelines & Timings for Submitting Leave Applications',
-    desc: 'Ensure all weekend and outstation leave requests are submitted via the portal Leave tab at least 24 hours in advance. Parent SMS verification code must be validated prior to warden departure approval.',
-    date: '08 July 2026',
-    time: '10:00 AM',
-    category: 'Regulations',
-    priority: 'High',
-    isRead: true,
-    readAt: '09 Jul 2026, 08:00 AM',
-    isArchived: false,
-    author: 'Associate Dean Student Affairs',
-    fileSize: '310 KB',
-    attachments: [
-      { name: 'Leave_Rules_2026_Policy.pdf', type: 'pdf', size: '310 KB' }
-    ],
-    reactions: { going: 8, useful: 98, thanks: 40, clarification: 12 },
-    comments: []
-  },
-  {
-    id: 'circ-6',
-    title: 'Archive Notice: Monsoon Pest Control & Room Sanitization Drive',
-    desc: 'Mandatory room-by-room pest control drive conducted across all floors of OM SAI PG during early monsoon season.',
-    date: '01 June 2026',
-    time: '09:00 AM',
-    category: 'Maintenance',
-    priority: 'Normal',
-    isRead: true,
-    isArchived: true,
-    author: 'Health & Hygiene Committee',
-    fileSize: '180 KB',
-    attachments: [
-      { name: 'Sanitization_Report_June.pdf', type: 'pdf', size: '180 KB' }
-    ],
-    reactions: { going: 0, useful: 45, thanks: 22, clarification: 0 },
-    comments: []
-  }
-];
+const INITIAL_NOTICES: Notice[] = [];
+
 
 export const Circulars: React.FC = () => {
   const { student } = usePayment();
@@ -233,30 +105,28 @@ export const Circulars: React.FC = () => {
         if (res.ok) {
           // Backend returns a raw array directly, not { notices: [...] }
           const data = await res.json();
-          const rawList = Array.isArray(data) ? data : (Array.isArray(data.notices) ? data.notices : null);
-          if (rawList && rawList.length > 0) {
-            const mapped: Notice[] = rawList.map((n: any) => ({
-              id: n.id,
-              title: n.title,
-              date: n.date,
-              time: n.time || '09:00 AM',
-              category: (n.category || 'Events') as Notice['category'],
-              priority: (n.priority || 'Normal') as Notice['priority'],
-              desc: n.desc || '',
-              author: n.author || 'Administration',
-              fileSize: n.fileSize || '150 KB',
-              isRead: false,
-              isArchived: false,
-              // Map uploaded document as attachment if present
-              attachments: n.documentUrl
-                ? [{ name: n.documentName || 'Attachment', type: (n.documentType?.toLowerCase() || 'pdf') as Attachment['type'], url: n.documentUrl, size: n.fileSize || '150 KB' }]
-                : [],
-              reactions: { going: 0, useful: 0, thanks: 0, clarification: 0 },
-              comments: []
-            }));
-            // Replace static notices entirely with real backend data
-            setNotices(mapped);
-          }
+          const rawList = Array.isArray(data) ? data : (Array.isArray(data.notices) ? data.notices : []);
+          const mapped: Notice[] = rawList.map((n: any) => ({
+            id: n.id,
+            title: n.title,
+            date: n.date,
+            time: n.time || '09:00 AM',
+            category: (n.category || 'Events') as Notice['category'],
+            priority: (n.priority || 'Normal') as Notice['priority'],
+            desc: n.desc || '',
+            author: n.author || 'Administration',
+            fileSize: n.fileSize || '150 KB',
+            isRead: false,
+            isArchived: false,
+            attachments: n.documentUrl
+              ? [{ name: n.documentName || 'Attachment', type: (n.documentType?.toLowerCase() || 'pdf') as Attachment['type'], url: n.documentUrl, size: n.fileSize || '150 KB' }]
+              : [],
+            reactions: { going: 0, useful: 0, thanks: 0, clarification: 0 },
+            comments: []
+          }));
+          // Always replace state — even if empty (no mock fallback)
+          setNotices(mapped);
+
         }
       } catch (err) {
         console.error('Error fetching notices:', err);

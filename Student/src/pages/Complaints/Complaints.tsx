@@ -3,6 +3,7 @@ import { HeroBanner } from '../../components/layout/HeroBanner';
 import { COMPLAINTS_HERO_IMAGE } from '../../assets/heroBanners';
 import { usePayment } from '../../context/PaymentContext';
 import { socket } from '../../lib/socket';
+import { apiRequest } from '../../services/api';
 import { 
   Send, ThumbsUp, CheckCircle, Clock, Filter, Search, 
   PhoneCall, ShieldAlert, FileText, ChevronRight, CheckCircle2,
@@ -125,8 +126,7 @@ export const Complaints: React.FC = () => {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetch('/api/complaints')
-      .then(res => res.json())
+    apiRequest('/api/complaints')
       .then(data => {
         if (active) {
           const studentComplaints = Array.isArray(data) ? data.map((c: any) => ({
