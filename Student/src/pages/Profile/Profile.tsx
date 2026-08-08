@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePayment } from '../../context/PaymentContext';
 import { useAuth } from '../../context/AuthContext';
+import { apiRequest } from '../../services/api';
 import { 
   User, Phone, MapPin, Building, FileText, CheckCircle2, Clock, 
   XCircle, ShieldAlert, X, Eye, HeartPulse, 
@@ -10,7 +11,7 @@ import { HeroBanner } from '../../components/layout/HeroBanner';
 import { useNavigate } from 'react-router-dom';
 
 export const Profile: React.FC = () => {
-  const { student, hostel, paymentStatus, applicationState, backendPayments, updateStudent } = usePayment();
+  const { student, hostel, paymentStatus, applicationState, backendPayments, updateStudent, refreshStatus } = usePayment();
   const { isLoggedIn, studentUsn: authUsn, login } = useAuth();
   const navigate = useNavigate();
   const [showAppFormModal, setShowAppFormModal] = useState(false);
@@ -40,11 +41,9 @@ export const Profile: React.FC = () => {
     setIsSaving(true);
     setSaveSuccessMsg(null);
     try {
-      // Identity is resolved from the JWT token attached automatically by the
-      // global fetch interceptor (api.ts). Do NOT send usn as identity.
-      const res = await fetch('http://localhost:5000/api/student/profile', {
+      // Use apiRequest which automatically attaches the JWT Bearer token from sessionStorage
+      const result = await apiRequest('/api/student/profile', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           newUsn: editedUsn || null,
           email: editedEmail,
@@ -54,9 +53,8 @@ export const Profile: React.FC = () => {
         })
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to update profile');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update profile');
       }
 
       // Update AuthContext session so USN stays synced across all tabs.
@@ -67,6 +65,9 @@ export const Profile: React.FC = () => {
           sessionStorage.getItem('student_account_id') || undefined);
       }
 
+      // Refresh backend data so both Student and Admin portals see updated info
+      await refreshStatus();
+
       updateStudent({
         usn: editedUsn,
         email: editedEmail,
@@ -75,7 +76,7 @@ export const Profile: React.FC = () => {
         year: selectedYear as any
       });
 
-      setSaveSuccessMsg('Profile updated successfully! Saved permanently in database.');
+      setSaveSuccessMsg('Profile updated successfully! Changes reflected across all portals.');
       setIsEditing(false);
       setTimeout(() => setSaveSuccessMsg(null), 4000);
     } catch (err: any) {

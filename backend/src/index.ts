@@ -410,6 +410,11 @@ app.put('/api/student/profile', authenticateJWT, async (req: AuthenticatedReques
       });
     }
 
+    // Broadcast socket events so Admin Portal reflects updated student data instantly
+    io.emit('data_updated', { type: 'STUDENT_PROFILE_UPDATED', id: application.id });
+    io.emit('APPLICATION_UPDATED', { id: application.id });
+    io.emit('STUDENT_UPDATED', { id: application.id, studentAccountId });
+
     return res.json({ success: true, application: updatedApp });
   } catch (err: any) {
     console.error('Profile update error:', err);
