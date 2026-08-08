@@ -110,16 +110,18 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
             <div className="space-y-1.5">
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 Username / Mail-id
               </label>
               <input
                 type="text"
+                name="admin_username"
                 value={username}
                 onChange={e => { setUsername(e.target.value); setError(''); }}
-                placeholder="Enter admin username"
+                placeholder="Enter admin username or email"
+                autoComplete="off"
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all placeholder:text-slate-300"
                 autoFocus
                 required
@@ -133,9 +135,11 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  name="admin_password"
                   value={password}
                   onChange={e => { setPassword(e.target.value); setError(''); }}
                   placeholder="Enter password"
+                  autoComplete="new-password"
                   className="w-full px-4 py-3 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all placeholder:text-slate-300"
                   required
                 />
