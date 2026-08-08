@@ -117,13 +117,11 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
               </label>
               <input
                 type="text"
-                name="admin_username"
                 value={username}
                 onChange={e => { setUsername(e.target.value); setError(''); }}
-                placeholder="Enter admin username or email"
-                autoComplete="off"
+                placeholder="Enter admin username"
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all placeholder:text-slate-300"
-                autoFocus
+                autoComplete="off"
                 required
               />
             </div>
@@ -135,12 +133,11 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  name="admin_password"
                   value={password}
                   onChange={e => { setPassword(e.target.value); setError(''); }}
                   placeholder="Enter password"
-                  autoComplete="new-password"
                   className="w-full px-4 py-3 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all placeholder:text-slate-300"
+                  autoComplete="new-password"
                   required
                 />
                 <button
