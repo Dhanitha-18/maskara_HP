@@ -38,24 +38,30 @@ export const Profile: React.FC = () => {
     setIsSaving(true);
     setSaveSuccessMsg(null);
     try {
-      const currentUsnToUse = student.usn || authUsn;
+      // Identity is resolved from the JWT token attached automatically by the
+      // global fetch interceptor (api.ts). Do NOT send usn as identity.
       const res = await fetch('http://localhost:5000/api/student/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          usn: currentUsnToUse,
-          newUsn: editedUsn,
+          newUsn: editedUsn || null,
           email: editedEmail,
           year: selectedYear,
           yearSem: selectedYear
         })
       });
 
-      if (!res.ok) throw new Error('Failed to update profile');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update profile');
+      }
 
-      // Update AuthContext session so USN stays synced across all tabs
+      // Update AuthContext session so USN stays synced across all tabs.
+      // Preserve the existing token and studentAccountId — do NOT reset identity.
       if (editedUsn && editedUsn !== authUsn) {
-        login(editedUsn, student.name || undefined, student.phone || undefined);
+        login(editedUsn, student.name || undefined, student.phone || undefined,
+          sessionStorage.getItem('student_token') || undefined,
+          sessionStorage.getItem('student_account_id') || undefined);
       }
 
       updateStudent({
@@ -68,8 +74,8 @@ export const Profile: React.FC = () => {
       setSaveSuccessMsg('Profile updated successfully! Saved permanently in database.');
       setIsEditing(false);
       setTimeout(() => setSaveSuccessMsg(null), 4000);
-    } catch {
-      alert('Failed to save profile changes. Please try again.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to save profile changes. Please try again.');
     } finally {
       setIsSaving(false);
     }

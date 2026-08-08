@@ -275,7 +275,7 @@ export const ApplicationForm: React.FC = () => {
       });
 
       const cleanContact = contact.replace(/\D/g, '') || contact.trim();
-      await submitApplication({
+      const submissionResult = await submitApplication({
         bmsitId: bmsitId || null,
         studentName: fullName,
         gender: gender,
@@ -309,8 +309,8 @@ export const ApplicationForm: React.FC = () => {
         collegeEmail: collegeEmail || null,
         year: sem || null,
 
-        // Legacy compatibility
-        usn: finalUsn,
+        // USN is optional — send null when blank
+        usn: userEnteredUsn ? userEnteredUsn.toUpperCase() : null,
         department: finalCourse,
         yearSem: sem,
         address: permanentAddress,
@@ -320,8 +320,16 @@ export const ApplicationForm: React.FC = () => {
         passportPhoto: uploadedPhotoUrl || null,
       });
 
-      // Login student using exact name and phone number credentials
-      login(finalUsn, fullName, contact);
+      // Use the token and studentAccountId returned directly from the backend.
+      // This guarantees we log into the EXACT account created for THIS application —
+      // even when USN is blank (which would otherwise match any blank-USN account).
+      const returnedToken = submissionResult?.token;
+      const returnedAccountId = submissionResult?.studentAccountId;
+      const returnedName = submissionResult?.studentName || fullName;
+      const returnedPhone = submissionResult?.phoneNumber || contact;
+      const returnedUsn = submissionResult?.usn || finalUsn;
+
+      login(returnedUsn, returnedName, returnedPhone, returnedToken, returnedAccountId);
 
       alert("Application submitted successfully! You are now logged in.");
       navigate("/");

@@ -41,7 +41,8 @@ export function requireAdmin(req: AuthenticatedRequest, res: Response, next: Nex
 }
 
 export function requireStudent(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  if (!req.user || (req.user.userType !== 'STUDENT' && !req.user.usn)) {
+  // USN may legitimately be null — use studentAccountId as the identity proof.
+  if (!req.user || (req.user.userType !== 'STUDENT' && !req.user.studentAccountId)) {
     return res.status(403).json({ error: 'Student access required.' });
   }
   next();

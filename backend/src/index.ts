@@ -221,7 +221,9 @@ app.post('/api/student/login', async (req, res) => {
       return res.status(400).json({ error: 'Valid Name and 10-digit Phone Number are required.' });
     }
 
-    // 1. Fetch all active student accounts and match by phone digits & name
+    // ── STEP 1: Match StudentAccount by phone + name ─────────────────────────
+    // Name + phone are AUTHENTICATION CREDENTIALS only, not identity.
+    // StudentAccount.id is the permanent identity once matched.
     const allAccounts = await prisma.studentAccount.findMany({
       where: { status: 'ACTIVE' }
     });
@@ -232,7 +234,10 @@ app.post('/api/student/login', async (req, res) => {
       return (aPhoneDigits === cleanPhone10 || a.phoneNumber?.trim() === String(phoneNumber).trim()) && aName === cleanName;
     });
 
-    // 2. Fallback: Search Application table directly
+    // ── STEP 2: Fallback — search Application table by phone + name ──────────
+    // Only used when no StudentAccount matched directly.
+    // After finding the matching Application, resolve its StudentAccount
+    // ONLY via Application.id (applicationId linkage). NEVER via USN.
     if (!account) {
       const allApps = await prisma.application.findMany({
         where: { status: { not: 'REJECTED' } }
@@ -245,11 +250,13 @@ app.post('/api/student/login', async (req, res) => {
       });
 
       if (matchingApp) {
-        const existingAcc = matchingApp.usn
-          ? await prisma.studentAccount.findFirst({ where: { usn: matchingApp.usn } })
-          : await prisma.studentAccount.findFirst({ where: { applicationId: matchingApp.id } });
+        // Always look up by applicationId — NEVER by USN (USN may be null).
+        const existingAcc = await prisma.studentAccount.findFirst({
+          where: { applicationId: matchingApp.id }
+        });
 
         if (existingAcc) {
+          // Sync name/phone in case they changed, but never change the id.
           account = await prisma.studentAccount.update({
             where: { id: existingAcc.id },
             data: {
@@ -260,9 +267,11 @@ app.post('/api/student/login', async (req, res) => {
             }
           });
         } else {
+          // No StudentAccount for this application yet — create one.
+          // USN is stored as null when missing; never use empty string.
           account = await prisma.studentAccount.create({
             data: {
-              usn: matchingApp.usn || '',
+              usn: (matchingApp.usn && matchingApp.usn.trim() !== '') ? matchingApp.usn.trim() : null,
               studentName: matchingApp.studentName,
               phoneNumber: matchingApp.phoneNumber,
               applicationId: matchingApp.id,
@@ -280,27 +289,25 @@ app.post('/api/student/login', async (req, res) => {
       });
     }
 
-    // 3. Fetch associated application
-    const application = await prisma.application.findFirst({
-      where: {
-        OR: [
-          ...(account.applicationId ? [{ id: account.applicationId }] : []),
-          ...(account.usn ? [{ usn: account.usn }] : []),
-          { phoneNumber: account.phoneNumber }
-        ]
-      }
-    });
+    // ── STEP 3: Fetch associated Application via applicationId ONLY ──────────
+    // Do NOT fall back to USN or phone number.
+    // StudentAccount.id → StudentAccount.applicationId → Application.id
+    const application = account.applicationId
+      ? await prisma.application.findUnique({ where: { id: account.applicationId } })
+      : null;
 
     if (application && String(application.status).toUpperCase() === 'REJECTED') {
       return res.status(404).json({ success: false, error: 'Your application has been rejected by administration.' });
     }
 
-    const effectiveUsn = account.usn || application?.usn || account.phoneNumber;
-
+    // ── STEP 4: Build JWT ────────────────────────────────────────────────────
+    // StudentAccount.id is the permanent identity.
+    // USN is an optional profile attribute — may be null.
+    // NEVER substitute phone number or name for a missing USN.
     const studentPayload = {
       id: account.id,
-      studentAccountId: account.id,  // permanent identity — same as id
-      usn: effectiveUsn,
+      studentAccountId: account.id,
+      usn: account.usn ?? null,          // null when not provided — no fallback
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
       userType: 'STUDENT'
@@ -312,7 +319,7 @@ app.post('/api/student/login', async (req, res) => {
       success: true,
       token,
       studentAccountId: account.id,
-      usn: effectiveUsn,
+      usn: account.usn ?? null,
       studentName: account.studentName,
       phoneNumber: account.phoneNumber,
       application
@@ -330,56 +337,75 @@ app.get('/api/auth/me', authenticateJWT, async (req: AuthenticatedRequest, res) 
 });
 
 // Student Profile Update
-app.put('/api/student/profile', async (req, res) => {
+// Protected: requires a valid student JWT. The authenticated StudentAccount.id
+// is the identity — no USN, phone number, or name is used to identify the student.
+app.put('/api/student/profile', authenticateJWT, async (req: AuthenticatedRequest, res) => {
   try {
-    const { usn, newUsn, email, year, yearSem } = req.body;
+    const { newUsn, email, year, yearSem } = req.body;
+    const studentAccountId: string | undefined = req.user?.studentAccountId;
 
-    if (!usn) {
-      return res.status(400).json({ error: 'Current USN or identifier is required.' });
+    if (!studentAccountId) {
+      return res.status(401).json({ error: 'Authentication required. Could not determine student identity.' });
     }
 
-    // Find the application by usn or phone (phone used as fallback usn)
-    const application = await prisma.application.findFirst({
-      where: {
-        OR: [
-          { usn: usn },
-          { phoneNumber: usn },
-          { bmsitId: usn }
-        ]
-      }
+    // ── Resolve the student's application via the authenticated identity chain ──
+    // StudentAccount.id → StudentAccount.applicationId → Application.id
+    // NEVER use USN, phone number, or name to look up the application.
+    const studentAccount = await prisma.studentAccount.findUnique({
+      where: { id: studentAccountId }
+    });
+
+    if (!studentAccount) {
+      return res.status(404).json({ error: 'Student account not found.' });
+    }
+
+    if (!studentAccount.applicationId) {
+      return res.status(404).json({ error: 'No application linked to this student account.' });
+    }
+
+    const application = await prisma.application.findUnique({
+      where: { id: studentAccount.applicationId }
     });
 
     if (!application) {
       return res.status(404).json({ error: 'Student application not found.' });
     }
 
+    // ── If a new USN is being set, validate it is not already taken ────────────
+    const cleanNewUsn = newUsn ? String(newUsn).trim().toUpperCase() : null;
+    if (cleanNewUsn && cleanNewUsn !== '') {
+      // Check for USN conflict on a DIFFERENT account
+      const usnConflict = await prisma.studentAccount.findFirst({
+        where: {
+          usn: cleanNewUsn,
+          id: { not: studentAccountId }
+        }
+      });
+      if (usnConflict) {
+        return res.status(409).json({
+          error: `USN ${cleanNewUsn} is already registered to another student. Do not share or transfer USNs.`
+        });
+      }
+    }
+
     const updatedYear = yearSem || year;
 
-    // Update Application record
+    // ── Update Application record ─────────────────────────────────────────────
     const updatedApp = await prisma.application.update({
       where: { id: application.id },
       data: {
-        ...(newUsn && newUsn !== usn ? { usn: newUsn } : {}),
+        ...(cleanNewUsn !== null ? { usn: cleanNewUsn || null } : {}),
         ...(email ? { email } : {}),
         ...(updatedYear ? { yearSem: updatedYear, year: updatedYear } : {})
       }
     });
 
-    // Also sync usn on StudentAccount so Admin's Student Database reflects the change
-    const effectiveNewUsn = newUsn || usn;
-    const studentAccount = await prisma.studentAccount.findFirst({
-      where: {
-        OR: [
-          { usn: usn },
-          { applicationId: application.id }
-        ]
-      }
-    });
-
-    if (studentAccount && newUsn && newUsn !== usn) {
+    // ── Sync USN on StudentAccount (USN is a display attribute, not identity) ──
+    // StudentAccount.id never changes. Only the usn attribute is updated.
+    if (cleanNewUsn !== null) {
       await prisma.studentAccount.update({
-        where: { id: studentAccount.id },
-        data: { usn: effectiveNewUsn }
+        where: { id: studentAccountId },
+        data: { usn: cleanNewUsn || null }
       });
     }
 
@@ -415,80 +441,99 @@ app.post('/api/applications/check-duplicate', async (req, res) => {
 app.post('/api/applications', async (req, res) => {
   try {
     const data = req.body;
-    const newApp = await prisma.application.create({
-      data: {
-        usn: data.usn,
-        studentName: data.studentName,
-        gender: data.gender || 'Male',
-        phoneNumber: data.phoneNumber,
-        email: data.email,
-        dob: data.dob ? new Date(data.dob) : new Date(),
-        program: data.program,
-        semester: data.semester,
-        branch: data.branch,
-        bloodGroup: data.bloodGroup,
-        aadhaarNumber: data.aadhaarNumber,
-        nationality: data.nationality,
-        religion: data.religion,
-        permanentAddress: data.permanentAddress,
-        fatherName: data.fatherName || 'N/A',
-        fatherOccupation: data.fatherOccupation,
-        fatherPhone: data.fatherPhone || 'N/A',
-        fatherEmail: data.fatherEmail,
-        motherName: data.motherName,
-        motherOccupation: data.motherOccupation,
-        motherPhone: data.motherPhone,
-        motherEmail: data.motherEmail,
-        communicationAddress: data.communicationAddress,
-        guardianName: data.guardianName,
-        guardianRelationship: data.guardianRelationship,
-        guardianPhone: data.guardianPhone,
-        guardianAddress: data.guardianAddress,
-        healthIssues: data.healthIssues,
-        allergies: data.allergies,
-        currentMedications: data.currentMedications,
-        emergencyContact: data.emergencyContact || data.phoneNumber || 'N/A',
-        department: data.department || data.branch || 'General',
-        yearSem: data.yearSem || data.semester || '1st Sem',
-        address: data.address || data.permanentAddress || 'N/A',
-        category: data.category,
-        hostelPref: data.hostelPref || 'General',
-        medicalInfo: data.medicalInfo,
-        remarks: data.remarks,
-        status: data.status || 'PENDING',
-        passportPhoto: data.passportPhoto || data.photoUrl
-      }
+
+    // Normalize USN: null when not provided or when provided as '-' / empty whitespace
+    const userUsn = data.usn ? String(data.usn).trim() : '';
+    const normalizedUsn = (userUsn !== '' && userUsn !== '-') ? userUsn.toUpperCase() : null;
+
+    // ── Atomically create Application + StudentAccount and link both bidirectional IDs ──
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create Application
+      const newApp = await tx.application.create({
+        data: {
+          usn: normalizedUsn,
+          studentName: data.studentName,
+          gender: data.gender || 'Male',
+          phoneNumber: data.phoneNumber,
+          email: data.email,
+          dob: data.dob ? new Date(data.dob) : new Date(),
+          program: data.program,
+          semester: data.semester,
+          branch: data.branch,
+          bloodGroup: data.bloodGroup,
+          aadhaarNumber: data.aadhaarNumber,
+          nationality: data.nationality,
+          religion: data.religion,
+          permanentAddress: data.permanentAddress,
+          fatherName: data.fatherName || 'N/A',
+          fatherOccupation: data.fatherOccupation,
+          fatherPhone: data.fatherPhone || 'N/A',
+          fatherEmail: data.fatherEmail,
+          motherName: data.motherName,
+          motherOccupation: data.motherOccupation,
+          motherPhone: data.motherPhone,
+          motherEmail: data.motherEmail,
+          communicationAddress: data.communicationAddress,
+          guardianName: data.guardianName,
+          guardianRelationship: data.guardianRelationship,
+          guardianPhone: data.guardianPhone,
+          guardianAddress: data.guardianAddress,
+          healthIssues: data.healthIssues,
+          allergies: data.allergies,
+          currentMedications: data.currentMedications,
+          emergencyContact: data.emergencyContact || data.phoneNumber || 'N/A',
+          department: data.department || data.branch || 'General',
+          yearSem: data.yearSem || data.semester || '1st Sem',
+          address: data.address || data.permanentAddress || 'N/A',
+          category: data.category,
+          hostelPref: data.hostelPref || 'General',
+          medicalInfo: data.medicalInfo,
+          remarks: data.remarks,
+          status: data.status || 'PENDING',
+          passportPhoto: data.passportPhoto || data.photoUrl
+        }
+      });
+
+      // 2. Create NEW StudentAccount linked to newApp.id
+      const finalAccount = await tx.studentAccount.create({
+        data: {
+          usn: normalizedUsn,
+          studentName: newApp.studentName,
+          phoneNumber: newApp.phoneNumber,
+          applicationId: newApp.id,
+          status: 'ACTIVE'
+        }
+      });
+
+      // 3. Update Application to set studentAccountId = finalAccount.id
+      const updatedApp = await tx.application.update({
+        where: { id: newApp.id },
+        data: { studentAccountId: finalAccount.id }
+      });
+
+      return { app: updatedApp, account: finalAccount };
     });
 
-    // Create or update Student Account entry so login works immediately
-    const existingAcc = newApp.usn
-      ? await prisma.studentAccount.findFirst({ where: { usn: newApp.usn } })
-      : await prisma.studentAccount.findFirst({ where: { applicationId: newApp.id } });
+    // ── Issue JWT containing the new StudentAccount.id ────────────────────────
+    const studentPayload = {
+      id: result.account.id,
+      studentAccountId: result.account.id,
+      usn: result.account.usn ?? null,
+      studentName: result.account.studentName,
+      phoneNumber: result.account.phoneNumber,
+      userType: 'STUDENT'
+    };
+    const studentToken = generateToken(studentPayload);
 
-    if (existingAcc) {
-      await prisma.studentAccount.update({
-        where: { id: existingAcc.id },
-        data: {
-          usn: newApp.usn || existingAcc.usn || '',
-          studentName: newApp.studentName,
-          phoneNumber: newApp.phoneNumber,
-          applicationId: newApp.id,
-          status: 'ACTIVE'
-        }
-      });
-    } else {
-      await prisma.studentAccount.create({
-        data: {
-          usn: newApp.usn || '',
-          studentName: newApp.studentName,
-          phoneNumber: newApp.phoneNumber,
-          applicationId: newApp.id,
-          status: 'ACTIVE'
-        }
-      });
-    }
-
-    return res.status(201).json({ success: true, application: newApp });
+    return res.status(201).json({
+      success: true,
+      application: result.app,
+      studentAccountId: result.account.id,
+      token: studentToken,
+      studentName: result.account.studentName,
+      phoneNumber: result.account.phoneNumber,
+      usn: result.account.usn ?? null
+    });
   } catch (err: any) {
     console.error('Error creating application:', err);
     res.status(500).json({ error: err.message });
@@ -1148,10 +1193,26 @@ app.get('/api/payments/stats', async (req, res) => {
 app.post('/api/student/payment', async (req, res) => {
   try {
     const data = req.body;
+
+    // Resolve studentAccountId from authenticated JWT session if present
+    let resolvedAccountId: string | undefined = undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const jwt = await import('jsonwebtoken');
+        const JWT_SECRET = process.env.JWT_SECRET || 'maskara_jwt_secret_key_2026_super_secure';
+        const decoded: any = jwt.default.verify(authHeader.split(' ')[1], JWT_SECRET);
+        if (decoded.userType === 'STUDENT' && decoded.studentAccountId) {
+          resolvedAccountId = decoded.studentAccountId;
+        }
+      } catch (_) {}
+    }
+
     const payment = await prisma.payment.create({
       data: {
+        ...(resolvedAccountId ? { studentAccountId: resolvedAccountId } : {}),
         studentName: data.studentName,
-        studentUsn: data.studentUsn,
+        studentUsn: data.studentUsn || '',
         hostelName: data.hostelName || 'Main Hostel',
         block: data.block || 'Block A',
         floor: data.floor,
@@ -1440,24 +1501,65 @@ app.delete('/api/admin/accounts/:id', async (req, res) => {
 });
 
 // ==================== STUDENT PORTAL ROUTES ====================
-app.get('/api/student/status/:usn', async (req, res) => {
+app.get(['/api/student/status/:usn?', '/api/student/status'], async (req, res) => {
   try {
-    const inputUsn = (req.params.usn || '').trim();
-    const application = await prisma.application.findFirst({
-      where: {
-        OR: [
-          { usn: inputUsn },
-          { phoneNumber: inputUsn }
-        ]
-      },
-      include: {
-        allocations: {
-          include: {
-            bed: { include: { room: { include: { block: true } } } }
+    let targetAccountId: string | null = null;
+
+    // 1. Resolve student identity from Bearer token if present
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const jwt = await import('jsonwebtoken');
+        const JWT_SECRET = process.env.JWT_SECRET || 'maskara_jwt_secret_key_2026_super_secure';
+        const decoded: any = jwt.default.verify(authHeader.split(' ')[1], JWT_SECRET);
+        if (decoded.userType === 'STUDENT' && decoded.studentAccountId) {
+          targetAccountId = decoded.studentAccountId;
+        }
+      } catch (_) {}
+    }
+
+    const inputParam = (req.params.usn || '').trim();
+    let application = null;
+
+    // 2. Query application by authenticated studentAccountId (PRIMARY AUTHORITY)
+    if (targetAccountId) {
+      application = await prisma.application.findFirst({
+        where: {
+          OR: [
+            { studentAccountId: targetAccountId },
+            { id: targetAccountId },
+            { studentAccount: { id: targetAccountId } }
+          ]
+        },
+        include: {
+          allocations: {
+            include: {
+              bed: { include: { room: { include: { block: true } } } }
+            }
           }
         }
-      }
-    });
+      });
+    }
+
+    // 3. Fallback only if no authenticated application found AND inputParam is a valid non-dash identifier
+    if (!application && inputParam && inputParam !== '-' && inputParam !== 'null' && inputParam !== 'undefined') {
+      application = await prisma.application.findFirst({
+        where: {
+          OR: [
+            { studentAccountId: inputParam },
+            { id: inputParam },
+            { usn: inputParam }
+          ]
+        },
+        include: {
+          allocations: {
+            include: {
+              bed: { include: { room: { include: { block: true } } } }
+            }
+          }
+        }
+      });
+    }
 
     if (!application) {
       return res.status(404).json({ found: false, error: 'No application found' });
@@ -1476,8 +1578,12 @@ app.get('/api/student/status/:usn', async (req, res) => {
       admissionDate: new Date(allocation.allocatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     } : null;
 
+    const paymentWhere: any[] = [];
+    if (application.studentAccountId) paymentWhere.push({ studentAccountId: application.studentAccountId });
+    if (application.usn) paymentWhere.push({ studentUsn: application.usn });
+
     const payments = await prisma.payment.findMany({
-      where: { studentUsn: application.usn },
+      where: paymentWhere.length > 0 ? { OR: paymentWhere } : { id: 'impossible_id' },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -1501,9 +1607,13 @@ app.get('/api/student/status/:usn', async (req, res) => {
 // ==================== LEAVE APPLICATIONS ====================
 app.get('/api/leaves', async (req, res) => {
   try {
-    const { studentUsn } = req.query;
+    const { studentUsn, studentAccountId } = req.query;
     const where: any = {};
-    if (studentUsn) where.usn = String(studentUsn);
+    if (studentAccountId) {
+      where.studentAccountId = String(studentAccountId);
+    } else if (studentUsn) {
+      where.usn = String(studentUsn);
+    }
 
     const leaves = await prisma.leaveApplication.findMany({ where, orderBy: { appliedAt: 'desc' } });
     res.json(leaves);
@@ -1515,8 +1625,24 @@ app.get('/api/leaves', async (req, res) => {
 app.post('/api/leaves', async (req, res) => {
   try {
     const data = req.body;
+    let resolvedAccountId: string | undefined = undefined;
+
+    // Resolve studentAccountId from authenticated JWT session if present
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const jwt = await import('jsonwebtoken');
+        const JWT_SECRET = process.env.JWT_SECRET || 'maskara_jwt_secret_key_2026_super_secure';
+        const decoded: any = jwt.default.verify(authHeader.split(' ')[1], JWT_SECRET);
+        if (decoded.userType === 'STUDENT' && decoded.studentAccountId) {
+          resolvedAccountId = decoded.studentAccountId;
+        }
+      } catch (_) {}
+    }
+
     const leave = await prisma.leaveApplication.create({
       data: {
+        ...(resolvedAccountId ? { studentAccountId: resolvedAccountId } : {}),
         studentName: data.studentName,
         usn: data.usn,
         roomNo: data.roomNo,
@@ -2088,7 +2214,50 @@ app.get('/api/dashboard/stats', async (req, res) => {
   }
 });
 
+// Startup Backfill Function
+async function backfillApplicationStudentAccountIds() {
+  try {
+    // 1. For every StudentAccount with an applicationId, ensure Application.studentAccountId is set
+    const accounts = await prisma.studentAccount.findMany({
+      where: { applicationId: { not: null } }
+    });
+
+    for (const acc of accounts) {
+      if (acc.applicationId) {
+        await prisma.application.updateMany({
+          where: {
+            id: acc.applicationId,
+            studentAccountId: null
+          },
+          data: { studentAccountId: acc.id }
+        });
+      }
+    }
+
+    // 2. For every Application with a studentAccountId, ensure StudentAccount.applicationId is set
+    const apps = await prisma.application.findMany({
+      where: { studentAccountId: { not: null } }
+    });
+
+    for (const app of apps) {
+      if (app.studentAccountId) {
+        await prisma.studentAccount.updateMany({
+          where: {
+            id: app.studentAccountId,
+            applicationId: null
+          },
+          data: { applicationId: app.id }
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error during studentAccountId backfill:', err);
+  }
+}
+
 // Start Server
-server.listen(PORT, () => {
-  console.log(`Common Backend server running on port ${PORT}`);
+backfillApplicationStudentAccountIds().then(() => {
+  server.listen(PORT, () => {
+    console.log(`Common Backend server running on port ${PORT}`);
+  });
 });
