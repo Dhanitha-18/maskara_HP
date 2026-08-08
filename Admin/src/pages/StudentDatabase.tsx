@@ -5,7 +5,7 @@ import {
   Loader2, Search, Download, Filter, FileSpreadsheet, ChevronDown, ChevronRight, 
   User, Users, Building2, Activity, FileText, Calendar, Mail, Phone, MapPin, 
   CreditCard, ShieldCheck, HeartPulse, Eye, ExternalLink, Sparkles, FolderCheck, 
-  CheckCircle2, Clock, AlertCircle, X, Trash2, AlertTriangle
+  CheckCircle2, Clock, AlertCircle, X, Trash2, AlertTriangle, Edit3, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
@@ -248,6 +248,90 @@ export default function StudentDatabase() {
     }
   };
 
+  // Edit Student Modal state
+  const [studentToEdit, setStudentToEdit] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [activeEditTab, setActiveEditTab] = useState<string>('PERSONAL');
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+
+  const startEditStudent = (student: any) => {
+    setStudentToEdit(student);
+    setActiveEditTab('PERSONAL');
+    setEditForm({
+      studentName: student.studentName || '',
+      usn: student.usn || '',
+      phoneNumber: student.phoneNumber || '',
+      email: student.email || '',
+      gender: student.gender || 'Male',
+      dob: student.dob ? new Date(student.dob).toISOString().split('T')[0] : '',
+      program: student.program || '',
+      semester: student.semester || student.yearSem || '',
+      branch: student.branch || student.department || '',
+      department: student.department || student.branch || '',
+      yearSem: student.yearSem || student.semester || '',
+      bloodGroup: student.bloodGroup || '',
+      aadhaarNumber: student.aadhaarNumber || '',
+      nationality: student.nationality || 'Indian',
+      religion: student.religion || '',
+      permanentAddress: student.permanentAddress || student.address || '',
+      address: student.address || student.permanentAddress || '',
+      communicationAddress: student.communicationAddress || '',
+      fatherName: student.fatherName || '',
+      fatherOccupation: student.fatherOccupation || student.fatherOcc || '',
+      fatherPhone: student.fatherPhone || '',
+      fatherEmail: student.fatherEmail || '',
+      motherName: student.motherName || '',
+      motherOccupation: student.motherOccupation || student.motherOcc || '',
+      motherPhone: student.motherPhone || '',
+      motherEmail: student.motherEmail || '',
+      guardianName: student.guardianName || '',
+      guardianRelationship: student.guardianRelationship || '',
+      guardianPhone: student.guardianPhone || '',
+      guardianAddress: student.guardianAddress || student.guardianEmail || '',
+      guardianEmail: student.guardianEmail || '',
+      emergencyContact: student.emergencyContact || '',
+      healthIssues: student.healthIssues || student.medicalInfo || '',
+      allergies: student.allergies || '',
+      currentMedications: student.currentMedications || ''
+    });
+  };
+
+  const handleSaveEditStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studentToEdit || !studentToEdit.id) return;
+    setIsSavingEdit(true);
+
+    try {
+      const res = await fetch(`/api/applications/${studentToEdit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update student record');
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['applications_all'] });
+      queryClient.invalidateQueries({ queryKey: ['payments_all'] });
+      queryClient.invalidateQueries({ queryKey: ['occupancy'] });
+      queryClient.invalidateQueries({ queryKey: ['allocations'] });
+      queryClient.refetchQueries({ queryKey: ['applications_all'] });
+
+      setStudentToEdit(null);
+      setEditForm({});
+      if (selectedStudentApp && selectedStudentApp.id === studentToEdit.id) {
+        setSelectedStudentApp(null);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Error updating student record');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   // Real-time socket sync for reallocation and profile updates
   useEffect(() => {
     const handleUpdate = () => {
@@ -292,12 +376,8 @@ export default function StudentDatabase() {
   const enrichedApplications = useMemo(() => {
     if (!applications) return [];
     return applications.map((app: any) => {
-      // Find latest payment for this application — join by applicationId first, then by non-null USN as fallback.
-      // Never match on null/blank USN to avoid cross-student collision.
-      const appPayment = payments?.find((p: any) =>
-        (p.applicationId && p.applicationId === app.id) ||
-        (app.usn && p.studentUsn && p.studentUsn === app.usn)
-      );
+      // Find latest payment for this application (payments are sorted desc by default from backend)
+      const appPayment = payments?.find((p: any) => p.studentUsn === app.usn);
       return {
         ...app,
         latestPayment: appPayment || null
@@ -655,6 +735,13 @@ export default function StudentDatabase() {
                               title="View Details"
                             >
                               <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); startEditStudent(app); }}
+                              className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors" 
+                              title="Edit Student Record"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
                             </button>
                             <button 
                               onClick={(e) => { e.stopPropagation(); setStudentToDelete(app); setDeleteConfirmInput(''); }}
@@ -1499,13 +1586,22 @@ export default function StudentDatabase() {
 
                 {/* Modal Footer */}
                 <div className="bg-slate-100 p-4 border-t border-slate-200 flex items-center justify-between shrink-0">
-                  <button
-                    onClick={() => { setSelectedStudentApp(null); setStudentToDelete(app); setDeleteConfirmInput(''); }}
-                    className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Trash2 className="w-4 h-4 text-rose-600" />
-                    <span>Delete Student Record</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { setSelectedStudentApp(null); startEditStudent(app); }}
+                      className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Edit3 className="w-4 h-4 text-blue-600" />
+                      <span>Edit Student Record</span>
+                    </button>
+                    <button
+                      onClick={() => { setSelectedStudentApp(null); setStudentToDelete(app); setDeleteConfirmInput(''); }}
+                      className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-600" />
+                      <span>Delete Student Record</span>
+                    </button>
+                  </div>
                   <button
                     onClick={() => handleDownloadPDF(app)}
                     className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-2"
@@ -1518,6 +1614,373 @@ export default function StudentDatabase() {
             </div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* Edit Student Record Modal Popup */}
+      <AnimatePresence>
+        {studentToEdit && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden my-auto"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-800 text-white p-5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                    <Edit3 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white">Edit Student Record</h3>
+                    <p className="text-[11px] text-blue-100 font-medium">Updates sync instantly to Student Portal &amp; Supabase backend</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setStudentToEdit(null)}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Sub-tab Switcher */}
+              <div className="bg-slate-100/90 p-2.5 border-b border-slate-200 flex flex-wrap gap-1.5 shrink-0">
+                {[
+                  { id: 'PERSONAL', label: 'Personal & Academic', icon: User },
+                  { id: 'CONTACT', label: 'Contact & Addresses', icon: Mail },
+                  { id: 'PARENT', label: 'Parent & Guardian', icon: Users },
+                  { id: 'HEALTH', label: 'Health & Emergency', icon: HeartPulse }
+                ].map(tab => {
+                  const Icon = tab.icon;
+                  const isActive = activeEditTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveEditTab(tab.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:text-blue-600 hover:bg-white'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleSaveEditStudent} className="flex-1 flex flex-col overflow-hidden">
+                <div className="p-6 overflow-y-auto flex-1 space-y-4 bg-slate-50/50 custom-scrollbar text-xs font-semibold">
+
+                  {/* 1. PERSONAL & ACADEMIC */}
+                  {activeEditTab === 'PERSONAL' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Full Name *</label>
+                        <input
+                          type="text" required
+                          value={editForm.studentName || ''}
+                          onChange={e => setEditForm({ ...editForm, studentName: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">USN / Roll Number</label>
+                        <input
+                          type="text"
+                          value={editForm.usn || ''}
+                          onChange={e => setEditForm({ ...editForm, usn: e.target.value })}
+                          placeholder="e.g. 1TE24CS001"
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-mono font-bold text-blue-700 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Gender</label>
+                        <select
+                          value={editForm.gender || 'Male'}
+                          onChange={e => setEditForm({ ...editForm, gender: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Date of Birth</label>
+                        <input
+                          type="date"
+                          value={editForm.dob || ''}
+                          onChange={e => setEditForm({ ...editForm, dob: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Program</label>
+                        <input
+                          type="text"
+                          value={editForm.program || ''}
+                          onChange={e => setEditForm({ ...editForm, program: e.target.value })}
+                          placeholder="e.g. B.E / B.Tech"
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Department / Branch</label>
+                        <input
+                          type="text"
+                          value={editForm.department || editForm.branch || ''}
+                          onChange={e => setEditForm({ ...editForm, department: e.target.value, branch: e.target.value })}
+                          placeholder="e.g. Computer Science Engineering"
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Year / Semester</label>
+                        <input
+                          type="text"
+                          value={editForm.yearSem || editForm.semester || ''}
+                          onChange={e => setEditForm({ ...editForm, yearSem: e.target.value, semester: e.target.value })}
+                          placeholder="e.g. 1st Year / 1st Sem"
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Blood Group</label>
+                        <input
+                          type="text"
+                          value={editForm.bloodGroup || ''}
+                          onChange={e => setEditForm({ ...editForm, bloodGroup: e.target.value })}
+                          placeholder="e.g. O+"
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-bold text-rose-600 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Aadhaar Number</label>
+                        <input
+                          type="text"
+                          value={editForm.aadhaarNumber || ''}
+                          onChange={e => setEditForm({ ...editForm, aadhaarNumber: e.target.value })}
+                          placeholder="e.g. 1234-5678-9012"
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-mono text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Nationality / Religion</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={editForm.nationality || ''}
+                            onChange={e => setEditForm({ ...editForm, nationality: e.target.value })}
+                            placeholder="Nationality"
+                            className="w-1/2 bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                          />
+                          <input
+                            type="text"
+                            value={editForm.religion || ''}
+                            onChange={e => setEditForm({ ...editForm, religion: e.target.value })}
+                            placeholder="Religion"
+                            className="w-1/2 bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. CONTACT & ADDRESSES */}
+                  {activeEditTab === 'CONTACT' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Phone Number *</label>
+                        <input
+                          type="text" required
+                          value={editForm.phoneNumber || ''}
+                          onChange={e => setEditForm({ ...editForm, phoneNumber: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-mono font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Personal Email *</label>
+                        <input
+                          type="email" required
+                          value={editForm.email || ''}
+                          onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Permanent Address</label>
+                        <textarea
+                          rows={3}
+                          value={editForm.permanentAddress || editForm.address || ''}
+                          onChange={e => setEditForm({ ...editForm, permanentAddress: e.target.value, address: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Communication Address</label>
+                        <textarea
+                          rows={3}
+                          value={editForm.communicationAddress || ''}
+                          onChange={e => setEditForm({ ...editForm, communicationAddress: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. PARENT & GUARDIAN */}
+                  {activeEditTab === 'PARENT' && (
+                    <div className="space-y-4">
+                      <div className="bg-slate-100/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                        <p className="font-bold text-indigo-900 text-xs border-b border-slate-200 pb-1">Father Information</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Father Name</label>
+                            <input type="text" value={editForm.fatherName || ''} onChange={e => setEditForm({ ...editForm, fatherName: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 text-slate-800 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Father Phone</label>
+                            <input type="text" value={editForm.fatherPhone || ''} onChange={e => setEditForm({ ...editForm, fatherPhone: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 font-mono text-slate-800 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Father Occupation</label>
+                            <input type="text" value={editForm.fatherOccupation || ''} onChange={e => setEditForm({ ...editForm, fatherOccupation: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 text-slate-800 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Father Email</label>
+                            <input type="email" value={editForm.fatherEmail || ''} onChange={e => setEditForm({ ...editForm, fatherEmail: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 text-slate-800 outline-none" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-slate-100/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                        <p className="font-bold text-indigo-900 text-xs border-b border-slate-200 pb-1">Mother Information</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Mother Name</label>
+                            <input type="text" value={editForm.motherName || ''} onChange={e => setEditForm({ ...editForm, motherName: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 text-slate-800 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Mother Phone</label>
+                            <input type="text" value={editForm.motherPhone || ''} onChange={e => setEditForm({ ...editForm, motherPhone: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 font-mono text-slate-800 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Mother Occupation</label>
+                            <input type="text" value={editForm.motherOccupation || ''} onChange={e => setEditForm({ ...editForm, motherOccupation: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 text-slate-800 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Mother Email</label>
+                            <input type="email" value={editForm.motherEmail || ''} onChange={e => setEditForm({ ...editForm, motherEmail: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 text-slate-800 outline-none" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-slate-100/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                        <p className="font-bold text-indigo-900 text-xs border-b border-slate-200 pb-1">Local Guardian Information</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Guardian Name</label>
+                            <input type="text" value={editForm.guardianName || ''} onChange={e => setEditForm({ ...editForm, guardianName: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 text-slate-800 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Relationship</label>
+                            <input type="text" value={editForm.guardianRelationship || ''} onChange={e => setEditForm({ ...editForm, guardianRelationship: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 text-slate-800 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Guardian Phone</label>
+                            <input type="text" value={editForm.guardianPhone || ''} onChange={e => setEditForm({ ...editForm, guardianPhone: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 font-mono text-slate-800 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">Guardian Address / Email</label>
+                            <input type="text" value={editForm.guardianAddress || editForm.guardianEmail || ''} onChange={e => setEditForm({ ...editForm, guardianAddress: e.target.value, guardianEmail: e.target.value })} className="w-full bg-white border border-slate-300 rounded-xl p-2 text-slate-800 outline-none" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 4. HEALTH & EMERGENCY */}
+                  {activeEditTab === 'HEALTH' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] uppercase font-bold text-rose-600 mb-1">Emergency Contact Number *</label>
+                        <input
+                          type="text" required
+                          value={editForm.emergencyContact || ''}
+                          onChange={e => setEditForm({ ...editForm, emergencyContact: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-mono font-bold text-slate-800 outline-none focus:ring-2 focus:ring-rose-500/20"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Existing Health Issues / Medical Info</label>
+                        <textarea
+                          rows={2}
+                          value={editForm.healthIssues || editForm.medicalInfo || ''}
+                          onChange={e => setEditForm({ ...editForm, healthIssues: e.target.value, medicalInfo: e.target.value })}
+                          placeholder="e.g. Asthma, Diabetes, etc."
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Allergies</label>
+                        <textarea
+                          rows={2}
+                          value={editForm.allergies || ''}
+                          onChange={e => setEditForm({ ...editForm, allergies: e.target.value })}
+                          placeholder="e.g. Dust, Peanuts"
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Current Medications</label>
+                        <textarea
+                          rows={2}
+                          value={editForm.currentMedications || ''}
+                          onChange={e => setEditForm({ ...editForm, currentMedications: e.target.value })}
+                          placeholder="e.g. Inhaler twice daily"
+                          className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+                {/* Footer Actions */}
+                <div className="bg-slate-100 p-4 border-t border-slate-200 flex items-center justify-between shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setStudentToEdit(null)}
+                    disabled={isSavingEdit}
+                    className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingEdit}
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-2"
+                  >
+                    {isSavingEdit ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Saving Changes...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>Save Changes</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* 2-Step Verification Delete Confirmation Modal Popup */}

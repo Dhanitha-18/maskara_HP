@@ -517,11 +517,11 @@ export const Payment: React.FC = () => {
                           className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                         >
                           <FileText className="w-3.5 h-3.5" />
-                          <span>PG Form Popup</span>
+                          <span>PG Form</span>
                         </button>
                         <label 
                           className="flex items-center gap-1.5 cursor-not-allowed opacity-80" 
-                          title="PG Verification status is automatically filled upon completing the PG Form Popup"
+                          title="PG Verification status is automatically filled upon completing the PG Form"
                         >
                           <input 
                             type="checkbox"

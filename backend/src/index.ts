@@ -667,6 +667,119 @@ app.delete('/api/applications/:id', async (req, res) => {
   }
 });
 
+app.put('/api/applications/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const application = await prisma.application.findFirst({
+      where: {
+        OR: [
+          { id },
+          ...(id && id !== '-' ? [{ studentAccountId: id }] : []),
+          ...(id && id !== '-' ? [{ usn: id }] : [])
+        ]
+      },
+      include: {
+        studentAccount: true
+      }
+    });
+
+    if (!application) {
+      return res.status(404).json({ error: 'Student application record not found' });
+    }
+
+    const appId = application.id;
+
+    // Normalize USN if provided
+    let normalizedUsn = updateData.usn !== undefined 
+      ? (updateData.usn && String(updateData.usn).trim() !== '-' && String(updateData.usn).trim() !== '' ? String(updateData.usn).trim() : null)
+      : application.usn;
+
+    const appFields: any = {};
+    if (updateData.studentName !== undefined) appFields.studentName = updateData.studentName;
+    if (updateData.usn !== undefined) appFields.usn = normalizedUsn;
+    if (updateData.phoneNumber !== undefined) appFields.phoneNumber = updateData.phoneNumber;
+    if (updateData.email !== undefined) appFields.email = updateData.email;
+    if (updateData.gender !== undefined) appFields.gender = updateData.gender;
+    if (updateData.dob !== undefined && updateData.dob) appFields.dob = new Date(updateData.dob);
+    if (updateData.program !== undefined) appFields.program = updateData.program;
+    if (updateData.semester !== undefined) appFields.semester = updateData.semester;
+    if (updateData.branch !== undefined) appFields.branch = updateData.branch;
+    if (updateData.department !== undefined) appFields.department = updateData.department;
+    if (updateData.yearSem !== undefined) appFields.yearSem = updateData.yearSem;
+    if (updateData.bloodGroup !== undefined) appFields.bloodGroup = updateData.bloodGroup;
+    if (updateData.aadhaarNumber !== undefined) appFields.aadhaarNumber = updateData.aadhaarNumber;
+    if (updateData.nationality !== undefined) appFields.nationality = updateData.nationality;
+    if (updateData.religion !== undefined) appFields.religion = updateData.religion;
+    if (updateData.permanentAddress !== undefined) appFields.permanentAddress = updateData.permanentAddress;
+    if (updateData.address !== undefined) appFields.address = updateData.address;
+    if (updateData.fatherName !== undefined) appFields.fatherName = updateData.fatherName;
+    if (updateData.fatherOccupation !== undefined) appFields.fatherOccupation = updateData.fatherOccupation;
+    if (updateData.fatherPhone !== undefined) appFields.fatherPhone = updateData.fatherPhone;
+    if (updateData.fatherEmail !== undefined) appFields.fatherEmail = updateData.fatherEmail;
+    if (updateData.motherName !== undefined) appFields.motherName = updateData.motherName;
+    if (updateData.motherOccupation !== undefined) appFields.motherOccupation = updateData.motherOccupation;
+    if (updateData.motherPhone !== undefined) appFields.motherPhone = updateData.motherPhone;
+    if (updateData.motherEmail !== undefined) appFields.motherEmail = updateData.motherEmail;
+    if (updateData.communicationAddress !== undefined) appFields.communicationAddress = updateData.communicationAddress;
+    if (updateData.guardianName !== undefined) appFields.guardianName = updateData.guardianName;
+    if (updateData.guardianRelationship !== undefined) appFields.guardianRelationship = updateData.guardianRelationship;
+    if (updateData.guardianPhone !== undefined) appFields.guardianPhone = updateData.guardianPhone;
+    if (updateData.guardianAddress !== undefined) appFields.guardianAddress = updateData.guardianAddress;
+    if (updateData.guardianEmail !== undefined) appFields.guardianEmail = updateData.guardianEmail;
+    if (updateData.healthIssues !== undefined) appFields.healthIssues = updateData.healthIssues;
+    if (updateData.medicalInfo !== undefined) appFields.medicalInfo = updateData.medicalInfo;
+    if (updateData.allergies !== undefined) appFields.allergies = updateData.allergies;
+    if (updateData.currentMedications !== undefined) appFields.currentMedications = updateData.currentMedications;
+    if (updateData.emergencyContact !== undefined) appFields.emergencyContact = updateData.emergencyContact;
+    if (updateData.status !== undefined) appFields.status = updateData.status;
+
+    const updatedApp = await prisma.application.update({
+      where: { id: appId },
+      data: appFields
+    });
+
+    // Sync StudentAccount if linked
+    const accFields: any = {};
+    if (updateData.studentName !== undefined) accFields.studentName = updateData.studentName;
+    if (updateData.usn !== undefined) accFields.usn = normalizedUsn;
+    if (updateData.phoneNumber !== undefined) accFields.phoneNumber = updateData.phoneNumber;
+
+    if (Object.keys(accFields).length > 0) {
+      if (application.studentAccountId) {
+        await prisma.studentAccount.update({
+          where: { id: application.studentAccountId },
+          data: accFields
+        }).catch(() => {});
+      } else {
+        await prisma.studentAccount.updateMany({
+          where: { applicationId: appId },
+          data: accFields
+        }).catch(() => {});
+      }
+    }
+
+    // Sync Payments if USN changed
+    if (normalizedUsn && application.usn && application.usn !== normalizedUsn) {
+      await prisma.payment.updateMany({
+        where: { studentUsn: application.usn },
+        data: { studentUsn: normalizedUsn, studentName: updateData.studentName || application.studentName }
+      }).catch(() => {});
+    }
+
+    // Broadcast real-time socket events
+    io.emit('data_updated', { type: 'APPLICATION_UPDATED', id: appId });
+    io.emit('APPLICATION_UPDATED', { id: appId });
+    io.emit('STUDENT_UPDATED', { id: appId, studentAccountId: application.studentAccountId });
+
+    return res.json({ success: true, application: updatedApp });
+  } catch (err: any) {
+    console.error('Error updating student application:', err);
+    return res.status(500).json({ error: err.message || 'Failed to update student application' });
+  }
+});
+
 // ==================== BLOCKS & ROOMS ROUTES ====================
 app.get('/api/blocks', async (req, res) => {
   try {

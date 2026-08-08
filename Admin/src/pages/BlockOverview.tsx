@@ -8,7 +8,6 @@ import AddRoomModal from './AddRoomModal';
 import { toast } from 'sonner';
 
 import { useAuthStore } from '../store/useAuthStore';
-import { API_BASE_URL } from '../lib/api';
 
 export default function BlockOverview() {
   const { role, allowedBlocks } = useAuthStore();
@@ -234,7 +233,7 @@ export default function BlockOverview() {
                   <div className="h-48 relative overflow-hidden bg-slate-100 group/image">
                     <div className={`absolute inset-0 bg-gradient-to-t ${isGirls ? 'from-pink-900/90 via-pink-900/30' : 'from-blue-900/90 via-blue-900/30'} to-transparent z-10 transition-opacity pointer-events-none`}></div>
                     <img 
-                      src={block.imageUrl ? (block.imageUrl.startsWith('http') || block.imageUrl.startsWith('data:') ? block.imageUrl : `${API_BASE_URL}${block.imageUrl.startsWith('/') ? '' : '/'}${block.imageUrl}`) : "/bg.png"} 
+                      src={block.imageUrl ? (block.imageUrl.startsWith('http') || block.imageUrl.startsWith('data:') ? block.imageUrl : `http://localhost:5000${block.imageUrl.startsWith('/') ? '' : '/'}${block.imageUrl}`) : "/bg.png"} 
                       className="w-full h-full object-cover pointer-events-none" 
                       alt="Hostel Building" 
                     />
