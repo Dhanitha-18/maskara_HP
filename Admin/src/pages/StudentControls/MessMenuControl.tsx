@@ -253,15 +253,17 @@ export default function MessMenuControl() {
   // Policies / Guidelines
   const startEditPolicy = () => {
     if (!cmsData) return;
-    setPolicyTitle(cmsData.policies?.title || '');
-    setPolicyPoints(cmsData.policies?.points || []);
+    setPolicyTitle(cmsData.policy?.title || cmsData.policies?.title || '');
+    setPolicyPoints(cmsData.policy?.points || cmsData.policies?.points || []);
     setEditingPolicy(true);
   };
 
   const savePolicy = () => {
+    const policyObj = { title: policyTitle, points: policyPoints };
     const copy = {
       ...cmsData,
-      policies: { title: policyTitle, points: policyPoints }
+      policy: policyObj,
+      policies: policyObj
     };
     setCmsData(copy);
     mutation.mutate(copy);
@@ -272,15 +274,17 @@ export default function MessMenuControl() {
   // Supplier info
   const startEditSupplier = () => {
     if (!cmsData) return;
-    setSupplierTitle(cmsData.supplier?.title || '');
-    setSupplierPoints(cmsData.supplier?.points || []);
+    setSupplierTitle(cmsData.supplierNotes?.title || cmsData.supplier?.title || '');
+    setSupplierPoints(cmsData.supplierNotes?.points || cmsData.supplier?.points || []);
     setEditingSupplier(true);
   };
 
   const saveSupplier = () => {
+    const supplierObj = { title: supplierTitle, points: supplierPoints };
     const copy = {
       ...cmsData,
-      supplier: { title: supplierTitle, points: supplierPoints }
+      supplier: supplierObj,
+      supplierNotes: supplierObj
     };
     setCmsData(copy);
     mutation.mutate(copy);
@@ -363,17 +367,12 @@ export default function MessMenuControl() {
             Synchronize and edit real-time dining data for the Student Portal.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />}
-          <button
-            onClick={handleGlobalSave}
-            disabled={mutation.isPending}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-700 transition shadow-md shadow-indigo-600/25 cursor-pointer hover:-translate-y-0.5 duration-200"
-          >
-            <Save className="w-4 h-4" />
-            Save Changes to Server
-          </button>
-        </div>
+        {mutation.isPending && (
+          <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Saving changes...</span>
+          </div>
+        )}
       </div>
 
 
@@ -734,10 +733,10 @@ export default function MessMenuControl() {
             {!editingPolicy ? (
               <>
                 <span className="text-indigo-300 font-black uppercase text-[10px] tracking-wider block">
-                  {cmsData.policy?.title || '📍 Campus Lunch & Grand Dinner Policy'}
+                  {cmsData.policy?.title || cmsData.policies?.title || '📍 Campus Lunch & Grand Dinner Policy'}
                 </span>
                 <ul className="space-y-2 text-[11px] text-slate-300 list-disc pl-4 leading-relaxed font-semibold">
-                  {(cmsData.policy?.points || []).map((point: string, idx: number) => (
+                  {(cmsData.policy?.points || cmsData.policies?.points || []).map((point: string, idx: number) => (
                     <li key={idx}>{point}</li>
                   ))}
                 </ul>
@@ -831,10 +830,10 @@ export default function MessMenuControl() {
             {!editingSupplier ? (
               <>
                 <span className="text-amber-400 font-black uppercase text-[10px] tracking-wider block">
-                  {cmsData.supplierNotes?.title || '🍦 Desserts & Supplier Note'}
+                  {cmsData.supplierNotes?.title || cmsData.supplier?.title || '🍦 Desserts & Supplier Note'}
                 </span>
                 <ul className="space-y-2 text-[11px] text-slate-300 list-disc pl-4 leading-relaxed font-semibold">
-                  {(cmsData.supplierNotes?.points || []).map((point: string, idx: number) => (
+                  {(cmsData.supplierNotes?.points || cmsData.supplier?.points || []).map((point: string, idx: number) => (
                     <li key={idx}>{point}</li>
                   ))}
                 </ul>

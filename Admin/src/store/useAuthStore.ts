@@ -31,14 +31,15 @@ function getInitialUser(): AdminUser {
       return JSON.parse(saved);
     }
   } catch {}
+  // No saved session — return a blank placeholder (login page will be shown)
   return {
-    id: 'default-chief',
-    email: 'admin123@gmail.com',
-    name: 'Chief Administrator',
-    role: 'CHIEF',
-    title: 'Chief Warden & Administrator',
-    allowedTabs: DEFAULT_TABS,
-    allowedBlocks: ['ALL']
+    id: '',
+    email: '',
+    name: '',
+    role: 'SUB_ADMIN',
+    title: '',
+    allowedTabs: [],
+    allowedBlocks: []
   };
 }
 
@@ -86,23 +87,23 @@ export const useAuthStore = create<AuthState>((set) => {
       localStorage.removeItem('admin_authenticated');
       localStorage.removeItem('admin_user');
       localStorage.removeItem('admin_token');
-      const resetUser = {
-        id: 'default-chief',
-        email: 'admin123@gmail.com',
-        name: 'Chief Administrator',
-        role: 'CHIEF' as Role,
-        title: 'Chief Warden & Administrator',
-        allowedTabs: DEFAULT_TABS,
-        allowedBlocks: ['ALL']
+      const emptyUser: AdminUser = {
+        id: '',
+        email: '',
+        name: '',
+        role: 'SUB_ADMIN',
+        title: '',
+        allowedTabs: [],
+        allowedBlocks: []
       };
       set({
-        user: resetUser,
-        role: resetUser.role,
-        name: resetUser.name,
-        title: resetUser.title,
+        user: emptyUser,
+        role: emptyUser.role,
+        name: emptyUser.name,
+        title: emptyUser.title,
         token: null,
-        allowedTabs: resetUser.allowedTabs,
-        allowedBlocks: resetUser.allowedBlocks
+        allowedTabs: emptyUser.allowedTabs,
+        allowedBlocks: emptyUser.allowedBlocks
       });
     }
   };

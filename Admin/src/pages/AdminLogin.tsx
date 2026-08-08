@@ -33,82 +33,10 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
         setAdminUser(data.admin, data.token);
         onLogin();
       } else {
-        const u = username.toLowerCase().trim();
-        if ((u === 'admin' || u === 'admin@omsai.com' || u === 'sindhu sharma' || u === 'sindhu') && password === 'omsai@2026') {
-          setAdminUser({
-            id: 'chief-sindhu',
-            email: 'admin@omsai.com',
-            name: 'Sindhu Sharma',
-            role: 'CHIEF' as const,
-            title: 'Chief Warden & Administrator',
-            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/admin-management'],
-            allowedBlocks: ['ALL']
-          });
-          onLogin();
-        } else if ((u === 'jyo' || u.includes('chandu')) && password === 'omsai@2026') {
-          setAdminUser({
-            id: 'sub-jyo',
-            email: 'chandu.nedium@gmail.com',
-            name: 'jyo',
-            role: 'SUB_ADMIN' as const,
-            title: 'Assistant Warden',
-            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls'],
-            allowedBlocks: ['Block-A']
-          });
-          onLogin();
-        } else if ((u === 'dhani' || u.includes('dhubavana')) && password === 'omsai@2026') {
-          setAdminUser({
-            id: 'sub-dhani',
-            email: 'dhubavana.gsb@gmail.com',
-            name: 'dhani',
-            role: 'SUB_ADMIN' as const,
-            title: 'Assistant Warden',
-            allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls'],
-            allowedBlocks: ['nilaya']
-          });
-          onLogin();
-        } else {
-          setError(data.error || 'Invalid username or password');
-        }
+        setError(data.error || 'Invalid username or password');
       }
     } catch (err: any) {
-      const u = username.toLowerCase().trim();
-      if ((u === 'admin' || u === 'admin@omsai.com' || u === 'sindhu sharma' || u === 'sindhu') && password === 'omsai@2026') {
-        setAdminUser({
-          id: 'chief-sindhu',
-          email: 'admin@omsai.com',
-          name: 'Sindhu Sharma',
-          role: 'CHIEF' as const,
-          title: 'Chief Warden & Administrator',
-          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls', '/admin-management'],
-          allowedBlocks: ['ALL']
-        });
-        onLogin();
-      } else if ((u === 'jyo' || u.includes('chandu')) && password === 'omsai@2026') {
-        setAdminUser({
-          id: 'sub-jyo',
-          email: 'chandu.nedium@gmail.com',
-          name: 'jyo',
-          role: 'SUB_ADMIN' as const,
-          title: 'Assistant Warden',
-          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls'],
-          allowedBlocks: ['Block-A']
-        });
-        onLogin();
-      } else if ((u === 'dhani' || u.includes('dhubavana')) && password === 'omsai@2026') {
-        setAdminUser({
-          id: 'sub-dhani',
-          email: 'dhubavana.gsb@gmail.com',
-          name: 'dhani',
-          role: 'SUB_ADMIN' as const,
-          title: 'Assistant Warden',
-          allowedTabs: ['/', '/applications', '/database', '/blocks', '/occupancy', '/attendance', '/communication', '/payments', '/student-controls'],
-          allowedBlocks: ['nilaya']
-        });
-        onLogin();
-      } else {
-        setError('Network error or invalid credentials');
-      }
+      setError('Network error. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +113,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Username
+                Username / Mail-id
               </label>
               <input
                 type="text"

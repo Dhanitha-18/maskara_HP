@@ -486,18 +486,18 @@ export const Mess: React.FC = () => {
       <div className="bg-gradient-to-br from-slate-900 via-slate-850 to-blue-950 text-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-700 space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold text-slate-200">
           <div className="bg-slate-800/60 border border-slate-700/60 p-4 rounded-xl space-y-2">
-            <span className="text-blue-300 font-black uppercase text-[10px] tracking-wider block">{cmsData?.policy?.title || "📍 Campus Lunch & Grand Dinner Policy"}</span>
+            <span className="text-blue-300 font-black uppercase text-[10px] tracking-wider block">{cmsData?.policy?.title || cmsData?.policies?.title || "📍 Campus Lunch & Grand Dinner Policy"}</span>
             <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc pl-4 leading-relaxed font-medium">
-              {(cmsData?.policy?.points || []).map((point: string, idx: number) => (
+              {(cmsData?.policy?.points || cmsData?.policies?.points || []).map((point: string, idx: number) => (
                 <li key={idx}>{point}</li>
               ))}
             </ul>
           </div>
 
           <div className="bg-slate-800/60 border border-slate-700/60 p-4 rounded-xl space-y-2">
-            <span className="text-amber-400 font-black uppercase text-[10px] tracking-wider block">{cmsData?.supplierNotes?.title || "🍦 Desserts & Supplier Note"}</span>
+            <span className="text-amber-400 font-black uppercase text-[10px] tracking-wider block">{cmsData?.supplierNotes?.title || cmsData?.supplier?.title || "🍦 Desserts & Supplier Note"}</span>
             <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc pl-4 leading-relaxed font-medium">
-              {(cmsData?.supplierNotes?.points || []).map((point: string, idx: number) => (
+              {(cmsData?.supplierNotes?.points || cmsData?.supplier?.points || []).map((point: string, idx: number) => (
                 <li key={idx}>{point}</li>
               ))}
             </ul>

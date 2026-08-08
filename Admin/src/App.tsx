@@ -233,9 +233,8 @@ function AnimatedRoutes() {
 }
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('admin_authenticated') === 'true';
-  });
+  // Always start unauthenticated on fresh page load — login page is always shown first.
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const handleLogin = useCallback(() => {
     setIsAuthenticated(true);
