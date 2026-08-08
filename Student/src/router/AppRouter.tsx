@@ -22,9 +22,18 @@ import { ErrorBoundary } from '../components/common/ErrorBoundary';
 // Guard: requires student login AND completed room allocation for protected tabs.
 const RequireApplicationGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isLoggedIn } = useAuth();
-  const { applicationState } = usePayment();
+  const { applicationState, isLoadingStatus } = usePayment();
 
   const isAllocationCompleted = applicationState === 'room_allotted' || applicationState === 'paid';
+
+  // While the initial status fetch is in progress, show nothing (spinner) to avoid 1-second flicker
+  if (isLoadingStatus) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (!isLoggedIn) {
     return (

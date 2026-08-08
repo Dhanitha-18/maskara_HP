@@ -1110,11 +1110,43 @@ app.put('/api/blocks/:id/photo', async (req, res) => {
 app.delete('/api/blocks/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Check for occupied beds before deleting
     const rooms = await prisma.room.findMany({ where: { blockId: id } });
     const roomIds = rooms.map(r => r.id);
+
+    if (roomIds.length > 0) {
+      const occupiedBeds = await prisma.bed.findMany({
+        where: {
+          roomId: { in: roomIds },
+          status: 'OCCUPIED'
+        },
+        include: {
+          allocation: {
+            include: { application: { select: { studentName: true } } }
+          }
+        }
+      });
+
+      if (occupiedBeds.length > 0) {
+        const names = occupiedBeds
+          .map(b => b.allocation?.application?.studentName || 'Unknown')
+          .slice(0, 5)
+          .join(', ');
+        const extra = occupiedBeds.length > 5 ? ` and ${occupiedBeds.length - 5} more` : '';
+        return res.status(409).json({
+          error: `Cannot delete block — ${occupiedBeds.length} bed(s) are currently occupied by students: ${names}${extra}. Please deallocate all students first before deleting this block.`
+        });
+      }
+    }
+
     await prisma.bed.deleteMany({ where: { roomId: { in: roomIds } } });
     await prisma.room.deleteMany({ where: { blockId: id } });
     await prisma.block.delete({ where: { id } });
+
+    io.emit('data_updated');
+    io.emit('BED_DEALLOCATED');
+
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

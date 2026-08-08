@@ -28,6 +28,8 @@ export const Profile: React.FC = () => {
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    // Don't reset edit fields while user is actively editing — background polls would wipe typed values
+    if (isEditing) return;
     setEditedUsn(student.usn || appData.usn || authUsn || '');
     setEditedEmail(student.email || appData.email || '');
     setEditedCollegeEmail(appData.collegeEmail || (student as any).collegeEmail || '');
@@ -35,7 +37,7 @@ export const Profile: React.FC = () => {
     if (savedYear) {
       setSelectedYear(savedYear);
     }
-  }, [student, appData, authUsn]);
+  }, [student, appData, authUsn, isEditing]);
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
