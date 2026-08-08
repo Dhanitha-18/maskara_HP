@@ -8,7 +8,7 @@ interface AuthContextType {
   studentPhone: string | null;
   token: string | null;
   setStudentName: (name: string) => void;
-  login: (usn: string, name?: string, phone?: string, token?: string, studentAccountId?: string) => void;
+  login: (usn: string | null, name?: string, phone?: string, token?: string, studentAccountId?: string) => void;
   logout: () => void;
 }
 
@@ -42,12 +42,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const login = (usn: string, name?: string, phone?: string, authToken?: string, accountId?: string) => {
-    const normalizedUsn = usn ? usn.trim().toUpperCase() : `STD-${Date.now()}`;
-    setStudentUsn(normalizedUsn);
+  const login = (usn: string | null, name?: string, phone?: string, authToken?: string, accountId?: string) => {
+    // Only store a real USN — never use phone number or name as USN fallback
+    const isRealUsn = usn && usn.trim() !== '' && usn.trim() !== '-';
+    const normalizedUsn = isRealUsn ? usn!.trim() : '';
+    setStudentUsn(normalizedUsn || null);
     setIsLoggedIn(true);
     // Use sessionStorage only — data persists only for the current browser tab/session
-    sessionStorage.setItem('student_usn', normalizedUsn);
+    if (normalizedUsn) {
+      sessionStorage.setItem('student_usn', normalizedUsn);
+    } else {
+      sessionStorage.removeItem('student_usn');
+    }
 
     if (accountId) {
       setStudentAccountId(accountId);
