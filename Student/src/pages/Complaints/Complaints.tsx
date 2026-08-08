@@ -236,7 +236,9 @@ export const Complaints: React.FC = () => {
   // Handle Upvote / Me Too (Real-time sync to Admin, 1-time vote limit per user)
   const handleUpvote = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const votedKey = `complaint_voted_${student.usn}_${id}`;
+    const studentKey = (student as any)?.studentAccountId || (student as any)?.id || student?.usn || 'anonymous';
+    const votedKey = `complaint_voted_${studentKey}_${id}`;
+
     if (localStorage.getItem(votedKey) === 'true') {
       return;
     }
@@ -444,7 +446,9 @@ export const Complaints: React.FC = () => {
 
                       <div className="flex items-center gap-3">
                         {(() => {
-                          const isVoted = item.upvotedByMe || localStorage.getItem(`complaint_voted_${student.usn}_${item.id}`) === 'true';
+                          const studentKey = (student as any)?.studentAccountId || (student as any)?.id || student?.usn || 'anonymous';
+                        const isVoted = item.upvotedByMe || localStorage.getItem(`complaint_voted_${studentKey}_${item.id}`) === 'true';
+
                           return (
                             <button
                               type="button"

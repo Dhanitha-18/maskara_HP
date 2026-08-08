@@ -77,8 +77,8 @@ const formatLeaveDisplayDate = (dateStr?: string | null) => {
 };
 
 export const LeaveApplication: React.FC = () => {
-  const { student } = usePayment();
-  const { studentUsn, studentName } = useAuth();
+  const { studentUsn, studentName, studentAccountId } = useAuth();
+  const accountId = studentAccountId || (student as any)?.studentAccountId || (student as any)?.id;
   const [activeMainTab, setActiveMainTab] = useState<'leave' | 'vacate'>('leave');
 
   // Persistent Leave Records state loaded from backend / localStorage
@@ -89,22 +89,14 @@ export const LeaveApplication: React.FC = () => {
   const fetchBackendLeaves = async () => {
     try {
       const currentUsn = (studentUsn || student?.usn || '').trim().toUpperCase();
-      const url = currentUsn 
-        ? `http://localhost:5000/api/leaves?studentUsn=${encodeURIComponent(currentUsn)}`
-        : 'http://localhost:5000/api/leaves';
+      const url = accountId 
+        ? `http://localhost:5000/api/leaves?studentAccountId=${encodeURIComponent(accountId)}`
+        : (currentUsn ? `http://localhost:5000/api/leaves?studentUsn=${encodeURIComponent(currentUsn)}` : 'http://localhost:5000/api/leaves');
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          if (currentUsn) {
-            const myLeaves = data.filter((item: any) => {
-              const u = String(item.studentUsn || item.usn || '').trim().toUpperCase();
-              return u === currentUsn;
-            });
-            setLeaves(myLeaves);
-          } else {
-            setLeaves(data);
-          }
+          setLeaves(data);
         }
       }
     } catch {}
@@ -123,7 +115,8 @@ export const LeaveApplication: React.FC = () => {
       socket.off('LEAVE_UPDATED', handleUpdate);
       socket.off('data_updated', handleUpdate);
     };
-  }, [studentUsn, student?.usn]);
+  }, [accountId, studentUsn, student?.usn]);
+
 
   const [wizardStep, setWizardStep] = useState<number>(1);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
@@ -235,15 +228,17 @@ export const LeaveApplication: React.FC = () => {
 
     const newId = `LEV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     const nameToUse = studentName || student?.name || 'Student';
-    const usnToUse = studentUsn || student?.usn || '1BM22CS001';
+    const usnToUse = (studentUsn && studentUsn !== '-') ? studentUsn : (student?.usn || '-');
 
     try {
       const res = await fetch('http://localhost:5000/api/leaves', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          studentAccountId: accountId,
           studentName: nameToUse,
           usn: usnToUse,
+
           roomNo: student?.allocatedRoom || '',
           block: student?.allocatedBlock || '',
           leaveType,

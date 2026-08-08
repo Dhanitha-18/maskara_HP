@@ -221,8 +221,10 @@ export const Payment: React.FC = () => {
 
       alert(`Payment verification for "${item.title}" submitted successfully! Stored in database and synced with Admin Portal.`);
       
-      // Save local response lock for this item
-      localStorage.setItem(`payment_submitted_${student.usn}_${item.title}`, 'true');
+      // Save local response lock for this item using studentAccountId
+      const studentKey = (student as any)?.studentAccountId || (student as any)?.id || student.usn || 'student';
+      localStorage.setItem(`payment_submitted_${studentKey}_${item.title}`, 'true');
+
       
       // Clear checkboxes for this item
       setItemCheckboxes(prev => ({
@@ -456,8 +458,10 @@ export const Payment: React.FC = () => {
                 { id: 'default-req-2', title: 'Hostel Fee 2026', amount: 143000, googleFormUrl: DEFAULT_GOOGLE_FORM_URL }
               ]).map((item: any) => {
                 const itemId = item.id;
-                const isAlreadySubmitted = localStorage.getItem(`payment_submitted_${student.usn}_${item.title}`) === 'true' ||
+                const studentKey = (student as any)?.studentAccountId || (student as any)?.id || student.usn || 'student';
+                const isAlreadySubmitted = localStorage.getItem(`payment_submitted_${studentKey}_${item.title}`) === 'true' ||
                   myPaymentsList.some((p: any) => p.paymentTitle?.trim().toLowerCase() === item.title?.trim().toLowerCase());
+
 
                 const itemState = itemCheckboxes[itemId] || { college: isAlreadySubmitted, pg: isAlreadySubmitted };
                 const isBothChecked = itemState.college && itemState.pg;

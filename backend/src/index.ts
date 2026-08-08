@@ -620,19 +620,29 @@ app.delete('/api/applications/:id', async (req, res) => {
     // 2. Delete related documents
     await prisma.document.deleteMany({ where: { applicationId: appId } }).catch(() => {});
 
-    // 3. Delete related student account
+    const realUsn = (usn && usn.trim() !== '' && usn.trim() !== '-') ? usn.trim() : null;
+    const targetAccountId = application.studentAccountId;
+
+    // 3. Delete related student account by studentAccountId or applicationId
     await prisma.studentAccount.deleteMany({
       where: {
         OR: [
+          ...(targetAccountId ? [{ id: targetAccountId }] : []),
           { applicationId: appId },
-          ...(usn ? [{ usn }] : [])
+          ...(realUsn ? [{ usn: realUsn }] : [])
         ]
       }
     }).catch(() => {});
 
-    // 4. Delete related payments if any
-    if (usn) {
-      await prisma.payment.deleteMany({ where: { studentUsn: usn } }).catch(() => {});
+    // 4. Delete related payments if any by studentAccountId or realUsn
+    const paymentDeleteWhere: any[] = [];
+    if (targetAccountId) paymentDeleteWhere.push({ studentAccountId: targetAccountId });
+    if (realUsn) paymentDeleteWhere.push({ studentUsn: realUsn });
+
+    if (paymentDeleteWhere.length > 0) {
+      await prisma.payment.deleteMany({
+        where: { OR: paymentDeleteWhere }
+      }).catch(() => {});
     }
 
     // 5. Delete application record
@@ -1725,9 +1735,10 @@ app.get(['/api/student/status/:usn?', '/api/student/status'], async (req, res) =
       admissionDate: new Date(allocation.allocatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     } : null;
 
+    const realUsn = (application.usn && application.usn.trim() !== '' && application.usn.trim() !== '-') ? application.usn.trim() : null;
     const paymentWhere: any[] = [];
     if (application.studentAccountId) paymentWhere.push({ studentAccountId: application.studentAccountId });
-    if (application.usn) paymentWhere.push({ studentUsn: application.usn });
+    if (realUsn) paymentWhere.push({ studentUsn: realUsn });
 
     const payments = await prisma.payment.findMany({
       where: paymentWhere.length > 0 ? { OR: paymentWhere } : { id: 'impossible_id' },
@@ -1787,9 +1798,12 @@ app.post('/api/leaves', async (req, res) => {
       } catch (_) {}
     }
 
+    const accountIdToUse = resolvedAccountId || data.studentAccountId;
+
     const leave = await prisma.leaveApplication.create({
       data: {
-        ...(resolvedAccountId ? { studentAccountId: resolvedAccountId } : {}),
+        ...(accountIdToUse ? { studentAccountId: accountIdToUse } : {}),
+
         studentName: data.studentName,
         usn: data.usn,
         roomNo: data.roomNo,
@@ -1833,11 +1847,14 @@ app.put('/api/leaves/:id/status', async (req, res) => {
                         String(leaveApp.leaveType || '').toUpperCase().includes('EXIT');
 
     if (newStatus === 'APPROVED' && isPermanent) {
-      const targetUsn = leaveApp.usn;
+      const leaveAccountId = leaveApp.studentAccountId;
+      const targetUsn = (leaveApp.usn && leaveApp.usn !== '-') ? leaveApp.usn : null;
+
       const app = await prisma.application.findFirst({
         where: {
           OR: [
-            ...(targetUsn && targetUsn !== '-' ? [{ usn: targetUsn }, { phoneNumber: targetUsn }] : []),
+            ...(leaveAccountId ? [{ studentAccountId: leaveAccountId }] : []),
+            ...(targetUsn ? [{ usn: targetUsn }] : []),
             { studentName: leaveApp.studentName }
           ]
         }
@@ -1857,28 +1874,27 @@ app.put('/api/leaves/:id/status', async (req, res) => {
           });
         }
 
-        const studentAccountId = app.studentAccountId;
+        const studentAccountId = app.studentAccountId || leaveAccountId;
+        const realAppUsn = (app.usn && app.usn !== '-') ? app.usn : null;
 
-        // 2. Cascade delete all linked student records in atomic transaction
+        // 2. Cascade delete all linked student records by studentAccountId in atomic transaction
+        const paymentDel: any[] = [];
+        if (studentAccountId) paymentDel.push({ studentAccountId });
+        if (realAppUsn) paymentDel.push({ studentUsn: realAppUsn });
+
+        const complaintDel: any[] = [];
+        if (studentAccountId) complaintDel.push({ studentAccountId });
+        if (realAppUsn) complaintDel.push({ usn: realAppUsn });
+
+        const leaveDel: any[] = [{ id: leaveApp.id }];
+        if (studentAccountId) leaveDel.push({ studentAccountId });
+        if (realAppUsn) leaveDel.push({ usn: realAppUsn });
+
         await prisma.$transaction([
           prisma.allocation.deleteMany({ where: { applicationId: app.id } }),
-          prisma.payment.deleteMany({
-            where: {
-              OR: [
-                ...(app.usn ? [{ studentUsn: app.usn }] : []),
-                ...(app.phoneNumber ? [{ studentUsn: app.phoneNumber }] : [])
-              ]
-            }
-          }),
-          prisma.complaint.deleteMany({
-            where: {
-              OR: [
-                ...(app.studentAccountId ? [{ studentAccountId: app.studentAccountId }] : []),
-                ...(app.usn ? [{ usn: app.usn }] : [])
-              ]
-            }
-          }),
-          prisma.leaveApplication.deleteMany({ where: { usn: leaveApp.usn } }),
+          ...(paymentDel.length > 0 ? [prisma.payment.deleteMany({ where: { OR: paymentDel } })] : []),
+          ...(complaintDel.length > 0 ? [prisma.complaint.deleteMany({ where: { OR: complaintDel } })] : []),
+          prisma.leaveApplication.deleteMany({ where: { OR: leaveDel } }),
           prisma.application.delete({ where: { id: app.id } }),
           ...(studentAccountId ? [prisma.studentAccount.delete({ where: { id: studentAccountId } })] : [])
         ]);

@@ -192,7 +192,7 @@ export default function AttendanceManagement() {
   const filteredList = useMemo(() => {
     const seenMap = new Map<string, AttendanceItem>();
     attendanceList.forEach(item => {
-      const key = item.studentUsn || item.phoneNumber || item.id;
+      const key = item.studentAccountId || item.id;
       if (!seenMap.has(key)) {
         seenMap.set(key, item);
       }
@@ -229,12 +229,13 @@ export default function AttendanceManagement() {
     });
   }, [attendanceList, selectedBlock, searchQuery, role, allowedBlocks]);
 
-  // Group history records by unique student USN for Attendance History tab with Search & Block filtering
+  // Group history records by unique studentAccountId for Attendance History tab with Search & Block filtering
   const uniqueStudentHistory = useMemo(() => {
     const map = new Map<string, any>();
     historyList.forEach(rec => {
-      if (rec.studentUsn && !map.has(rec.studentUsn)) {
-        map.set(rec.studentUsn, rec);
+      const key = rec.studentAccountId || rec.studentUsn || rec.id;
+      if (key && !map.has(key)) {
+        map.set(key, rec);
       }
     });
     const allUnique = Array.from(map.values());
@@ -404,7 +405,7 @@ export default function AttendanceManagement() {
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {uniqueStudentHistory.map((rec: any, idx: number) => {
                     return (
-                      <tr key={rec.id || rec.studentUsn || idx} className="hover:bg-slate-50 transition-colors">
+                      <tr key={rec.studentAccountId || rec.id || idx} className="hover:bg-slate-50 transition-colors">
                         <td className="p-3.5 font-bold text-slate-900">
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-black uppercase text-xs">
@@ -577,7 +578,7 @@ export default function AttendanceManagement() {
                     {filteredList.map((item) => {
                       const isPresent = item.status === 'PRESENT';
                       return (
-                        <tr key={item.studentUsn} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={item.studentAccountId || item.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="p-4">
                             <div className="flex items-center gap-3">
                               <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm ${

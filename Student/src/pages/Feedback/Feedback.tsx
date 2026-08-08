@@ -70,8 +70,10 @@ export const Feedback: React.FC = () => {
   const [isSuccessToast, setIsSuccessToast] = useState(false);
   const [iframeError, setIframeError] = useState(false);
 
+  const { studentAccountId } = useAuth();
   const studentName = student.name || authName || 'Student';
-  const studentUsn = student.usn || authUsn || '1BM22CS001';
+  const studentUsn = student.usn || authUsn || '-';
+  const accountId = studentAccountId || (student as any)?.studentAccountId || (student as any)?.id;
 
   // Compute embed & direct URLs from admin-provided URL
   const embedUrl = useMemo(() => toEmbedUrl(formConfig.googleFormUrl), [formConfig.googleFormUrl]);
@@ -109,10 +111,11 @@ export const Feedback: React.FC = () => {
     socket.on('feedback_config_updated', handleConfigUpdated);
     socket.on('data_updated', fetchConfig);
 
-    // Check if student already responded via API
+    // Check if student already responded via API using studentAccountId
     const fetchStatus = async () => {
       try {
-        const res = await fetch(`/api/feedback/status?usn=${studentUsn}`);
+        const queryParam = accountId ? `studentAccountId=${accountId}` : `usn=${studentUsn}`;
+        const res = await fetch(`/api/feedback/status?${queryParam}`);
         const data = await res.json();
         if (data.submitted) setHasResponded(true);
       } catch (_) {
@@ -125,7 +128,7 @@ export const Feedback: React.FC = () => {
       socket.off('feedback_config_updated', handleConfigUpdated);
       socket.off('data_updated', fetchConfig);
     };
-  }, [studentUsn]);
+  }, [accountId, studentUsn]);
 
   const handleConfirmResponse = async () => {
     setIsSubmitting(true);
@@ -135,14 +138,16 @@ export const Feedback: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentName,
+          studentAccountId: accountId,
           usn: studentUsn,
           rating: 5,
           message: 'Google Form feedback submitted'
         })
       });
 
-      localStorage.setItem(`feedback_responded_${studentUsn}`, 'true');
+      if (accountId) localStorage.setItem(`feedback_responded_${accountId}`, 'true');
       setHasResponded(true);
+
       setIsSuccessToast(true);
     } catch {
       alert('Failed to record feedback status. Please try again.');
