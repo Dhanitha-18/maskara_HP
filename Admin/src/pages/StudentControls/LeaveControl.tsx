@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../../lib/api';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -15,7 +16,7 @@ export default function LeaveControl() {
   const { data: leaves = [], isLoading } = useQuery({
     queryKey: ['leaves'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/leaves');
+      const res = await fetch(`${API_BASE_URL}/api/leaves`);
       if (!res.ok) throw new Error('Failed to fetch leaves');
       return res.json();
     }
@@ -39,7 +40,7 @@ export default function LeaveControl() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string, status: string }) => {
-      const res = await fetch(`http://localhost:5000/api/leaves/${id}/status`, {
+      const res = await fetch(`${API_BASE_URL}/api/leaves/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })

@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../lib/api';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -27,7 +28,7 @@ export default function AllocationModal({ isOpen, onClose, applicationId, gender
   const { data: blocks = [], isLoading: loadingBlocks } = useQuery({
     queryKey: ['blocks'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/blocks');
+      const res = await fetch(`${API_BASE_URL}/api/blocks`);
       if (!res.ok) throw new Error('Failed to fetch blocks');
       return res.json();
     },
@@ -36,7 +37,7 @@ export default function AllocationModal({ isOpen, onClose, applicationId, gender
 
   const allocateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('http://localhost:5000/api/allocate', {
+      const res = await fetch(`${API_BASE_URL}/api/allocate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ applicationId, bedId, adminName })

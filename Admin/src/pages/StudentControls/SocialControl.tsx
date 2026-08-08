@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../../lib/api';
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -88,7 +89,7 @@ export default function SocialControl() {
   const { data: availableBlocks = [] } = useQuery({
     queryKey: ['available-blocks'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/blocks');
+      const res = await fetch(`${API_BASE_URL}/api/blocks`);
       if (!res.ok) throw new Error('Failed to fetch blocks');
       return res.json();
     }
@@ -98,7 +99,7 @@ export default function SocialControl() {
   const { data: serverChannels, isLoading: isChannelsLoading } = useQuery({
     queryKey: ['chat-channels'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/chat/channels');
+      const res = await fetch(`${API_BASE_URL}/api/chat/channels`);
       if (!res.ok) throw new Error('Failed to fetch channels');
       return res.json();
     }
@@ -108,7 +109,7 @@ export default function SocialControl() {
   const { data: serverMessages, isLoading: isMessagesLoading, refetch: refetchMessages } = useQuery({
     queryKey: ['chat-messages', activeChannelId],
     queryFn: async () => {
-      const res = await fetch(`http://localhost:5000/api/chat/channels/${activeChannelId}/messages`);
+      const res = await fetch(`${API_BASE_URL}/api/chat/channels/${activeChannelId}/messages`);
       if (!res.ok) throw new Error('Failed to fetch messages');
       return res.json();
     }
@@ -118,7 +119,7 @@ export default function SocialControl() {
   const { data: residents } = useQuery({
     queryKey: ['residents-list'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/applications');
+      const res = await fetch(`${API_BASE_URL}/api/applications`);
       if (!res.ok) throw new Error('Failed to fetch residents');
       const all = await res.json();
       // Only show approved/allocated students
@@ -208,7 +209,7 @@ export default function SocialControl() {
     };
 
     try {
-      const res = await fetch(`http://localhost:5000/api/chat/channels/${activeChannelId}/messages`, {
+      const res = await fetch(`${API_BASE_URL}/api/chat/channels/${activeChannelId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -237,7 +238,7 @@ export default function SocialControl() {
     if (!newChannelName.trim()) return;
 
     try {
-      const res = await fetch('http://localhost:5000/api/chat/channels', {
+      const res = await fetch(`${API_BASE_URL}/api/chat/channels`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -268,7 +269,7 @@ export default function SocialControl() {
     if (!showRenameChannelModal || !renameValue.trim()) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/chat/channels/${showRenameChannelModal.id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/chat/channels/${showRenameChannelModal.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -299,7 +300,7 @@ export default function SocialControl() {
   const handleDeleteChannel = async (id: string, name: string) => {
     if (confirm(`Are you sure you want to delete channel "${formatChannelTitle(name)}"? This will permanently clear all its chat history.`)) {
       try {
-        const res = await fetch(`http://localhost:5000/api/chat/channels/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/api/chat/channels/${id}`, {
           method: 'DELETE'
         });
         if (!res.ok) {

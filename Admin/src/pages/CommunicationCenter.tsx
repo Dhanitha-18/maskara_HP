@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../lib/api';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { socket } from '../lib/socket';
@@ -179,7 +180,7 @@ export default function CommunicationCenter() {
   const { data: emailHistory = [] } = useQuery<EmailHistoryRecord[]>({
     queryKey: ['email-history-list'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/email-history');
+      const res = await fetch(`${API_BASE_URL}/api/email-history`);
       if (!res.ok) throw new Error('Failed to fetch email history');
       return res.json();
     }
@@ -189,7 +190,7 @@ export default function CommunicationCenter() {
   const { data: applications = [], isLoading: loadingApps } = useQuery({
     queryKey: ['applications-list-comm'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/applications');
+      const res = await fetch(`${API_BASE_URL}/api/applications`);
       if (!res.ok) throw new Error('Failed to fetch applications');
       return res.json();
     }
@@ -199,7 +200,7 @@ export default function CommunicationCenter() {
   const { data: allocations = [] } = useQuery({
     queryKey: ['allocations-list-comm'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/allocations');
+      const res = await fetch(`${API_BASE_URL}/api/allocations`);
       if (!res.ok) throw new Error('Failed to fetch allocations');
       return res.json();
     }
@@ -209,7 +210,7 @@ export default function CommunicationCenter() {
   const { data: emailModeData, refetch: refetchEmailMode } = useQuery({
     queryKey: ['email-mode'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/settings/email-mode');
+      const res = await fetch(`${API_BASE_URL}/api/settings/email-mode`);
       if (!res.ok) throw new Error('Failed to fetch email mode');
       return res.json();
     }
@@ -251,7 +252,7 @@ export default function CommunicationCenter() {
   const executeToggleAutomation = async () => {
     const targetMode = !automationEnabled ? 'Automatic' : 'Manual';
     try {
-      const res = await fetch('http://localhost:5000/api/settings/email-mode', {
+      const res = await fetch(`${API_BASE_URL}/api/settings/email-mode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: targetMode })
@@ -279,7 +280,7 @@ export default function CommunicationCenter() {
     // If turning ON automatic mode
     if (!automationEnabled) {
       try {
-        const res = await fetch('http://localhost:5000/api/settings/email-pending-count');
+        const res = await fetch(`${API_BASE_URL}/api/settings/email-pending-count`);
         const data = await res.json();
         if (data.pendingCount > 0) {
           setPendingEmailsCount(data.pendingCount);
@@ -330,7 +331,7 @@ export default function CommunicationCenter() {
   const { data: blocks = [] } = useQuery({
     queryKey: ['blocks-list-comm'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/blocks');
+      const res = await fetch(`${API_BASE_URL}/api/blocks`);
       if (!res.ok) throw new Error('Failed to fetch blocks list');
       return res.json();
     }
@@ -566,7 +567,7 @@ useEffect(() => {
   const loadTemplate = async () => {
     try {
       const res = await fetch(
-        `http://localhost:5000/api/email-templates/${activeTab}`
+        `${API_BASE_URL}/api/email-templates/${activeTab}`
       );
 
       if (!res.ok) return;
@@ -702,7 +703,7 @@ useEffect(() => {
 
   try {
     const res = await fetch(
-      "http://localhost:5000/api/email-templates",
+      `${API_BASE_URL}/api/email-templates`,
       {
         method: "POST",
         headers: {
@@ -748,7 +749,7 @@ useEffect(() => {
     const nowStr = `${dateStr} ${timeStr.substring(0, 5)}`;
 
     try {
-      const response = await fetch("http://localhost:5000/api/emails/send", {
+      const response = await fetch(`${API_BASE_URL}/api/emails/send`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

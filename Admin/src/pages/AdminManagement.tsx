@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../lib/api';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -64,7 +65,7 @@ export default function AdminManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/blocks')
+    fetch(`${API_BASE_URL}/api/blocks`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {

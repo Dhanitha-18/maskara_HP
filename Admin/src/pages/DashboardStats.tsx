@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../lib/api';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,7 +9,7 @@ export default function DashboardStats() {
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/dashboard/stats');
+      const res = await fetch(`${API_BASE_URL}/api/dashboard/stats`);
       if (!res.ok) throw new Error('Failed to fetch stats');
       return res.json();
     },

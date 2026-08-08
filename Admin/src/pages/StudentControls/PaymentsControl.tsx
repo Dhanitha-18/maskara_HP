@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../../lib/api';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CreditCard, Building, Plus, Trash2, DollarSign, ExternalLink, CheckCircle2, XCircle, Power } from 'lucide-react';
@@ -29,7 +30,7 @@ export default function PaymentsControl() {
   const { data: fetchedBankData } = useQuery({
     queryKey: ['bank-details'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/settings/bank-details');
+      const res = await fetch(`${API_BASE_URL}/api/settings/bank-details`);
       if (!res.ok) throw new Error('Failed to fetch bank details');
       return res.json();
     }
@@ -50,7 +51,7 @@ export default function PaymentsControl() {
   // Save Bank Details Mutation
   const saveBankMutation = useMutation({
     mutationFn: async (data: typeof bankData) => {
-      const res = await fetch('http://localhost:5000/api/settings/bank-details', {
+      const res = await fetch(`${API_BASE_URL}/api/settings/bank-details`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -70,7 +71,7 @@ export default function PaymentsControl() {
   const { data: paymentRequests, isLoading: isLoadingRequests } = useQuery({
     queryKey: ['payment-requests'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/settings/payment-requests');
+      const res = await fetch(`${API_BASE_URL}/api/settings/payment-requests`);
       if (!res.ok) throw new Error('Failed to fetch payment requests');
       return res.json();
     },
@@ -80,11 +81,11 @@ export default function PaymentsControl() {
 
   // Helper: fetch current list, apply transform, save back
   const updatePaymentList = async (transform: (list: any[]) => any[]) => {
-    const getRes = await fetch('http://localhost:5000/api/settings/payment-requests');
+    const getRes = await fetch(`${API_BASE_URL}/api/settings/payment-requests`);
     const current = getRes.ok ? await getRes.json() : null;
     const list: any[] = Array.isArray(current) ? current : [];
     const updated = transform(list);
-    const saveRes = await fetch('http://localhost:5000/api/settings/payment-requests', {
+    const saveRes = await fetch(`${API_BASE_URL}/api/settings/payment-requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated)

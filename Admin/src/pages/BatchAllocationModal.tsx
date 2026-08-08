@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../lib/api';
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -23,7 +24,7 @@ export default function BatchAllocationModal({ isOpen, onClose, selectedIds, gen
   const { data: blocks = [], isLoading } = useQuery({
     queryKey: ['blocks'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/blocks');
+      const res = await fetch(`${API_BASE_URL}/api/blocks`);
       if (!res.ok) throw new Error('Failed to fetch blocks');
       return res.json();
     }
@@ -31,7 +32,7 @@ export default function BatchAllocationModal({ isOpen, onClose, selectedIds, gen
 
   const allocateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('http://localhost:5000/api/allocate/batch', {
+      const res = await fetch(`${API_BASE_URL}/api/allocate/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ applicationIds: selectedIds, blockId, floor, roomType })

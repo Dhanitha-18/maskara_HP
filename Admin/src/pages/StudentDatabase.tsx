@@ -20,7 +20,7 @@ const getPhotoUrl = (raw?: string | any) => {
   if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) return trimmed;
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
   const cleanUrl = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  const base = API_BASE_URL || 'http://localhost:5000';
+  const base = API_BASE_URL || '$API_BASE_URL';
   return `${base}${cleanUrl}`;
 };
 
@@ -272,7 +272,7 @@ export default function StudentDatabase() {
   const { data: applications, isLoading: isLoadingApps } = useQuery({
     queryKey: ['applications_all'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/applications');
+      const res = await fetch(`${API_BASE_URL}/api/applications`);
       if (!res.ok) throw new Error('Network response was not ok');
       return res.json();
     }
@@ -281,7 +281,7 @@ export default function StudentDatabase() {
   const { data: payments, isLoading: isLoadingPayments } = useQuery({
     queryKey: ['payments_all'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/payments');
+      const res = await fetch(`${API_BASE_URL}/api/payments`);
       if (!res.ok) throw new Error('Network response was not ok');
       return res.json();
     }
@@ -292,8 +292,12 @@ export default function StudentDatabase() {
   const enrichedApplications = useMemo(() => {
     if (!applications) return [];
     return applications.map((app: any) => {
-      // Find latest payment for this application (payments are sorted desc by default from backend)
-      const appPayment = payments?.find((p: any) => p.studentUsn === app.usn);
+      // Find latest payment for this application — join by applicationId first, then by non-null USN as fallback.
+      // Never match on null/blank USN to avoid cross-student collision.
+      const appPayment = payments?.find((p: any) =>
+        (p.applicationId && p.applicationId === app.id) ||
+        (app.usn && p.studentUsn && p.studentUsn === app.usn)
+      );
       return {
         ...app,
         latestPayment: appPayment || null

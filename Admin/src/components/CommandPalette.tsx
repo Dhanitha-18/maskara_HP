@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../lib/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -37,7 +38,7 @@ export default function CommandPalette() {
   const { data: applications = [], isLoading: loadingApps } = useQuery({
     queryKey: ['applications'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/applications');
+      const res = await fetch(`${API_BASE_URL}/api/applications`);
       if (!res.ok) return [];
       return res.json();
     },
@@ -48,7 +49,7 @@ export default function CommandPalette() {
   const { data: blocks = [], isLoading: loadingBlocks } = useQuery({
     queryKey: ['occupancy'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/occupancy');
+      const res = await fetch(`${API_BASE_URL}/api/occupancy`);
       if (!res.ok) return [];
       return res.json();
     },

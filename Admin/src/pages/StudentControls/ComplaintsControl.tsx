@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../../lib/api';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -189,7 +190,7 @@ export default function ComplaintsControl() {
 
   // Fetch real-time available blocks for filter
   useEffect(() => {
-    fetch('http://localhost:5000/api/blocks')
+    fetch(`${API_BASE_URL}/api/blocks`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {

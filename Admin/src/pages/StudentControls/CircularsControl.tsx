@@ -1,3 +1,4 @@
+﻿import { API_BASE_URL } from '../../lib/api';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, FileText, Loader2, Calendar } from 'lucide-react';
@@ -27,7 +28,7 @@ export default function CircularsControl() {
     try {
       const fd = new FormData();
       fd.append('photo', file);
-      const res = await fetch('http://localhost:5000/api/upload', {
+      const res = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',
         body: fd
       });
@@ -57,7 +58,7 @@ export default function CircularsControl() {
   const { data: notices, isLoading } = useQuery({
     queryKey: ['notices'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/notices');
+      const res = await fetch(`${API_BASE_URL}/api/notices`);
       if (!res.ok) throw new Error('Failed to fetch notices');
       // Backend returns a raw array, not { notices: [...] }
       const data = await res.json();
@@ -67,7 +68,7 @@ export default function CircularsControl() {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch('http://localhost:5000/api/notices', {
+      const res = await fetch(`${API_BASE_URL}/api/notices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -91,7 +92,7 @@ export default function CircularsControl() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`http://localhost:5000/api/notices/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/notices/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
     },
     onSuccess: () => {

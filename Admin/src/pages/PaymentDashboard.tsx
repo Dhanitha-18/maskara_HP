@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../lib/api';
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,7 +12,7 @@ import { toast } from 'sonner';
 import { socket } from '../lib/socket';
 import { useAuthStore } from '../store/useAuthStore';
 
-const API = 'http://localhost:5000/api';
+const API = `${API_BASE_URL}/api`;
 
 // ─── Types ────────────────────────────────────────────────────
 interface Payment {
@@ -84,8 +85,8 @@ function ScreenshotModal({ url, onClose }: { url: string; onClose: () => void })
   const getFullUrl = (rawUrl: string) => {
     if (!rawUrl) return '';
     if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
-    if (rawUrl.startsWith('/')) return `http://localhost:5000${rawUrl}`;
-    return `http://localhost:5000/${rawUrl}`;
+    if (rawUrl.startsWith('/')) return `${API_BASE_URL}${rawUrl}`;
+    return `${API_BASE_URL}/${rawUrl}`;
   };
 
   const fullUrl = getFullUrl(url);

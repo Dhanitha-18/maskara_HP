@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ const getPhotoUrl = (raw?: string | any) => {
   if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) return trimmed;
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
   const cleanUrl = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  const base = API_BASE_URL || 'http://localhost:5000';
+  const base = API_BASE_URL || '$API_BASE_URL';
   return `${base}${cleanUrl}`;
 };
 
@@ -224,7 +224,7 @@ export default function ApplicationsQueue() {
   const { data: applications, isLoading } = useQuery({
     queryKey: ['applications'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/applications');
+      const res = await fetch(`${API_BASE_URL}/api/applications`);
       if (!res.ok) throw new Error('Network response was not ok');
       const allApps = await res.json();
       return allApps.filter((app: any) => app.status !== 'TRANSFERRED');
@@ -234,7 +234,7 @@ export default function ApplicationsQueue() {
 
   const mutation = useMutation({
     mutationFn: async ({ ids, status }: { ids: string[], status: string }) => {
-      const res = await fetch('http://localhost:5000/api/applications/batch-status', {
+      const res = await fetch(`${API_BASE_URL}/api/applications/batch-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, status })
@@ -282,7 +282,7 @@ export default function ApplicationsQueue() {
 
   const transferMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('http://localhost:5000/api/applications/batch-status', {
+      const res = await fetch(`${API_BASE_URL}/api/applications/batch-status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'TRANSFERRED', fromStatuses: ['PENDING', 'APPROVED'] })
@@ -303,7 +303,7 @@ export default function ApplicationsQueue() {
 
   const undoAllocationMutation = useMutation({
     mutationFn: async (applicationIds: string[]) => {
-      const res = await fetch('http://localhost:5000/api/allocate/undo', {
+      const res = await fetch(`${API_BASE_URL}/api/allocate/undo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ applicationIds })

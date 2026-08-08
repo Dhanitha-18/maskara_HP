@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Image as ImageIcon, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
@@ -29,7 +29,7 @@ export default function FacilitiesControl() {
   const { data: facilities, isLoading } = useQuery({
     queryKey: ['facilities'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:5000/api/facilities');
+      const res = await fetch(`${API_BASE_URL}/api/facilities`);
       if (!res.ok) throw new Error('Failed to fetch facilities');
       return res.json();
     }
@@ -37,7 +37,7 @@ export default function FacilitiesControl() {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch('http://localhost:5000/api/facilities', {
+      const res = await fetch(`${API_BASE_URL}/api/facilities`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -56,7 +56,7 @@ export default function FacilitiesControl() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`http://localhost:5000/api/facilities/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/facilities/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
     },
     onSuccess: () => {
@@ -67,7 +67,7 @@ export default function FacilitiesControl() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch(`http://localhost:5000/api/facilities/${editId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/facilities/${editId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -101,7 +101,7 @@ export default function FacilitiesControl() {
     const uploadData = new FormData();
     uploadData.append('photo', file);
     try {
-      const res = await fetch('http://localhost:5000/api/upload', {
+      const res = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',
         body: uploadData
       });
