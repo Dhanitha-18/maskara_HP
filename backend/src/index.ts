@@ -341,7 +341,7 @@ app.get('/api/auth/me', authenticateJWT, async (req: AuthenticatedRequest, res) 
 // is the identity — no USN, phone number, or name is used to identify the student.
 app.put('/api/student/profile', authenticateJWT, async (req: AuthenticatedRequest, res) => {
   try {
-    const { newUsn, email, year, yearSem } = req.body;
+    const { newUsn, email, collegeEmail, year, yearSem } = req.body;
     const studentAccountId: string | undefined = req.user?.studentAccountId;
 
     if (!studentAccountId) {
@@ -396,6 +396,7 @@ app.put('/api/student/profile', authenticateJWT, async (req: AuthenticatedReques
       data: {
         ...(cleanNewUsn !== null ? { usn: cleanNewUsn || null } : {}),
         ...(email ? { email } : {}),
+        ...(collegeEmail !== undefined ? { collegeEmail: collegeEmail || null } : {}),
         ...(updatedYear ? { yearSem: updatedYear, year: updatedYear } : {})
       }
     });

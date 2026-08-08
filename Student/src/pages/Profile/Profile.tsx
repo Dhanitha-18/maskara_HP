@@ -21,6 +21,7 @@ export const Profile: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedUsn, setEditedUsn] = useState('');
   const [editedEmail, setEditedEmail] = useState('');
+  const [editedCollegeEmail, setEditedCollegeEmail] = useState('');
   const [selectedYear, setSelectedYear] = useState('1st Year');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -28,6 +29,7 @@ export const Profile: React.FC = () => {
   useEffect(() => {
     setEditedUsn(student.usn || appData.usn || authUsn || '');
     setEditedEmail(student.email || appData.email || '');
+    setEditedCollegeEmail(appData.collegeEmail || (student as any).collegeEmail || '');
     const savedYear = appData.yearSem || appData.year || (student as any).yearSem || (student as any).year || (typeof student.semester === 'string' ? student.semester : '1st Year');
     if (savedYear) {
       setSelectedYear(savedYear);
@@ -46,6 +48,7 @@ export const Profile: React.FC = () => {
         body: JSON.stringify({
           newUsn: editedUsn || null,
           email: editedEmail,
+          collegeEmail: editedCollegeEmail || null,
           year: selectedYear,
           yearSem: selectedYear
         })
@@ -67,6 +70,7 @@ export const Profile: React.FC = () => {
       updateStudent({
         usn: editedUsn,
         email: editedEmail,
+        collegeEmail: editedCollegeEmail as any,
         yearSem: selectedYear as any,
         year: selectedYear as any
       });
@@ -197,7 +201,7 @@ export const Profile: React.FC = () => {
                       onClick={() => setIsEditing(true)}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0 cursor-pointer"
                     >
-                      <span>Edit Profile (USN / Email / Year)</span>
+                      <span>Edit Profile (USN / Email / College Email / Year)</span>
                     </button>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -289,6 +293,20 @@ export const Profile: React.FC = () => {
                       </select>
                     ) : (
                       <span className="text-slate-900 font-bold block mt-0.5">{displayVal(selectedYear)}</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider block font-bold">College Email ID</span>
+                    {isEditing ? (
+                      <input
+                        type="email"
+                        value={editedCollegeEmail}
+                        onChange={e => setEditedCollegeEmail(e.target.value)}
+                        placeholder="student@bmsit.in"
+                        className="w-full mt-1 bg-white border border-indigo-300 rounded-lg p-1.5 text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    ) : (
+                      <span className="text-slate-900 font-bold block mt-0.5 font-mono">{displayVal(editedCollegeEmail || appData.collegeEmail)}</span>
                     )}
                   </div>
                   <div>
